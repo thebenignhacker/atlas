@@ -1,37 +1,49 @@
 @import "tailwindcss";
 
 /*
-  Atlas design language: dark, code-first, calm.
-  Teal = data/health · Amber = attention · Purple = AI-generated.
-  Color carries meaning — never decoration.
+  Atlas design language: Warm Editorial.
+  Cream paper, ink type, a confident marigold/clay accent system. Light, calm,
+  magazine-like. Color carries meaning, never decoration:
+    marigold/ochre = data & attention · clay = warm flags/danger ·
+    forest = health/fresh · plum = AI-generated · petrol = links/focus.
+
+  Light-theme contrast note: accent *text* tokens are tuned dark enough to read
+  on cream (amber is an ochre, not the bright marigold). The bright marigold is
+  reserved for chart fills and dots (--color-marigold), never small text.
 */
 @theme {
-  --color-base: #0a0c10;
-  --color-surface-1: #11141b;
-  --color-surface-2: #171b24;
-  --color-surface-3: #1e232e;
-  --color-line: #232936;
-  --color-line-strong: #313847;
+  --color-base: #faf6ee; /* paper */
+  --color-surface-1: #fffdf8; /* card / raised */
+  --color-surface-2: #f3ecdd; /* warm hover / secondary */
+  --color-surface-3: #ebe2cf; /* pressed / track */
+  --color-line: #e7dcc6;
+  --color-line-strong: #d6c8ab;
 
-  --color-text: #e6edf3;
-  --color-muted: #9aa4b2;
-  --color-faint: #6b7484;
+  --color-text: #211c15; /* ink */
+  --color-muted: #6c6357;
+  --color-faint: #9b9182;
 
-  --color-teal: #06b6d4;
-  --color-amber: #f59e0b;
-  --color-purple: #8b5cf6;
-  --color-rose: #f43f5e;
-  --color-emerald: #10b981;
+  /* Accent system -- tuned for legibility as text on cream. */
+  --color-teal: #0f7b84; /* petrol -- links / focus */
+  --color-amber: #b9740a; /* ochre -- attention text/badges */
+  --color-purple: #7a5a99; /* plum -- AI */
+  --color-rose: #be4530; /* clay-red -- P0 / danger */
+  --color-emerald: #2f6b4a; /* forest -- health */
 
-  /* Staleness scale: fresh → dormant */
-  --color-fresh: #10b981;
-  --color-recent: #22d3ee;
-  --color-aging: #f59e0b;
-  --color-stale: #fb923c;
-  --color-dormant: #6b7484;
+  /* Bright decorative fills (charts, dots) -- NOT for small text. */
+  --color-marigold: #e8a317;
+  --color-clay: #c75d3c;
+
+  /* Staleness scale: fresh → dormant (each legible as both text and dot). */
+  --color-fresh: #2f6b4a;
+  --color-recent: #1f8a7e;
+  --color-aging: #b9740a;
+  --color-stale: #c0452f;
+  --color-dormant: #9b9182;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
 
   --radius-card: 12px;
 }
@@ -42,7 +54,7 @@
 
 html {
   background: var(--color-base);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -50,9 +62,26 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* Faint warm paper grain + a soft top-light wash for depth on the canvas. */
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(232, 163, 23, 0.06), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+  background-attachment: fixed;
 }
 
-/* Thin, unobtrusive scrollbars to match the calm aesthetic. */
+/* Editorial display type. Fraunces with a soft optical-size + slight contrast. */
+.font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.01em;
+}
+
+/* Tabular figures for stats so numbers align in columns. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin, warm scrollbars. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -68,7 +97,7 @@ body {
 @keyframes atlas-fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -76,5 +105,11 @@ body {
   }
 }
 .atlas-fade {
-  animation: atlas-fade-in 0.25s ease-out both;
+  animation: atlas-fade-in 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Staggered list reveal: set --i on each item for a cascading entrance. */
+.atlas-stagger {
+  animation: atlas-fade-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 35ms);
 }
