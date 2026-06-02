@@ -108,7 +108,7 @@ function resolveRepoSlug(
   };
 
   // 1) explicit guess from **Repos:** field
-  let slug = tryName(guess);
+  const slug = tryName(guess);
   if (slug) return { slug, guess };
 
   // 2) alias token appearing in the filename

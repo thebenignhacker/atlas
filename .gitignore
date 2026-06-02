@@ -23,6 +23,12 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+secrets/
+credentials/
 
 # debug
 npm-debug.log*
@@ -52,3 +58,7 @@ CLAUDE.md
 AGENTS.md
 .claude/
 .cursorrules
+
+# local quality-gate markers
+.pre-push-review-passed
+.release-test-passed
