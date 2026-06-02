@@ -1,5 +1,7 @@
 import "server-only";
 import { getDb } from "@/lib/db";
+import { isOwnerMode } from "@/lib/mode";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
 
 export interface FeedbackInput {
   entityType: string;
@@ -37,6 +39,7 @@ export interface LearnedItem {
 }
 
 export function getFeedback(limit = 200): LearnedItem[] {
+  if (isOwnerMode()) return loadOwnerSnapshot().feedback.slice(0, limit);
   return getDb()
     .prepare(
       "SELECT field, aiValue, correctedValue, note, entityId, createdAt FROM feedback ORDER BY createdAt DESC LIMIT ?"

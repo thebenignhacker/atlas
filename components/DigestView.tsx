@@ -21,10 +21,14 @@ export function DigestView({
   available,
   reason,
   initial,
+  readOnly = false,
 }: {
   available: boolean;
   reason?: string;
   initial: Digest | null;
+  /** Owner deployment: the host can't regenerate (read-only filesystem). Show
+   *  the cached digest without a Generate button. */
+  readOnly?: boolean;
 }) {
   const [digest, setDigest] = useState<Digest | null>(initial);
   const [loading, setLoading] = useState(false);
@@ -78,14 +82,21 @@ export function DigestView({
             ? `${digest.reposIncluded} repos in scope · ${digest.reposExcluded} excluded by privacy policy`
             : "Ready to generate"}
         </div>
-        <button
-          onClick={() => generate(Boolean(digest))}
-          disabled={loading}
-          className="inline-flex items-center gap-2 rounded-lg border border-purple/40 bg-purple/10 px-3 py-2 text-sm font-medium text-purple transition-colors hover:bg-purple/20 disabled:opacity-50"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Thinking…" : digest ? "Regenerate" : "Generate digest"}
-        </button>
+        {readOnly ? (
+          <span className="text-[11px] text-faint">
+            Remote view; regenerate locally with{" "}
+            <code className="font-mono text-teal">npm run dev</code>
+          </span>
+        ) : (
+          <button
+            onClick={() => generate(Boolean(digest))}
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg border border-purple/40 bg-purple/10 px-3 py-2 text-sm font-medium text-purple transition-colors hover:bg-purple/20 disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            {loading ? "Thinking…" : digest ? "Regenerate" : "Generate digest"}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -110,8 +121,9 @@ export function DigestView({
         </article>
       ) : (
         <div className="rounded-[var(--radius-card)] border border-dashed border-line py-16 text-center text-sm text-faint">
-          No digest yet. Generate one to see what moved, what&apos;s stale, and what to
-          focus on next.
+          {readOnly
+            ? "No digest in this snapshot yet. Generate one locally, then re-publish the owner snapshot."
+            : "No digest yet. Generate one to see what moved, what's stale, and what to focus on next."}
         </div>
       )}
     </div>

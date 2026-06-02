@@ -1,8 +1,9 @@
 import "server-only";
 import { getReadDb, getMeta } from "@/lib/db";
 import { computeSignals } from "@/lib/signals";
-import { loadPublicSnapshot } from "@/lib/snapshot";
+import { loadPublicSnapshot, loadOwnerSnapshot } from "@/lib/snapshot";
 import { getLatestOutput } from "@/lib/ai/cache";
+import { isPublicMode, isOwnerMode } from "@/lib/mode";
 import type { ActivityEvent, Repo, RepoSignals, Todo } from "@/lib/types";
 
 export interface RepoWithSignals extends Repo {
@@ -10,14 +11,10 @@ export interface RepoWithSignals extends Repo {
   openTodos: number;
 }
 
-/**
- * Public mode (ATLAS_MODE=public) reads a sanitized snapshot instead of the
- * local database. In this mode there is no SQLite, no todos, and no private
- * data on the host — the snapshot is the only data source.
- */
-export function isPublicMode(): boolean {
-  return process.env.ATLAS_MODE === "public";
-}
+// Mode helpers live in lib/mode.ts (dependency-free). Re-exported here so the
+// many call sites that already import { isPublicMode } from "@/lib/queries"
+// keep working, and so isOwnerMode is reachable from the same place.
+export { isPublicMode, isOwnerMode };
 
 export interface AtlasStats {
   lastScanAt: string | null;
@@ -33,6 +30,7 @@ export interface AtlasStats {
 
 export function getStats(): AtlasStats {
   if (isPublicMode()) return loadPublicSnapshot().stats;
+  if (isOwnerMode()) return loadOwnerSnapshot().stats;
   const db = getReadDb();
   try {
     const repos = getRepos();
@@ -60,6 +58,7 @@ let repoCache: RepoWithSignals[] | null = null;
 
 export function getRepos(): RepoWithSignals[] {
   if (isPublicMode()) return loadPublicSnapshot().repos;
+  if (isOwnerMode()) return loadOwnerSnapshot().repos;
   if (repoCache) return repoCache;
   const db = getReadDb();
   try {
@@ -88,9 +87,10 @@ export function getRepo(slug: string): RepoWithSignals | null {
   return getRepos().find((r) => r.slug === slug) ?? null;
 }
 
-/** Last AI summary for a repo. Reads the snapshot in public mode (no DB). */
+/** Last AI summary for a repo. Reads the snapshot in deployed modes (no DB). */
 export function getRepoSummary(slug: string): string | null {
   if (isPublicMode()) return loadPublicSnapshot().summaries[slug] ?? null;
+  if (isOwnerMode()) return loadOwnerSnapshot().summaries[slug] ?? null;
   return getLatestOutput("repo", slug, "summary")?.output ?? null;
 }
 
@@ -103,6 +103,15 @@ export interface TodoFilters {
 
 export function getTodos(filters: TodoFilters = {}): Todo[] {
   if (isPublicMode()) return []; // todos are never exposed publicly
+  if (isOwnerMode()) {
+    return loadOwnerSnapshot().todos.filter(
+      (t) =>
+        (!filters.priority || t.priority === filters.priority) &&
+        (!filters.status || t.status === filters.status) &&
+        (!filters.repoSlug || t.repoSlug === filters.repoSlug) &&
+        (!filters.kind || t.kind === filters.kind)
+    );
+  }
   const db = getReadDb();
   try {
     const where: string[] = [];
@@ -135,6 +144,7 @@ export function getTodos(filters: TodoFilters = {}): Todo[] {
 
 export function getActivity(limit = 300): ActivityEvent[] {
   if (isPublicMode()) return loadPublicSnapshot().activity.slice(0, limit);
+  if (isOwnerMode()) return loadOwnerSnapshot().activity.slice(0, limit);
   const db = getReadDb();
   try {
     return db
@@ -148,6 +158,10 @@ export function getActivity(limit = 300): ActivityEvent[] {
 export function getActivityForRepo(slug: string, limit = 30): ActivityEvent[] {
   if (isPublicMode())
     return loadPublicSnapshot()
+      .activity.filter((e) => e.repoSlug === slug)
+      .slice(0, limit);
+  if (isOwnerMode())
+    return loadOwnerSnapshot()
       .activity.filter((e) => e.repoSlug === slug)
       .slice(0, limit);
   const db = getReadDb();

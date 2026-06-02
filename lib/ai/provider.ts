@@ -1,6 +1,8 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { loadConfig } from "@/lib/config";
+import { isOwnerMode } from "@/lib/mode";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
 
 export interface CompletionResult {
   text: string;
@@ -23,6 +25,9 @@ export type AIAvailability =
 
 /** Is the AI layer usable right now? Drives graceful UI degradation. */
 export function aiAvailability(): AIAvailability {
+  // Owner deployment has no API key on the host; report the availability that
+  // was captured locally when the snapshot was generated.
+  if (isOwnerMode()) return loadOwnerSnapshot().ai;
   const { ai } = loadConfig();
   if (!ai.enabled) return { ok: false, reason: "AI is disabled in atlas.config.json (ai.enabled = false)." };
   switch (ai.provider) {

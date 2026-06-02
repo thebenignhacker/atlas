@@ -19,8 +19,9 @@ const NAV = [
   { href: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
 
-export function Sidebar({ publicMode = false }: { publicMode?: boolean }) {
+export function Sidebar({ mode = "local" }: { mode?: "local" | "public" | "owner" }) {
   const pathname = usePathname();
+  const publicMode = mode === "public";
   const nav = publicMode ? NAV.filter((n) => !n.ownerOnly) : NAV;
 
   return (
@@ -61,7 +62,7 @@ export function Sidebar({ publicMode = false }: { publicMode?: boolean }) {
       </nav>
 
       <div className="hidden px-5 py-4 text-[11px] text-faint md:block">
-        {publicMode ? (
+        {mode === "public" ? (
           <a
             href="https://github.com/thebenignhacker/atlas"
             target="_blank"
@@ -70,6 +71,8 @@ export function Sidebar({ publicMode = false }: { publicMode?: boolean }) {
           >
             public demo · built with Atlas
           </a>
+        ) : mode === "owner" ? (
+          "owner view · private · signed in"
         ) : (
           "local-first · your data stays here"
         )}

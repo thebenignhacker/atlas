@@ -46,12 +46,17 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Atlas — local data & personal config (NEVER commit: contains your repo paths)
+# Atlas -- local data & personal config (NEVER commit: contains your repo paths)
 /data
 *.db
 *.db-shm
 *.db-wal
 atlas.config.json
+
+# Owner snapshot -- FULL unsanitized data (all repos, paths, private repos, todos,
+# digest). NEVER commit. It ships to the login-gated owner deployment via the
+# Vercel CLI upload only, never through git.
+owner-snapshot.json
 
 # AI assistant files (never commit to a public repo)
 CLAUDE.md
