@@ -7,6 +7,7 @@
     "orgs": []
   },
   "exclude": ["node_modules", ".next", ".git", "dist", "build", "archive-"],
+  "publicOwners": [],
   "ai": {
     "enabled": false,
     "provider": "anthropic",

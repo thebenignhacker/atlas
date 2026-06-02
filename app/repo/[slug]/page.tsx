@@ -8,13 +8,19 @@ import {
   Lock,
   Star,
 } from "lucide-react";
-import { getRepo, getActivityForRepo, getTodos } from "@/lib/queries";
+import {
+  getRepo,
+  getActivityForRepo,
+  getTodos,
+  getRepoSummary,
+  isPublicMode,
+} from "@/lib/queries";
 import { STALENESS, languageColor, PRIORITY } from "@/lib/display";
 import { relativeTime } from "@/lib/util/date";
 import { aiAvailability } from "@/lib/ai/provider";
 import { isRepoAIEligible, eligibilityReason } from "@/lib/ai/policy";
-import { getLatestOutput } from "@/lib/ai/cache";
 import { RepoSummary } from "@/components/RepoSummary";
+import { AiBadge } from "@/components/AiBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +38,13 @@ export default async function RepoPage({
   }
   if (!repo) notFound();
 
+  const publicMode = isPublicMode();
   const todos = getTodos({ repoSlug: slug });
   const activity = getActivityForRepo(slug, 25);
   const stale = STALENESS[repo.signals.staleness];
   const avail = aiAvailability();
-  const eligible = isRepoAIEligible(repo);
-  const initialSummary = getLatestOutput("repo", slug, "summary")?.output ?? null;
+  const eligible = !publicMode && isRepoAIEligible(repo);
+  const initialSummary = getRepoSummary(slug);
   const webUrl =
     repo.owner && repo.repoName
       ? `https://github.com/${repo.owner}/${repo.repoName}`
@@ -62,7 +69,13 @@ export default async function RepoPage({
             {repo.isFork === 1 && <GitFork className="h-4 w-4 text-faint" />}
           </div>
           <p className="mt-1 text-sm text-muted">
-            {repo.groupName} · <span className="font-mono text-faint">{repo.path}</span>
+            {repo.groupName}
+            {repo.path && (
+              <>
+                {" · "}
+                <span className="font-mono text-faint">{repo.path}</span>
+              </>
+            )}
           </p>
         </div>
         {webUrl && (
@@ -82,13 +95,24 @@ export default async function RepoPage({
       )}
 
       <div className="mb-6">
-        <RepoSummary
-          slug={slug}
-          available={avail.ok}
-          eligible={eligible}
-          eligibleReason={eligibilityReason(repo)}
-          initial={initialSummary}
-        />
+        {publicMode ? (
+          initialSummary ? (
+            <section className="rounded-[var(--radius-card)] border border-purple/20 bg-surface-1 p-4">
+              <div className="mb-2">
+                <AiBadge label="Summary" />
+              </div>
+              <p className="text-sm leading-relaxed text-muted">{initialSummary}</p>
+            </section>
+          ) : null
+        ) : (
+          <RepoSummary
+            slug={slug}
+            available={avail.ok}
+            eligible={eligible}
+            eligibleReason={eligibilityReason(repo)}
+            initial={initialSummary}
+          />
+        )}
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

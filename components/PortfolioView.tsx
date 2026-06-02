@@ -53,8 +53,8 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
             value={q}
@@ -64,7 +64,7 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
           />
         </div>
 
-        <Select value={group} onChange={setGroup}>
+        <Select value={group} onChange={setGroup} className="w-full min-w-0 sm:w-auto">
           <option value="all">All groups</option>
           {groups.map((g) => (
             <option key={g} value={g}>
@@ -73,13 +73,13 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
           ))}
         </Select>
 
-        <Select value={visibility} onChange={setVisibility}>
+        <Select value={visibility} onChange={setVisibility} className="w-full min-w-0 sm:w-auto">
           <option value="all">All visibility</option>
           <option value="public">Public</option>
           <option value="private">Private</option>
         </Select>
 
-        <Select value={sort} onChange={(v) => setSort(v as Sort)}>
+        <Select value={sort} onChange={(v) => setSort(v as Sort)} className="w-full min-w-0 sm:w-auto">
           <option value="activity">Recent activity</option>
           <option value="stars">Most stars</option>
           <option value="attention">Needs attention</option>
@@ -89,7 +89,7 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
         <button
           onClick={() => setAttentionOnly((v) => !v)}
           className={[
-            "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors",
+            "flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors sm:justify-start",
             attentionOnly
               ? "border-amber/40 bg-amber/10 text-amber"
               : "border-line bg-surface-1 text-muted hover:text-text",
@@ -123,16 +123,18 @@ function Select<T extends string>({
   value,
   onChange,
   children,
+  className = "",
 }: {
   value: T;
   onChange: (v: T) => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className="rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
+      className={`rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none ${className}`}
     >
       {children}
     </select>

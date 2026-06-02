@@ -4,14 +4,16 @@ import { aiAvailability } from "@/lib/ai/provider";
 import { getCostSummary } from "@/lib/ai/cache";
 import { getFeedback } from "@/lib/ai/learning";
 import { isRepoAIEligible } from "@/lib/ai/policy";
-import { getRepos } from "@/lib/queries";
+import { getRepos, isPublicMode } from "@/lib/queries";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { OwnerOnly } from "@/components/OwnerOnly";
 import { relativeTime } from "@/lib/util/date";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsPage() {
+  if (isPublicMode()) return <OwnerOnly feature="Settings" />;
   let repos;
   try {
     repos = getRepos();

@@ -88,8 +88,30 @@ To enable: set `ai.enabled` to `true` and provide a key
 |---|---|
 | `npm run setup-db` | Create the local SQLite schema |
 | `npm run scan` | Scan your repos and todos into the database |
-| `npm run dev` | Start the dashboard |
+| `npm run snapshot` | Generate the sanitized public snapshot (for a public demo) |
+| `npm run dev` | Start the dashboard (full local view) |
 | `npm run build` / `npm start` | Production build and serve |
+
+## Optional: a public demo of your active projects
+
+Atlas runs in two modes from one codebase:
+
+- **Local (default):** reads the full SQLite database. You see everything. No login,
+  because it is your machine.
+- **Public (`ATLAS_MODE=public`):** reads only `public-snapshot.json` and serves a
+  sanitized, read-only view. Private repos, forks, local file paths, todos, and settings
+  are never present. The full database is never deployed, so it cannot leak.
+
+To publish a demo:
+
+1. Choose which owners are public in `atlas.config.json` via `publicOwners`
+   (empty means all public repos; list specific orgs/users to scope it).
+2. Run `npm run snapshot`. It writes `public-snapshot.json` and aborts if any private
+   data (your username, local paths, private or fork repo names) is detected.
+3. Deploy with the environment variable `ATLAS_MODE=public` (for example on Vercel).
+   The committed `public-snapshot.json` is the data source; no database is needed.
+
+Re-run `npm run snapshot` and redeploy whenever you want to refresh the public view.
 
 ## Privacy
 

@@ -1,11 +1,22 @@
 import "server-only";
 import { getReadDb, getMeta } from "@/lib/db";
 import { computeSignals } from "@/lib/signals";
+import { loadPublicSnapshot } from "@/lib/snapshot";
+import { getLatestOutput } from "@/lib/ai/cache";
 import type { ActivityEvent, Repo, RepoSignals, Todo } from "@/lib/types";
 
 export interface RepoWithSignals extends Repo {
   signals: RepoSignals;
   openTodos: number;
+}
+
+/**
+ * Public mode (ATLAS_MODE=public) reads a sanitized snapshot instead of the
+ * local database. In this mode there is no SQLite, no todos, and no private
+ * data on the host — the snapshot is the only data source.
+ */
+export function isPublicMode(): boolean {
+  return process.env.ATLAS_MODE === "public";
 }
 
 export interface AtlasStats {
@@ -21,6 +32,7 @@ export interface AtlasStats {
 }
 
 export function getStats(): AtlasStats {
+  if (isPublicMode()) return loadPublicSnapshot().stats;
   const db = getReadDb();
   try {
     const repos = getRepos();
@@ -47,6 +59,7 @@ export function getStats(): AtlasStats {
 let repoCache: RepoWithSignals[] | null = null;
 
 export function getRepos(): RepoWithSignals[] {
+  if (isPublicMode()) return loadPublicSnapshot().repos;
   if (repoCache) return repoCache;
   const db = getReadDb();
   try {
@@ -75,6 +88,12 @@ export function getRepo(slug: string): RepoWithSignals | null {
   return getRepos().find((r) => r.slug === slug) ?? null;
 }
 
+/** Last AI summary for a repo. Reads the snapshot in public mode (no DB). */
+export function getRepoSummary(slug: string): string | null {
+  if (isPublicMode()) return loadPublicSnapshot().summaries[slug] ?? null;
+  return getLatestOutput("repo", slug, "summary")?.output ?? null;
+}
+
 export interface TodoFilters {
   priority?: string;
   status?: string;
@@ -83,6 +102,7 @@ export interface TodoFilters {
 }
 
 export function getTodos(filters: TodoFilters = {}): Todo[] {
+  if (isPublicMode()) return []; // todos are never exposed publicly
   const db = getReadDb();
   try {
     const where: string[] = [];
@@ -114,6 +134,7 @@ export function getTodos(filters: TodoFilters = {}): Todo[] {
 }
 
 export function getActivity(limit = 300): ActivityEvent[] {
+  if (isPublicMode()) return loadPublicSnapshot().activity.slice(0, limit);
   const db = getReadDb();
   try {
     return db
@@ -125,6 +146,10 @@ export function getActivity(limit = 300): ActivityEvent[] {
 }
 
 export function getActivityForRepo(slug: string, limit = 30): ActivityEvent[] {
+  if (isPublicMode())
+    return loadPublicSnapshot()
+      .activity.filter((e) => e.repoSlug === slug)
+      .slice(0, limit);
   const db = getReadDb();
   try {
     return db

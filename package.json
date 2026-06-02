@@ -25,7 +25,8 @@
     "start": "next start",
     "lint": "eslint",
     "setup-db": "tsx scripts/setup-db.ts",
-    "scan": "tsx scripts/scan.ts"
+    "scan": "tsx scripts/scan.ts",
+    "snapshot": "tsx scripts/snapshot.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

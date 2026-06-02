@@ -1,11 +1,13 @@
-import { getRepos, getStats, getTodos } from "@/lib/queries";
+import { getRepos, getStats, getTodos, isPublicMode } from "@/lib/queries";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { TodoView } from "@/components/TodoView";
 import { EmptyState } from "@/components/EmptyState";
+import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
 
 export default function TodosPage() {
+  if (isPublicMode()) return <OwnerOnly feature="Todos" />;
   let todos;
   let repos;
   let stats;

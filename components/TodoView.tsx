@@ -53,8 +53,8 @@ export function TodoView({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[200px] flex-1">
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
             value={q}
@@ -63,20 +63,20 @@ export function TodoView({
             className="w-full rounded-lg border border-line bg-surface-1 py-2 pl-9 pr-3 text-sm text-text placeholder:text-faint focus:border-teal focus:outline-none"
           />
         </div>
-        <Select value={status} onChange={setStatus}>
+        <Select value={status} onChange={setStatus} className="w-full min-w-0 sm:w-auto">
           <option value="open">Open</option>
           <option value="done">Done</option>
           <option value="archived">Archived</option>
           <option value="all">All status</option>
         </Select>
-        <Select value={priority} onChange={setPriority}>
+        <Select value={priority} onChange={setPriority} className="w-full min-w-0 sm:w-auto">
           <option value="all">All priorities</option>
           <option value="P0">P0</option>
           <option value="P1">P1</option>
           <option value="P2">P2</option>
           <option value="P3">P3</option>
         </Select>
-        <Select value={repo} onChange={setRepo}>
+        <Select value={repo} onChange={setRepo} className="w-full min-w-0 sm:w-auto">
           <option value="all">All repos</option>
           {repos.map((r) => (
             <option key={r.slug} value={r.slug}>
@@ -87,7 +87,7 @@ export function TodoView({
         <button
           onClick={() => setStaleOnly((v) => !v)}
           className={[
-            "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors",
+            "flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors sm:justify-start",
             staleOnly
               ? "border-amber/40 bg-amber/10 text-amber"
               : "border-line bg-surface-1 text-muted hover:text-text",
@@ -174,16 +174,18 @@ function Select<T extends string>({
   value,
   onChange,
   children,
+  className = "",
 }: {
   value: T;
   onChange: (v: T) => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className="rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
+      className={`rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none ${className}`}
     >
       {children}
     </select>

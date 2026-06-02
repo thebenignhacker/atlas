@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { recordFeedback } from "@/lib/ai/learning";
+import { isPublicMode } from "@/lib/queries";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  if (isPublicMode()) {
+    return NextResponse.json({ error: "Not available in public demo" }, { status: 403 });
+  }
   try {
     const body = await req.json();
     if (!body.entityType || !body.entityId || !body.field || !body.correctedValue) {

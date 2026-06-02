@@ -1,13 +1,15 @@
 import { aiAvailability } from "@/lib/ai/provider";
 import { getLastDigest } from "@/lib/ai/digest";
-import { getStats } from "@/lib/queries";
+import { getStats, isPublicMode } from "@/lib/queries";
 import { PageHeader } from "@/components/PageHeader";
 import { DigestView } from "@/components/DigestView";
 import { EmptyState } from "@/components/EmptyState";
+import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
 
 export default function DigestPage() {
+  if (isPublicMode()) return <OwnerOnly feature="AI Digest" />;
   let stats;
   try {
     stats = getStats();

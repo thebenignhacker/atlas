@@ -12,15 +12,16 @@ import {
 } from "lucide-react";
 
 const NAV = [
-  { href: "/", label: "Portfolio", icon: LayoutGrid },
-  { href: "/todos", label: "Todos", icon: ListChecks },
-  { href: "/activity", label: "Activity", icon: Activity },
-  { href: "/digest", label: "AI Digest", icon: Sparkles },
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/", label: "Portfolio", icon: LayoutGrid, ownerOnly: false },
+  { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },
+  { href: "/activity", label: "Activity", icon: Activity, ownerOnly: false },
+  { href: "/digest", label: "AI Digest", icon: Sparkles, ownerOnly: true },
+  { href: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
 
-export function Sidebar() {
+export function Sidebar({ publicMode = false }: { publicMode?: boolean }) {
   const pathname = usePathname();
+  const nav = publicMode ? NAV.filter((n) => !n.ownerOnly) : NAV;
 
   return (
     <aside className="fixed inset-x-0 bottom-0 z-20 flex h-14 items-center gap-1 border-t border-line bg-surface-1/95 px-2 backdrop-blur md:inset-y-0 md:left-0 md:h-auto md:w-60 md:flex-col md:items-stretch md:gap-0 md:border-t-0 md:border-r md:px-0">
@@ -36,7 +37,7 @@ export function Sidebar() {
       </Link>
 
       <nav className="flex flex-1 items-center justify-around gap-1 md:flex-col md:items-stretch md:justify-start md:gap-0.5 md:px-3">
-        {NAV.map(({ href, label, icon: Icon }) => {
+        {nav.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link
@@ -60,7 +61,18 @@ export function Sidebar() {
       </nav>
 
       <div className="hidden px-5 py-4 text-[11px] text-faint md:block">
-        local-first · your data stays here
+        {publicMode ? (
+          <a
+            href="https://github.com/thebenignhacker/atlas"
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-text"
+          >
+            public demo · built with Atlas
+          </a>
+        ) : (
+          "local-first · your data stays here"
+        )}
       </div>
     </aside>
   );

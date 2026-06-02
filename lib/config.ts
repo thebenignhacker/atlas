@@ -13,6 +13,11 @@ export interface AtlasConfig {
   github: { user?: string; orgs?: string[] };
   /** Directory name fragments to skip while walking. */
   exclude: string[];
+  /**
+   * GitHub owners/orgs allowed to appear in the PUBLIC snapshot. Empty = all
+   * public repos. Use this to keep specific accounts out of the public demo.
+   */
+  publicOwners: string[];
   /** AI layer. Disabled by default — Atlas is fully usable without it. */
   ai: {
     enabled: boolean;
@@ -31,6 +36,7 @@ const DEFAULT_CONFIG: AtlasConfig = {
   todoDirs: [],
   github: { user: undefined, orgs: [] },
   exclude: ["node_modules", ".next", ".git", "archive-", "dist", "build"],
+  publicOwners: [],
   ai: {
     enabled: false,
     provider: "anthropic",
