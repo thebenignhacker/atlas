@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-03T13:28:35.673Z",
+  "generatedAt": "2026-06-03T14:25:43.573Z",
   "stats": {
-    "lastScanAt": "2026-06-03T13:28:35.672Z",
+    "lastScanAt": "2026-06-03T14:25:43.573Z",
     "repoCount": 39,
     "todoCount": 0,
     "activityCount": 534,
@@ -417,7 +417,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 5,
+        "daysSinceCommit": 6,
         "attention": []
       },
       "openTodos": 0
@@ -451,7 +451,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 5,
+        "daysSinceCommit": 6,
         "attention": []
       },
       "openTodos": 0
@@ -829,7 +829,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 9,
+        "daysSinceCommit": 10,
         "attention": []
       },
       "openTodos": 0
@@ -6174,7 +6174,7 @@
       "derivedAt": "2026-06-03T13:07:03.377Z",
       "lastVerifiedAt": "2026-06-03T13:07:03.377Z",
       "staleAfterDays": null,
-      "freshness": "fresh",
+      "freshness": "drifted",
       "driftedPaths": [],
       "tags": [
         "feature",
@@ -6184,18 +6184,19 @@
       "status": "active",
       "supersededBy": null,
       "visibility": "public",
+      "sensitive": false,
       "originSessionId": null,
       "createdAt": "2026-06-03T13:07:03.377Z",
-      "updatedAt": "2026-06-03T13:07:03.377Z"
+      "updatedAt": "2026-06-03T14:22:49.099Z"
     }
   ],
   "contextMetrics": {
     "totalCards": 1,
     "activeCards": 1,
-    "staleCaught": 0,
+    "staleCaught": 1,
     "freshness": {
-      "fresh": 1,
-      "drifted": 0,
+      "fresh": 0,
+      "drifted": 1,
       "expired": 0,
       "stale": 0,
       "unverified": 0

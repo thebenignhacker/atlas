@@ -18,6 +18,13 @@ export interface AtlasConfig {
    * public repos. Use this to keep specific accounts out of the public demo.
    */
   publicOwners: string[];
+  /**
+   * Repo slugs marked SENSITIVE — a hard never-publish. A sensitive repo (and
+   * every context card under it) is dropped from the public snapshot even when
+   * the repo is GitHub-public, and the snapshot gate fails closed if one would
+   * leak. Stronger than relying on GitHub visibility.
+   */
+  sensitiveRepos: string[];
   /** AI layer. Disabled by default — Atlas is fully usable without it. */
   ai: {
     enabled: boolean;
@@ -37,6 +44,7 @@ const DEFAULT_CONFIG: AtlasConfig = {
   github: { user: undefined, orgs: [] },
   exclude: ["node_modules", ".next", ".git", "archive-", "dist", "build"],
   publicOwners: [],
+  sensitiveRepos: [],
   ai: {
     enabled: false,
     provider: "anthropic",

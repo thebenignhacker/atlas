@@ -126,7 +126,31 @@ export interface ContextCard {
   status: CardStatus;
   supersededBy: string | null;
   visibility: CardVisibility;
+  /** Hard never-publishable flag. Dropped from every public surface even when the
+   *  repo is GitHub-public; the snapshot gate fails closed if one would leak. */
+  sensitive: boolean;
   originSessionId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/**
+ * A Claude session that established one or more context cards. Lets you trace a
+ * fact back to the session that set it and re-open that session
+ * (`claude --resume <id>`). Owner/local only — never written to the public
+ * snapshot.
+ */
+export interface Session {
+  id: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  summary: string | null;
+  /** Git branches this session worked on (free-form, optional). */
+  branches: string[];
+  /** Projects/repos this session touched, accumulated as cards are added. */
+  repos: string[];
+  /** Number of context cards this session established. Measured. */
+  cardCount: number;
   createdAt: string | null;
   updatedAt: string | null;
 }

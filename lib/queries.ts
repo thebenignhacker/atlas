@@ -4,7 +4,7 @@ import { computeSignals } from "@/lib/signals";
 import { loadPublicSnapshot, loadOwnerSnapshot } from "@/lib/snapshot";
 import { getLatestOutput } from "@/lib/ai/cache";
 import { isPublicMode, isOwnerMode } from "@/lib/mode";
-import { getCards } from "@/lib/context/store";
+import { getCards, getSessions as getSessionsFromDb } from "@/lib/context/store";
 import { getMetrics } from "@/lib/context/metrics";
 import type {
   ActivityEvent,
@@ -12,6 +12,7 @@ import type {
   ContextMetrics,
   Repo,
   RepoSignals,
+  Session,
   Todo,
 } from "@/lib/types";
 
@@ -203,6 +204,23 @@ export function getContextMetrics(): ContextMetrics {
   const db = getReadDb();
   try {
     return getMetrics(db);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Claude session registry. Owner/local only — sessions are never written to the
+ * public snapshot (they carry harness ids and internal repo/branch state), so
+ * the public demo always sees an empty list. The owner snapshot carries them for
+ * the login-gated owner deployment.
+ */
+export function getSessions(): Session[] {
+  if (isPublicMode()) return [];
+  if (isOwnerMode()) return loadOwnerSnapshot().sessions ?? [];
+  const db = getReadDb();
+  try {
+    return getSessionsFromDb(db);
   } finally {
     db.close();
   }

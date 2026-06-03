@@ -147,6 +147,10 @@ CREATE TABLE IF NOT EXISTS context_cards (
   status TEXT DEFAULT 'active',       -- 'active' | 'superseded' | 'retired'
   supersededBy TEXT,
   visibility TEXT DEFAULT 'private',  -- 'private' | 'public'
+  -- Hard "never publishable" flag. Stronger than visibility=private: a sensitive
+  -- card is dropped from EVERY public surface (and the snapshot gate fails closed
+  -- if one would leak), even when the underlying GitHub repo is public.
+  sensitive INTEGER DEFAULT 0,
   originSessionId TEXT,
   createdAt TEXT,
   updatedAt TEXT
@@ -155,6 +159,27 @@ CREATE INDEX IF NOT EXISTS idx_context_project ON context_cards(project);
 CREATE INDEX IF NOT EXISTS idx_context_status ON context_cards(status);
 CREATE INDEX IF NOT EXISTS idx_context_repo ON context_cards(repoSlug);
 CREATE INDEX IF NOT EXISTS idx_context_fresh ON context_cards(freshness);
+CREATE INDEX IF NOT EXISTS idx_context_session ON context_cards(originSessionId);
+-- NOTE: the index on the sensitive column is created in initSchema AFTER the
+-- column migration, so it works on databases predating that column too.
+
+-- Claude session registry. A card's originSessionId points here so you can see
+-- which session established a fact and jump back to it (claude --resume <id>).
+-- Populated incrementally: the SessionStart hook registers a session; each card
+-- added under that session merges its project/repo into the repos list and bumps
+-- the count. Never published — sessions stay out of the public snapshot entirely.
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  startedAt TEXT,
+  endedAt TEXT,
+  summary TEXT,
+  branches TEXT,            -- JSON string array
+  repos TEXT,               -- JSON string array (projects/repos this session touched)
+  cardCount INTEGER DEFAULT 0,
+  createdAt TEXT,
+  updatedAt TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(startedAt);
 
 -- Append-only event log. The hero metric ("stale facts caught") is a COUNT over
 -- kind='caught_stale' rows, so the headline number is measured, never estimated.
@@ -197,8 +222,33 @@ export function getReadDb(): Database.Database {
   return db;
 }
 
+/**
+ * Add a column to an existing table if it isn't there yet. `CREATE TABLE IF NOT
+ * EXISTS` never alters an existing table, so a DB created before a column was
+ * introduced needs this. Idempotent and safe to run on every init.
+ */
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  ddl: string
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+
 export function initSchema(db: Database.Database = getDb()): void {
   db.exec(SCHEMA);
+  // Migrations for DBs created before these columns existed. The column must be
+  // added before any index on it, hence after the SCHEMA exec above.
+  addColumnIfMissing(db, "context_cards", "sensitive", "sensitive INTEGER DEFAULT 0");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_context_sensitive ON context_cards(sensitive)"
+  );
 }
 
 export function dbExists(): boolean {
