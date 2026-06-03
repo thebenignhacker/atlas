@@ -8,11 +8,13 @@ import {
   LayoutGrid,
   ListChecks,
   Settings,
+  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Portfolio", icon: LayoutGrid, ownerOnly: false },
+  { href: "/context", label: "Context", icon: ShieldCheck, ownerOnly: false },
   { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },
   { href: "/activity", label: "Activity", icon: Activity, ownerOnly: false },
   { href: "/digest", label: "AI Digest", icon: Sparkles, ownerOnly: true },

@@ -90,9 +90,9 @@ export function computeFreshness(i: {
 
 // --- row mapping -----------------------------------------------------------
 
-type CardRow = Record<string, unknown>;
+export type CardRow = Record<string, unknown>;
 
-function rowToCard(r: CardRow): ContextCard {
+export function rowToCard(r: CardRow): ContextCard {
   return {
     id: r.id as string,
     project: r.project as string,

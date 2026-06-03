@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-02T02:37:32.023Z",
+  "generatedAt": "2026-06-03T13:12:34.622Z",
   "stats": {
-    "lastScanAt": "2026-06-02T02:37:32.023Z",
+    "lastScanAt": "2026-06-03T13:12:34.622Z",
     "repoCount": 39,
     "todoCount": 0,
     "activityCount": 534,
@@ -41,7 +41,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -75,7 +75,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -109,7 +109,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -143,7 +143,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -177,7 +177,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -211,7 +211,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": [
           "1 open PR(s)"
         ]
@@ -247,7 +247,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -281,7 +281,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -315,7 +315,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "fresh",
-        "daysSinceCommit": 0,
+        "daysSinceCommit": 1,
         "attention": []
       },
       "openTodos": 0
@@ -349,7 +349,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 5,
         "attention": []
       },
       "openTodos": 0
@@ -383,7 +383,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 5,
         "attention": []
       },
       "openTodos": 0
@@ -417,7 +417,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 5,
         "attention": []
       },
       "openTodos": 0
@@ -451,7 +451,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 5,
         "attention": []
       },
       "openTodos": 0
@@ -485,7 +485,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 6,
         "attention": []
       },
       "openTodos": 0
@@ -519,7 +519,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 6,
         "attention": [
           "1 open PR(s)"
         ]
@@ -555,7 +555,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 4,
+        "daysSinceCommit": 6,
         "attention": []
       },
       "openTodos": 0
@@ -589,7 +589,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 5,
+        "daysSinceCommit": 6,
         "attention": [
           "1 open PR(s)"
         ]
@@ -625,7 +625,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -659,7 +659,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -693,7 +693,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -727,7 +727,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -761,7 +761,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -795,7 +795,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -829,7 +829,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 9,
         "attention": []
       },
       "openTodos": 0
@@ -863,7 +863,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 8,
+        "daysSinceCommit": 10,
         "attention": []
       },
       "openTodos": 0
@@ -897,7 +897,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 11,
+        "daysSinceCommit": 12,
         "attention": [
           "1 open PR(s)"
         ]
@@ -933,7 +933,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 12,
+        "daysSinceCommit": 13,
         "attention": []
       },
       "openTodos": 0
@@ -967,7 +967,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 13,
+        "daysSinceCommit": 14,
         "attention": []
       },
       "openTodos": 0
@@ -1001,7 +1001,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 20,
+        "daysSinceCommit": 21,
         "attention": []
       },
       "openTodos": 0
@@ -1035,7 +1035,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 21,
+        "daysSinceCommit": 22,
         "attention": []
       },
       "openTodos": 0
@@ -1069,7 +1069,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "aging",
-        "daysSinceCommit": 21,
+        "daysSinceCommit": 22,
         "attention": []
       },
       "openTodos": 0
@@ -1103,7 +1103,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 44,
+        "daysSinceCommit": 45,
         "attention": []
       },
       "openTodos": 0
@@ -1137,7 +1137,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 53,
+        "daysSinceCommit": 54,
         "attention": []
       },
       "openTodos": 0
@@ -1171,7 +1171,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 53,
+        "daysSinceCommit": 55,
         "attention": []
       },
       "openTodos": 0
@@ -1205,7 +1205,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 53,
+        "daysSinceCommit": 55,
         "attention": []
       },
       "openTodos": 0
@@ -1239,7 +1239,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 68,
+        "daysSinceCommit": 70,
         "attention": []
       },
       "openTodos": 0
@@ -1273,7 +1273,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 68,
+        "daysSinceCommit": 70,
         "attention": []
       },
       "openTodos": 0
@@ -1307,7 +1307,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 68,
+        "daysSinceCommit": 70,
         "attention": []
       },
       "openTodos": 0
@@ -1341,7 +1341,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "stale",
-        "daysSinceCommit": 70,
+        "daysSinceCommit": 71,
         "attention": []
       },
       "openTodos": 0
@@ -6157,5 +6157,50 @@
   ],
   "summaries": {
     "opena2a-org-hackmyagent": "HackMyAgent is a TypeScript security scanner and red-team toolkit for AI agents, part of the OpenA2A ecosystem. It runs 209 static checks, 29 semantic analyses via NanoMind AST, and 164 adversarial payloads to detect credentials, prompt injection, MCP misconfigs, and agent vulnerabilities. Marked stable at v0.23.5 with 32 commits in the last month and 27 open todos, mostly release and documentation tasks."
+  },
+  "contextCards": [
+    {
+      "id": "atlas:context-store",
+      "project": "atlas",
+      "repoSlug": null,
+      "subject": "context store",
+      "claim": "Atlas ships a provenance-and-freshness Context Store via the atlas-context CLI",
+      "detail": null,
+      "provenance": [],
+      "verifyCommand": null,
+      "verifyResult": "pass",
+      "verifyCheckedAt": null,
+      "confidence": "medium",
+      "derivedAt": "2026-06-03T13:07:03.377Z",
+      "lastVerifiedAt": "2026-06-03T13:07:03.377Z",
+      "staleAfterDays": null,
+      "freshness": "fresh",
+      "driftedPaths": [],
+      "tags": [
+        "feature",
+        "context"
+      ],
+      "links": [],
+      "status": "active",
+      "supersededBy": null,
+      "visibility": "public",
+      "originSessionId": null,
+      "createdAt": "2026-06-03T13:07:03.377Z",
+      "updatedAt": "2026-06-03T13:07:03.377Z"
+    }
+  ],
+  "contextMetrics": {
+    "totalCards": 3,
+    "activeCards": 3,
+    "staleCaught": 0,
+    "freshness": {
+      "fresh": 3,
+      "drifted": 0,
+      "expired": 0,
+      "stale": 0,
+      "unverified": 0
+    },
+    "tokensSavedEstimate": 5680,
+    "reads": 1
   }
 }

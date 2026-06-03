@@ -69,6 +69,22 @@ function main() {
     if (re.test(json)) violations.push(`possible ${label} present`);
   }
 
+  // 5) Context cards: only PUBLIC cards, and never their guts (source paths,
+  //    verify commands, drift paths, origin session). These would leak machine
+  //    layout and internal commands even though the claim itself is public.
+  for (const c of snapshot.contextCards) {
+    if (c.visibility !== "public")
+      violations.push(`non-public context card "${c.id}" present in snapshot`);
+    if (c.provenance.length > 0)
+      violations.push(`context card "${c.id}" leaked provenance paths`);
+    if (c.verifyCommand)
+      violations.push(`context card "${c.id}" leaked a verify command`);
+    if (c.driftedPaths.length > 0)
+      violations.push(`context card "${c.id}" leaked drifted paths`);
+    if (c.originSessionId)
+      violations.push(`context card "${c.id}" leaked an origin session id`);
+  }
+
   if (violations.length > 0) {
     console.error("atlas: SNAPSHOT ABORTED — sanitization failed:");
     for (const v of violations) console.error(`  - ${v}`);
@@ -77,7 +93,7 @@ function main() {
 
   fs.writeFileSync(SNAPSHOT_PATH, json);
   console.log(
-    `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries). Sanitization checks passed.`
+    `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries, ${snapshot.contextCards.length} public context cards). Sanitization checks passed.`
   );
 }
 

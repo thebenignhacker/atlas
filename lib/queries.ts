@@ -4,7 +4,16 @@ import { computeSignals } from "@/lib/signals";
 import { loadPublicSnapshot, loadOwnerSnapshot } from "@/lib/snapshot";
 import { getLatestOutput } from "@/lib/ai/cache";
 import { isPublicMode, isOwnerMode } from "@/lib/mode";
-import type { ActivityEvent, Repo, RepoSignals, Todo } from "@/lib/types";
+import { getCards } from "@/lib/context/store";
+import { getMetrics } from "@/lib/context/metrics";
+import type {
+  ActivityEvent,
+  ContextCard,
+  ContextMetrics,
+  Repo,
+  RepoSignals,
+  Todo,
+} from "@/lib/types";
 
 export interface RepoWithSignals extends Repo {
   signals: RepoSignals;
@@ -150,6 +159,50 @@ export function getActivity(limit = 300): ActivityEvent[] {
     return db
       .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT ?")
       .all(limit) as ActivityEvent[];
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Context cards for the dashboard. Read-only: the UI shows the CACHED freshness
+ * (the atlas-context CLI recomputes drift on the owner machine where the source
+ * files live). In the public demo only `public` cards are exposed.
+ */
+export function getContextCards(project?: string): ContextCard[] {
+  if (isPublicMode())
+    return (loadPublicSnapshot().contextCards ?? []).filter(
+      (c) => !project || c.project === project
+    );
+  if (isOwnerMode())
+    return (loadOwnerSnapshot().contextCards ?? []).filter(
+      (c) => !project || c.project === project
+    );
+  const db = getReadDb();
+  try {
+    // recomputeDrift/logRead would write; the read-only UI must not. Cached
+    // freshness is shown with its age so it stays honest.
+    return getCards(db, { project }, { recomputeDrift: false, logRead: false });
+  } finally {
+    db.close();
+  }
+}
+
+const EMPTY_METRICS: ContextMetrics = {
+  totalCards: 0,
+  activeCards: 0,
+  staleCaught: 0,
+  freshness: { fresh: 0, drifted: 0, expired: 0, stale: 0, unverified: 0 },
+  tokensSavedEstimate: 0,
+  reads: 0,
+};
+
+export function getContextMetrics(): ContextMetrics {
+  if (isPublicMode()) return loadPublicSnapshot().contextMetrics ?? EMPTY_METRICS;
+  if (isOwnerMode()) return loadOwnerSnapshot().contextMetrics ?? EMPTY_METRICS;
+  const db = getReadDb();
+  try {
+    return getMetrics(db);
   } finally {
     db.close();
   }

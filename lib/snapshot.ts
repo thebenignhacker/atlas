@@ -3,7 +3,15 @@ import path from "node:path";
 import { getReadDb, getMeta } from "@/lib/db";
 import { loadConfig } from "@/lib/config";
 import { computeSignals } from "@/lib/signals";
-import type { ActivityEvent, Repo, Todo } from "@/lib/types";
+import { rowToCard, type CardRow } from "@/lib/context/store";
+import { getMetrics } from "@/lib/context/metrics";
+import type {
+  ActivityEvent,
+  ContextCard,
+  ContextMetrics,
+  Repo,
+  Todo,
+} from "@/lib/types";
 import type { AtlasStats, RepoWithSignals } from "@/lib/queries";
 // Type-only imports: erased at compile time, so this file never pulls the AI
 // stack (or the Anthropic SDK) into the runtime bundle. Keeps the snapshot layer
@@ -22,6 +30,34 @@ export interface PublicSnapshot {
   repos: RepoWithSignals[];
   activity: ActivityEvent[];
   summaries: Record<string, string>;
+  /** Only `public` cards, with provenance/verify/paths stripped and names redacted. */
+  contextCards: ContextCard[];
+  /** Aggregate counts only — safe to publish, leak nothing per-card. */
+  contextMetrics: ContextMetrics;
+}
+
+/**
+ * Strip everything machine- or command-specific from a context card before it
+ * can appear in the public demo: source paths, the verify command, drift paths,
+ * the origin session. Free text is redacted by the caller. What remains is the
+ * claim, its freshness, and when it was verified — the showcase, not the guts.
+ */
+function sanitizeCard(
+  card: ContextCard,
+  redact: (s: string | null) => string | null
+): ContextCard {
+  return {
+    ...card,
+    claim: redact(card.claim) ?? "",
+    detail: redact(card.detail),
+    subject: redact(card.subject) ?? card.subject,
+    provenance: [],
+    verifyCommand: null,
+    verifyCheckedAt: null,
+    driftedPaths: [],
+    originSessionId: null,
+    repoSlug: null,
+  };
 }
 
 /**
@@ -43,6 +79,9 @@ export interface OwnerSnapshot {
   feedback: LearnedItem[];
   /** AI availability captured at generation time (the host has no API key). */
   ai: AIAvailability;
+  /** All context cards, unredacted (owner deployment is OAuth-gated). */
+  contextCards: ContextCard[];
+  contextMetrics: ContextMetrics;
 }
 
 /**
@@ -161,12 +200,26 @@ export function generatePublicSnapshot(): PublicSnapshot {
       openP0: 0,
     };
 
+    // Only public, active cards reach the demo, fully sanitized + redacted.
+    const cardRows = db
+      .prepare(
+        "SELECT * FROM context_cards WHERE visibility = 'public' AND status = 'active'"
+      )
+      .all() as CardRow[];
+    const contextCards = cardRows
+      .map(rowToCard)
+      .map((c) => sanitizeCard(c, redact));
+    // Aggregate metrics are counts only (no per-card content) — safe to publish.
+    const contextMetrics = getMetrics(db);
+
     return {
       generatedAt: new Date().toISOString(),
       stats,
       repos,
       activity,
       summaries,
+      contextCards,
+      contextMetrics,
     };
   } finally {
     db.close();
@@ -284,6 +337,13 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       openP0: todos.filter((t) => t.priority === "P0" && t.status === "open").length,
     };
 
+    const contextCards = (
+      db
+        .prepare("SELECT * FROM context_cards WHERE status = 'active'")
+        .all() as CardRow[]
+    ).map(rowToCard);
+    const contextMetrics = getMetrics(db);
+
     return {
       generatedAt: new Date().toISOString(),
       stats,
@@ -295,6 +355,8 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       cost,
       feedback,
       ai,
+      contextCards,
+      contextMetrics,
     };
   } finally {
     db.close();
