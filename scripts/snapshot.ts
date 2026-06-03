@@ -51,8 +51,8 @@ function main() {
     }
   }
 
-  // 3) No absolute unix paths anywhere.
-  if (/\/Users\/[\w.-]+/.test(json) || /\/home\/[\w.-]+/.test(json))
+  // 3) No absolute unix paths anywhere (common home + system roots).
+  if (/\/(?:Users|home|root)\/[\w.-]+/.test(json))
     violations.push("absolute filesystem path present");
 
   // 4) No credential-like tokens (GitHub PAT, AWS key, OpenAI/Anthropic key,
@@ -69,6 +69,37 @@ function main() {
     if (re.test(json)) violations.push(`possible ${label} present`);
   }
 
+  // 5) Context cards: only PUBLIC cards, and never their guts (source paths,
+  //    verify commands, drift paths, origin session). These would leak machine
+  //    layout and internal commands even though the claim itself is public.
+  for (const c of snapshot.contextCards) {
+    if (c.visibility !== "public")
+      violations.push(`non-public context card "${c.id}" present in snapshot`);
+    if (c.provenance.length > 0)
+      violations.push(`context card "${c.id}" leaked provenance paths`);
+    if (c.verifyCommand)
+      violations.push(`context card "${c.id}" leaked a verify command`);
+    if (c.driftedPaths.length > 0)
+      violations.push(`context card "${c.id}" leaked drifted paths`);
+    if (c.originSessionId)
+      violations.push(`context card "${c.id}" leaked an origin session id`);
+  }
+
+  // 6) Published metrics must describe ONLY the public cards — never disclose
+  //    the count or freshness of private cards. Fail closed on any mismatch.
+  const m = snapshot.contextMetrics;
+  const freshnessSum = Object.values(m.freshness).reduce((a, b) => a + b, 0);
+  if (m.totalCards !== snapshot.contextCards.length)
+    violations.push(
+      `contextMetrics.totalCards (${m.totalCards}) != public card count (${snapshot.contextCards.length}) — leaks private card count`
+    );
+  if (freshnessSum !== snapshot.contextCards.length)
+    violations.push(
+      `contextMetrics freshness sum (${freshnessSum}) != public card count (${snapshot.contextCards.length}) — leaks private card freshness`
+    );
+  if (m.reads !== 0)
+    violations.push(`contextMetrics.reads (${m.reads}) should be 0 publicly (owner usage)`);
+
   if (violations.length > 0) {
     console.error("atlas: SNAPSHOT ABORTED — sanitization failed:");
     for (const v of violations) console.error(`  - ${v}`);
@@ -77,7 +108,7 @@ function main() {
 
   fs.writeFileSync(SNAPSHOT_PATH, json);
   console.log(
-    `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries). Sanitization checks passed.`
+    `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries, ${snapshot.contextCards.length} public context cards). Sanitization checks passed.`
   );
 }
 
