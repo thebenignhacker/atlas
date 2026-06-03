@@ -30,29 +30,53 @@ const FRESH_STATES: Freshness[] = [
   "unverified",
 ];
 
-export function getMetrics(db: Database.Database): ContextMetrics {
+/**
+ * @param opts.publicOnly  Scope EVERY number to `visibility='public'` cards.
+ *   Used for the public snapshot so it never discloses the count, freshness, or
+ *   read/usage activity of private cards. Read/usage stats (reads, tokensSaved)
+ *   are owner-only and reported as 0 publicly. Owner/local pass no opts and see
+ *   the full picture.
+ */
+export function getMetrics(
+  db: Database.Database,
+  opts: { publicOnly?: boolean } = {}
+): ContextMetrics {
+  const pub = opts.publicOnly === true;
+  const scope = pub ? " AND visibility='public'" : "";
+
   const totalCards = (
-    db.prepare("SELECT count(*) n FROM context_cards").get() as { n: number }
+    db
+      .prepare(`SELECT count(*) n FROM context_cards WHERE 1=1${pub ? " AND visibility='public'" : ""}`)
+      .get() as { n: number }
   ).n;
   const activeCards = (
     db
-      .prepare("SELECT count(*) n FROM context_cards WHERE status='active'")
+      .prepare(`SELECT count(*) n FROM context_cards WHERE status='active'${scope}`)
       .get() as { n: number }
   ).n;
 
+  // caught_stale events scoped to in-scope cards (public set when publicOnly).
   const staleCaught = (
     db
-      .prepare("SELECT count(*) n FROM context_events WHERE kind='caught_stale'")
+      .prepare(
+        `SELECT count(*) n FROM context_events WHERE kind='caught_stale'` +
+          (pub
+            ? " AND cardId IN (SELECT id FROM context_cards WHERE visibility='public')"
+            : "")
+      )
       .get() as { n: number }
   ).n;
 
-  const reads = (
-    db
-      .prepare("SELECT count(*) n FROM context_events WHERE kind='read'")
-      .get() as { n: number }
-  ).n;
+  // Read/usage stats are owner activity, never published.
+  const reads = pub
+    ? 0
+    : (
+        db
+          .prepare("SELECT count(*) n FROM context_events WHERE kind='read'")
+          .get() as { n: number }
+      ).n;
 
-  // Freshness coverage over ACTIVE cards (point-in-time gauge).
+  // Freshness coverage over in-scope ACTIVE cards (point-in-time gauge).
   const freshness: Record<Freshness, number> = {
     fresh: 0,
     drifted: 0,
@@ -62,7 +86,7 @@ export function getMetrics(db: Database.Database): ContextMetrics {
   };
   const rows = db
     .prepare(
-      "SELECT freshness, count(*) n FROM context_cards WHERE status='active' GROUP BY freshness"
+      `SELECT freshness, count(*) n FROM context_cards WHERE status='active'${scope} GROUP BY freshness`
     )
     .all() as { freshness: string; n: number }[];
   for (const r of rows) {
@@ -71,23 +95,29 @@ export function getMetrics(db: Database.Database): ContextMetrics {
     }
   }
 
-  // Estimated tokens saved: for each recorded read, the baseline re-read cost
-  // minus the cost of serving the cards instead. Floored at 0 per read.
-  const readRows = db
-    .prepare("SELECT detail FROM context_events WHERE kind='read'")
-    .all() as { detail: string | null }[];
+  // Estimated tokens saved (owner-only): baseline re-read cost minus the cost of
+  // serving the cards instead, per recorded read. Floored at 0 per read.
   let tokensSavedEstimate = 0;
-  for (const r of readRows) {
-    let cardCount = 0;
-    try {
-      cardCount = Number(JSON.parse(r.detail ?? "{}").cardCount ?? 0);
-    } catch {
-      cardCount = 0;
+  if (!pub) {
+    const readRows = db
+      .prepare("SELECT detail FROM context_events WHERE kind='read'")
+      .all() as { detail: string | null }[];
+    for (const r of readRows) {
+      let cardCount = 0;
+      try {
+        cardCount = Number(JSON.parse(r.detail ?? "{}").cardCount ?? 0);
+      } catch {
+        cardCount = 0;
+      }
+      // A read that returned no cards saved nothing — the question wasn't
+      // answered, so it didn't replace a repo re-read. Only credit real hits.
+      if (cardCount > 0) {
+        tokensSavedEstimate += Math.max(
+          0,
+          RE_READ_BASELINE_TOKENS - cardCount * TOKENS_PER_CARD
+        );
+      }
     }
-    tokensSavedEstimate += Math.max(
-      0,
-      RE_READ_BASELINE_TOKENS - cardCount * TOKENS_PER_CARD
-    );
   }
 
   return {

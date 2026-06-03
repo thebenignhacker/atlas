@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-03T13:12:34.622Z",
+  "generatedAt": "2026-06-03T13:28:35.673Z",
   "stats": {
-    "lastScanAt": "2026-06-03T13:12:34.622Z",
+    "lastScanAt": "2026-06-03T13:28:35.672Z",
     "repoCount": 39,
     "todoCount": 0,
     "activityCount": 534,
@@ -6190,17 +6190,17 @@
     }
   ],
   "contextMetrics": {
-    "totalCards": 3,
-    "activeCards": 3,
+    "totalCards": 1,
+    "activeCards": 1,
     "staleCaught": 0,
     "freshness": {
-      "fresh": 3,
+      "fresh": 1,
       "drifted": 0,
       "expired": 0,
       "stale": 0,
       "unverified": 0
     },
-    "tokensSavedEstimate": 5680,
-    "reads": 1
+    "tokensSavedEstimate": 0,
+    "reads": 0
   }
 }

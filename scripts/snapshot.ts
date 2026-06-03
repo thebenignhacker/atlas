@@ -51,8 +51,8 @@ function main() {
     }
   }
 
-  // 3) No absolute unix paths anywhere.
-  if (/\/Users\/[\w.-]+/.test(json) || /\/home\/[\w.-]+/.test(json))
+  // 3) No absolute unix paths anywhere (common home + system roots).
+  if (/\/(?:Users|home|root)\/[\w.-]+/.test(json))
     violations.push("absolute filesystem path present");
 
   // 4) No credential-like tokens (GitHub PAT, AWS key, OpenAI/Anthropic key,
@@ -84,6 +84,21 @@ function main() {
     if (c.originSessionId)
       violations.push(`context card "${c.id}" leaked an origin session id`);
   }
+
+  // 6) Published metrics must describe ONLY the public cards — never disclose
+  //    the count or freshness of private cards. Fail closed on any mismatch.
+  const m = snapshot.contextMetrics;
+  const freshnessSum = Object.values(m.freshness).reduce((a, b) => a + b, 0);
+  if (m.totalCards !== snapshot.contextCards.length)
+    violations.push(
+      `contextMetrics.totalCards (${m.totalCards}) != public card count (${snapshot.contextCards.length}) — leaks private card count`
+    );
+  if (freshnessSum !== snapshot.contextCards.length)
+    violations.push(
+      `contextMetrics freshness sum (${freshnessSum}) != public card count (${snapshot.contextCards.length}) — leaks private card freshness`
+    );
+  if (m.reads !== 0)
+    violations.push(`contextMetrics.reads (${m.reads}) should be 0 publicly (owner usage)`);
 
   if (violations.length > 0) {
     console.error("atlas: SNAPSHOT ABORTED — sanitization failed:");

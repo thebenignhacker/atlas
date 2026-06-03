@@ -138,6 +138,45 @@ test("verify failure flips a fresh card to stale and is caught", () => {
   assert.equal(getMetrics(db).staleCaught, 1);
 });
 
+test("a read returning zero cards credits no token savings", () => {
+  const db = freshDb();
+  getCards(db, { project: "empty" }, { recomputeDrift: false }); // 0 cards
+  const m = getMetrics(db);
+  assert.equal(m.reads, 1);
+  assert.equal(m.tokensSavedEstimate, 0, "no cards returned => nothing saved");
+});
+
+test("publicOnly metrics never disclose private cards", () => {
+  const db = freshDb();
+  const file = tmpFile("v1");
+  const cwd = path.dirname(file);
+  // Two private (default) cards + one public card.
+  addCard(db, { project: "p", subject: "a", claim: "x", sourcePaths: ["manifest.txt"], cwd });
+  addCard(db, { project: "p", subject: "b", claim: "y", confidence: "unverified" });
+  addCard(db, {
+    project: "p",
+    subject: "c",
+    claim: "z",
+    sourcePaths: ["manifest.txt"],
+    visibility: "public",
+    cwd,
+  });
+  getCards(db, { project: "p" }, { recomputeDrift: false }); // a read event
+
+  const full = getMetrics(db);
+  const pub = getMetrics(db, { publicOnly: true });
+
+  assert.equal(full.totalCards, 3);
+  assert.equal(pub.totalCards, 1, "public metrics count only public cards");
+  assert.equal(
+    Object.values(pub.freshness).reduce((a, b) => a + b, 0),
+    1,
+    "public freshness sum == public card count"
+  );
+  assert.equal(pub.reads, 0, "owner read activity not published");
+  assert.equal(pub.tokensSavedEstimate, 0, "owner usage estimate not published");
+});
+
 test("freshOnly filter hides flagged cards", () => {
   const db = freshDb();
   const file = tmpFile("v1");

@@ -42,15 +42,28 @@ export interface PublicSnapshot {
  * the origin session. Free text is redacted by the caller. What remains is the
  * claim, its freshness, and when it was verified — the showcase, not the guts.
  */
+/** Blank absolute filesystem paths embedded in free text (e.g. a claim that
+ *  mentions "/Users/me/proj/x"). The snapshot gate greps for these too and
+ *  fails closed; stripping here makes the sanitizer self-sufficient so the gate
+ *  is a second line of defense, not the only one. */
+function stripPaths(s: string | null): string | null {
+  if (!s) return s;
+  return s.replace(
+    /(?:\/(?:Users|home|root|var|tmp|opt|mnt|private|srv)\/[^\s)'"]+)/g,
+    "[path]"
+  );
+}
+
 function sanitizeCard(
   card: ContextCard,
   redact: (s: string | null) => string | null
 ): ContextCard {
+  const clean = (s: string | null) => stripPaths(redact(s));
   return {
     ...card,
-    claim: redact(card.claim) ?? "",
-    detail: redact(card.detail),
-    subject: redact(card.subject) ?? card.subject,
+    claim: clean(card.claim) ?? "",
+    detail: clean(card.detail),
+    subject: clean(card.subject) ?? card.subject,
     provenance: [],
     verifyCommand: null,
     verifyCheckedAt: null,
@@ -209,8 +222,9 @@ export function generatePublicSnapshot(): PublicSnapshot {
     const contextCards = cardRows
       .map(rowToCard)
       .map((c) => sanitizeCard(c, redact));
-    // Aggregate metrics are counts only (no per-card content) — safe to publish.
-    const contextMetrics = getMetrics(db);
+    // Metrics scoped to PUBLIC cards only — the public snapshot must not
+    // disclose the count, freshness, or read activity of private cards.
+    const contextMetrics = getMetrics(db, { publicOnly: true });
 
     return {
       generatedAt: new Date().toISOString(),
