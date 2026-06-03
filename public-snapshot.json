@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-06-03T14:25:43.573Z",
+  "generatedAt": "2026-06-03T14:36:07.781Z",
   "stats": {
-    "lastScanAt": "2026-06-03T14:25:43.573Z",
+    "lastScanAt": "2026-06-03T14:36:07.781Z",
     "repoCount": 39,
     "todoCount": 0,
     "activityCount": 534,
@@ -349,7 +349,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 5,
+        "daysSinceCommit": 6,
         "attention": []
       },
       "openTodos": 0
@@ -383,7 +383,7 @@
       "scannedAt": "2026-06-02T01:08:59.230Z",
       "signals": {
         "staleness": "recent",
-        "daysSinceCommit": 5,
+        "daysSinceCommit": 6,
         "attention": []
       },
       "openTodos": 0

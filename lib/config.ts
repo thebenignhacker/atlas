@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { slugify } from "@/lib/util/format";
 
 export interface AtlasConfig {
   /** Directories to scan for git repositories. */
@@ -83,5 +84,11 @@ export function loadConfig(): AtlasConfig {
   // Normalize paths up-front so the rest of the code never sees a `~`.
   cached.scanRoots = cached.scanRoots.map(expandHome);
   cached.todoDirs = cached.todoDirs.map(expandHome);
+  // Canonicalize sensitiveRepos to the SAME slug form repos are stored under, so
+  // a hand-typed entry with uppercase or stray whitespace ("My-Repo", "repo ")
+  // still matches and the never-publish guarantee can't silently fail open.
+  cached.sensitiveRepos = Array.from(
+    new Set(cached.sensitiveRepos.map(slugify).filter(Boolean))
+  );
   return cached;
 }

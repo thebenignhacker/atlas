@@ -39,13 +39,35 @@ export function isCardPublishable(
   card: ContextCard,
   sensitiveSlugs: Set<string>
 ): boolean {
+  // Normalize both comparison inputs to the same slug form the config set is
+  // canonicalized to (see loadConfig) — never compare a raw, possibly mixed-case
+  // value against the normalized set, or the exclusion can silently fail open.
   return (
     card.visibility === "public" &&
     card.status === "active" &&
     !card.sensitive &&
-    !(card.repoSlug != null && sensitiveSlugs.has(card.repoSlug)) &&
+    !(card.repoSlug != null && sensitiveSlugs.has(slug(card.repoSlug))) &&
     !sensitiveSlugs.has(slug(card.project))
   );
+}
+
+/**
+ * Distinctive tokens to scrub from public free text when they originate in
+ * sensitive content (a sensitive card's subject/claim/detail). A token counts
+ * as distinctive — and therefore redactable/assertable — when it's long enough
+ * or carries a separator (`-_./`), e.g. `prod-db-pw`, an internal hostname, a
+ * key name. Short common words ("auth", "prod") are skipped so the public demo
+ * isn't redacted to noise; the same heuristic governs repo-name redaction.
+ * Exported so the snapshot gate re-derives the identical set independently.
+ */
+export function distinctiveTokens(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const out: string[] = [];
+  for (const tok of text.split(/[^\w.\-/]+/)) {
+    if (!tok) continue;
+    if (tok.length >= 5 && (tok.length >= 12 || /[-_./]/.test(tok))) out.push(tok);
+  }
+  return out;
 }
 
 export interface PublicSnapshot {
@@ -193,6 +215,26 @@ export function generatePublicSnapshot(): PublicSnapshot {
       .prepare("SELECT name FROM repos WHERE visibility != 'public' OR isFork = 1")
       .all() as { name: string }[];
     const publicNameSet = new Set(publicRepos.map((r) => r.name));
+    // Distinctive tokens from SENSITIVE cards' own text. A sensitive card never
+    // ships, but its claim could be quoted verbatim inside a publishable card
+    // (the owner authors both); scrub those tokens so the secret can't leak by
+    // cross-reference. The gate re-derives the same set and fails closed.
+    const isSensitiveCard = (c: ContextCard): boolean =>
+      c.sensitive ||
+      (c.repoSlug != null && sensitiveSlugs.has(slug(c.repoSlug))) ||
+      sensitiveSlugs.has(slug(c.project));
+    const sensitiveCardRows = (
+      db
+        .prepare("SELECT * FROM context_cards WHERE status = 'active'")
+        .all() as CardRow[]
+    )
+      .map(rowToCard)
+      .filter(isSensitiveCard);
+    const sensitiveCardTokens = sensitiveCardRows.flatMap((c) => [
+      ...distinctiveTokens(c.subject),
+      ...distinctiveTokens(c.claim),
+      ...distinctiveTokens(c.detail),
+    ]);
     // Redact hidden (private/fork) repo names AND sensitive repo names. A
     // sensitive repo may be GitHub-public, so it won't appear in `hidden`; add
     // its name explicitly so any cross-reference in another repo's text is
@@ -209,6 +251,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
               (n.length >= 12 || /[-_]/.test(n))
           ),
         ...sensitiveRepoNames.filter((n) => n && !publicNameSet.has(n)),
+        ...sensitiveCardTokens.filter((t) => !publicNameSet.has(t)),
       ])
     );
     const redactRes = redactNames.map(

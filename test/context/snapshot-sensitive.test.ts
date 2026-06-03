@@ -34,13 +34,14 @@ function seed(): void {
      VALUES (@id,@project,@repoSlug,@subject,@claim,@derivedAt,@lastVerifiedAt,@freshness,
         @status,@visibility,@sensitive,@originSessionId)`
   );
-  // Publishable: public, active, not sensitive, with a session id (to be stripped).
+  // Publishable, but its detail quotes a distinctive token that belongs to a
+  // sensitive card — the snapshot must redact that token (HIGH-2).
   card.run({
     id: "pub:open-fact",
     project: "pub-repo",
     repoSlug: "pub-repo",
     subject: "open fact",
-    claim: "safe to publish",
+    claim: "safe to publish but mentions prod-db-pw-7f3a inline",
     derivedAt: now,
     lastVerifiedAt: now,
     freshness: "fresh",
@@ -55,7 +56,7 @@ function seed(): void {
     project: "pub-repo",
     repoSlug: "pub-repo",
     subject: "secret fact",
-    claim: "INTERNAL ONLY do not leak distinctive-secret-string",
+    claim: "INTERNAL ONLY do not leak distinctive-secret-string prod-db-pw-7f3a",
     derivedAt: now,
     lastVerifiedAt: now,
     freshness: "fresh",
@@ -111,7 +112,9 @@ before(() => {
       github: { user: "tester", orgs: [] },
       exclude: [],
       publicOwners: ["testorg"],
-      sensitiveRepos: ["secret-repo"],
+      // Deliberately mixed-case to prove loadConfig canonicalizes to slug form
+      // (a raw "Secret-Repo" must still match the stored slug "secret-repo").
+      sensitiveRepos: ["Secret-Repo"],
     })
   );
   process.env.ATLAS_DATA_DIR = dataDir;
@@ -155,6 +158,13 @@ test("public snapshot drops sensitive repos and their cards", async () => {
     "sensitive card claim text must not appear"
   );
   assert.ok(!json.includes("sess-xyz-9999"), "session id must not appear");
+  // A distinctive token from a sensitive card, quoted inside a PUBLISHABLE card,
+  // must be redacted (HIGH-2). The publishable card itself still ships.
+  assert.ok(
+    !json.includes("prod-db-pw-7f3a"),
+    "sensitive token quoted in a public card must be redacted"
+  );
+  assert.equal(cardIds.length, 1, "the publishable card still ships");
 });
 
 test("owner snapshot retains sensitive cards and the session registry", async () => {

@@ -7,7 +7,7 @@ import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db";
 import { addCard, getCard } from "@/lib/context/store";
 import { getMetricsForCards } from "@/lib/context/metrics";
-import { isCardPublishable } from "@/lib/snapshot";
+import { isCardPublishable, distinctiveTokens } from "@/lib/snapshot";
 import type { ContextCard } from "@/lib/types";
 
 function freshDb(): Database.Database {
@@ -93,6 +93,26 @@ test("isCardPublishable: defensive — project name mapping to a sensitive slug 
     isCardPublishable(card({ project: "Secret Repo", repoSlug: null }), sensitive),
     false
   );
+});
+
+test("isCardPublishable: a mixed-case repoSlug still matches the normalized sensitive set", () => {
+  // The config set is canonicalized to slug form (loadConfig); the card-side
+  // value must be normalized too or the exclusion silently fails open.
+  const sensitive = new Set(["secret-repo"]);
+  assert.equal(
+    isCardPublishable(card({ repoSlug: "Secret-Repo" }), sensitive),
+    false
+  );
+});
+
+test("distinctiveTokens keeps separator/long tokens, skips short common words", () => {
+  const toks = distinctiveTokens("the prod-db-pw is set and auth works fine");
+  assert.ok(toks.includes("prod-db-pw"), "hyphenated secret-ish token kept");
+  assert.ok(!toks.includes("auth"), "short common word skipped");
+  assert.ok(!toks.includes("the"), "tiny word skipped");
+  // A long bare word (>=12) is distinctive even without a separator.
+  assert.ok(distinctiveTokens("internalhostname12").includes("internalhostname12"));
+  assert.deepEqual(distinctiveTokens(null), []);
 });
 
 test("addCard persists the sensitive flag and round-trips as a boolean", () => {
