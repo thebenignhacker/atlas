@@ -14,6 +14,7 @@ import {
   getTodos,
   getRepoSummary,
   isPublicMode,
+  isOwnerMode,
 } from "@/lib/queries";
 import { STALENESS, languageColor, PRIORITY } from "@/lib/display";
 import { relativeTime } from "@/lib/util/date";
@@ -39,11 +40,13 @@ export default async function RepoPage({
   if (!repo) notFound();
 
   const publicMode = isPublicMode();
+  // Both deployed modes show the AI summary read-only (the host can't generate).
+  const readOnly = publicMode || isOwnerMode();
   const todos = getTodos({ repoSlug: slug });
   const activity = getActivityForRepo(slug, 25);
   const stale = STALENESS[repo.signals.staleness];
   const avail = aiAvailability();
-  const eligible = !publicMode && isRepoAIEligible(repo);
+  const eligible = !readOnly && isRepoAIEligible(repo);
   const initialSummary = getRepoSummary(slug);
   const webUrl =
     repo.owner && repo.repoName
@@ -95,7 +98,7 @@ export default async function RepoPage({
       )}
 
       <div className="mb-6">
-        {publicMode ? (
+        {readOnly ? (
           initialSummary ? (
             <section className="rounded-[var(--radius-card)] border border-purple/20 bg-surface-1 p-4">
               <div className="mb-2">

@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { recordFeedback } from "@/lib/ai/learning";
-import { isPublicMode } from "@/lib/queries";
+import { isSnapshotMode } from "@/lib/mode";
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  if (isPublicMode()) {
-    return NextResponse.json({ error: "Not available in public demo" }, { status: 403 });
+  if (isSnapshotMode()) {
+    // Deployed (public/owner) hosts have no writable DB -- feedback is local-only.
+    return NextResponse.json(
+      { error: "Not available on this deployment; record feedback locally." },
+      { status: 403 }
+    );
   }
   try {
     const body = await req.json();

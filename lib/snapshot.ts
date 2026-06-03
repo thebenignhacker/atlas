@@ -1,12 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getReadDb } from "@/lib/db";
+import { getReadDb, getMeta } from "@/lib/db";
 import { loadConfig } from "@/lib/config";
 import { computeSignals } from "@/lib/signals";
-import type { ActivityEvent, Repo } from "@/lib/types";
+import type { ActivityEvent, Repo, Todo } from "@/lib/types";
 import type { AtlasStats, RepoWithSignals } from "@/lib/queries";
+// Type-only imports: erased at compile time, so this file never pulls the AI
+// stack (or the Anthropic SDK) into the runtime bundle. Keeps the snapshot layer
+// free of import cycles with lib/ai/*.
+import type { DigestResult } from "@/lib/ai/digest";
+import type { AICostSummary } from "@/lib/ai/cache";
+import type { LearnedItem } from "@/lib/ai/learning";
+import type { AIAvailability } from "@/lib/ai/provider";
 
 export const SNAPSHOT_PATH = path.join(process.cwd(), "public-snapshot.json");
+export const OWNER_SNAPSHOT_PATH = path.join(process.cwd(), "owner-snapshot.json");
 
 export interface PublicSnapshot {
   generatedAt: string;
@@ -14,6 +22,27 @@ export interface PublicSnapshot {
   repos: RepoWithSignals[];
   activity: ActivityEvent[];
   summaries: Record<string, string>;
+}
+
+/**
+ * The owner snapshot is a SUPERSET of the public snapshot: full unsanitized data
+ * (all repos with paths, private repos, forks), plus todos, the cached AI digest,
+ * usage cost, and recorded feedback. It is NEVER committed (gitignored); it ships
+ * to the login-gated owner deployment via the Vercel CLI upload, never via git.
+ */
+export interface OwnerSnapshot {
+  generatedAt: string;
+  stats: AtlasStats;
+  repos: RepoWithSignals[];
+  activity: ActivityEvent[];
+  summaries: Record<string, string>;
+  todos: Todo[];
+  /** Latest cached portfolio digest, or null if none was ever generated. */
+  digest: DigestResult | null;
+  cost: AICostSummary;
+  feedback: LearnedItem[];
+  /** AI availability captured at generation time (the host has no API key). */
+  ai: AIAvailability;
 }
 
 /**
@@ -156,4 +185,134 @@ export function loadPublicSnapshot(): PublicSnapshot {
   }
   snapshotCache = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8")) as PublicSnapshot;
   return snapshotCache;
+}
+
+/**
+ * Build the FULL owner snapshot from the local database. Unlike the public
+ * snapshot, nothing is sanitized or redacted; this is the owner's complete view
+ * (all repos, paths, private repos, todos, digest, feedback). Run locally via
+ * `npm run snapshot:owner`; the result is gitignored and uploaded only to the
+ * login-gated owner deployment.
+ *
+ * The AI availability cannot be derived on the read-only host (no API key there),
+ * so the caller captures it locally at generation time and passes it in.
+ */
+export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
+  const db = getReadDb();
+  try {
+    const repoRows = db.prepare("SELECT * FROM repos").all() as Repo[];
+    const todoCounts = db
+      .prepare(
+        "SELECT repoSlug, count(*) n FROM todos WHERE status = 'open' AND repoSlug IS NOT NULL GROUP BY repoSlug"
+      )
+      .all() as { repoSlug: string; n: number }[];
+    const todoMap = new Map(todoCounts.map((r) => [r.repoSlug, r.n]));
+    const repos: RepoWithSignals[] = repoRows
+      .map((r) => ({
+        ...r,
+        signals: computeSignals(r),
+        openTodos: todoMap.get(r.slug) ?? 0,
+      }))
+      .sort((a, b) => (b.lastCommitAt ?? "").localeCompare(a.lastCommitAt ?? ""));
+
+    const todos = db
+      .prepare("SELECT * FROM todos ORDER BY createdAt DESC")
+      .all() as Todo[];
+
+    const activity = db
+      .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000")
+      .all() as ActivityEvent[];
+
+    const summaries: Record<string, string> = {};
+    const sumRows = db
+      .prepare(
+        "SELECT entityId, output FROM ai_outputs WHERE entityType = 'repo' AND task = 'summary'"
+      )
+      .all() as { entityId: string; output: string }[];
+    for (const s of sumRows) summaries[s.entityId] = s.output;
+
+    // Latest cached portfolio digest (most recently generated row). Stored
+    // content-hash isn't needed here: the owner deployment cannot regenerate
+    // (read-only host), so it always shows the last digest the owner produced.
+    const digestRow = db
+      .prepare(
+        "SELECT output, model, generatedAt, promptTokens, completionTokens FROM ai_outputs WHERE entityType = 'portfolio' AND task = 'digest' ORDER BY generatedAt DESC LIMIT 1"
+      )
+      .get() as
+      | {
+          output: string;
+          model: string;
+          generatedAt: string;
+          promptTokens: number;
+          completionTokens: number;
+        }
+      | undefined;
+    const digest: DigestResult | null = digestRow
+      ? {
+          text: digestRow.output,
+          model: digestRow.model,
+          generatedAt: digestRow.generatedAt,
+          promptTokens: digestRow.promptTokens,
+          completionTokens: digestRow.completionTokens,
+          cached: true,
+          reposIncluded: repos.length,
+          reposExcluded: 0,
+        }
+      : null;
+
+    const cost = db
+      .prepare(
+        "SELECT count(*) calls, COALESCE(SUM(promptTokens),0) promptTokens, COALESCE(SUM(completionTokens),0) completionTokens FROM ai_outputs"
+      )
+      .get() as AICostSummary;
+
+    const feedback = db
+      .prepare(
+        "SELECT field, aiValue, correctedValue, note, entityId, createdAt FROM feedback ORDER BY createdAt DESC LIMIT 200"
+      )
+      .all() as LearnedItem[];
+
+    const stats: AtlasStats = {
+      lastScanAt: getMeta(db, "lastScanAt"),
+      repoCount: repos.length,
+      todoCount: Number(getMeta(db, "todoCount") ?? todos.length),
+      activityCount: Number(getMeta(db, "activityCount") ?? activity.length),
+      publicCount: repos.filter((r) => r.visibility === "public").length,
+      privateCount: repos.filter((r) => r.visibility === "private").length,
+      forkCount: repos.filter((r) => r.isFork === 1).length,
+      needsAttention: repos.filter((r) => r.signals.attention.length > 0).length,
+      openP0: todos.filter((t) => t.priority === "P0" && t.status === "open").length,
+    };
+
+    return {
+      generatedAt: new Date().toISOString(),
+      stats,
+      repos,
+      activity,
+      summaries,
+      todos,
+      digest,
+      cost,
+      feedback,
+      ai,
+    };
+  } finally {
+    db.close();
+  }
+}
+
+let ownerSnapshotCache: OwnerSnapshot | null = null;
+
+/** Load the deployed owner snapshot (used when ATLAS_MODE=owner). */
+export function loadOwnerSnapshot(): OwnerSnapshot {
+  if (ownerSnapshotCache) return ownerSnapshotCache;
+  if (!fs.existsSync(OWNER_SNAPSHOT_PATH)) {
+    throw new Error(
+      "atlas: owner-snapshot.json not found. Run `npm run snapshot:owner` to generate it."
+    );
+  }
+  ownerSnapshotCache = JSON.parse(
+    fs.readFileSync(OWNER_SNAPSHOT_PATH, "utf8")
+  ) as OwnerSnapshot;
+  return ownerSnapshotCache;
 }

@@ -1,6 +1,8 @@
 import "server-only";
 import crypto from "node:crypto";
 import { getDb } from "@/lib/db";
+import { isOwnerMode } from "@/lib/mode";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
 
 export const hashContent = (s: string) =>
   crypto.createHash("sha256").update(s).digest("hex").slice(0, 16);
@@ -81,6 +83,7 @@ export interface AICostSummary {
 }
 
 export function getCostSummary(): AICostSummary {
+  if (isOwnerMode()) return loadOwnerSnapshot().cost;
   const row = getDb()
     .prepare(
       "SELECT count(*) calls, COALESCE(SUM(promptTokens),0) promptTokens, COALESCE(SUM(completionTokens),0) completionTokens FROM ai_outputs"
