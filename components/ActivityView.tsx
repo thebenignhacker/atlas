@@ -1,6 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { ActivityEvent } from "@/lib/types";
 import { relativeTime } from "@/lib/util/date";
 
@@ -29,6 +37,15 @@ export function ActivityView({
   );
 
   const { weeks, max, total } = useMemo(() => buildHeatmap(filtered), [filtered]);
+
+  const trend = useMemo(
+    () =>
+      weeks.map((week) => ({
+        label: week[0]?.date.slice(5) ?? "",
+        commits: week.reduce((s, d) => s + (d.count > 0 ? d.count : 0), 0),
+      })),
+    [weeks]
+  );
 
   const byDay = useMemo(() => {
     const groups = new Map<string, ActivityEvent[]>();
@@ -60,7 +77,52 @@ export function ActivityView({
         </span>
       </div>
 
+      <div className="rounded-[var(--radius-card)] border border-line bg-surface-1 p-4">
+        <h3 className="mb-2 text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint">
+          Commits per week
+        </h3>
+        <ResponsiveContainer width="100%" height={130}>
+          <AreaChart data={trend} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="atlasTrend" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#e8a317" stopOpacity={0.5} />
+                <stop offset="100%" stopColor="#e8a317" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+            <XAxis
+              dataKey="label"
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: "#9b9182", fontSize: 10 }}
+              interval="preserveStartEnd"
+            />
+            <YAxis hide />
+            <Tooltip
+              contentStyle={{
+                background: "#fffdf8",
+                border: "1px solid #e7dcc6",
+                borderRadius: 10,
+                fontSize: 12,
+                color: "#211c15",
+              }}
+              labelFormatter={(l) => `Week of ${l}`}
+              formatter={(v) => [`${v} commits`, ""]}
+            />
+            <Area
+              type="monotone"
+              dataKey="commits"
+              stroke="#c75d3c"
+              strokeWidth={2}
+              fill="url(#atlasTrend)"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
       <div className="overflow-x-auto rounded-[var(--radius-card)] border border-line bg-surface-1 p-4">
+        <h3 className="mb-3 text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint">
+          Daily heatmap · last {WEEKS} weeks
+        </h3>
         <div className="flex gap-1">
           {weeks.map((week, wi) => (
             <div key={wi} className="flex flex-col gap-1">
@@ -151,6 +213,6 @@ function buildHeatmap(events: ActivityEvent[]): {
 function heatColor(count: number, max: number): string {
   if (count < 0) return "transparent"; // future day
   if (count === 0) return "var(--color-surface-3)";
-  const t = max <= 1 ? 1 : Math.min(1, 0.25 + (count / max) * 0.75);
-  return `color-mix(in srgb, var(--color-teal) ${Math.round(t * 100)}%, var(--color-surface-3))`;
+  const t = max <= 1 ? 1 : Math.min(1, 0.28 + (count / max) * 0.72);
+  return `color-mix(in srgb, var(--color-marigold) ${Math.round(t * 100)}%, var(--color-surface-2))`;
 }
