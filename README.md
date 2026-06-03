@@ -89,20 +89,25 @@ To enable: set `ai.enabled` to `true` and provide a key
 | `npm run setup-db` | Create the local SQLite schema |
 | `npm run scan` | Scan your repos and todos into the database |
 | `npm run snapshot` | Generate the sanitized public snapshot (for a public demo) |
+| `npm run snapshot:owner` | Generate the full owner snapshot (for a private remote view) |
 | `npm run dev` | Start the dashboard (full local view) |
 | `npm run build` / `npm start` | Production build and serve |
 
-## Optional: a public demo of your active projects
+## Deployment modes
 
-Atlas runs in two modes from one codebase:
+Atlas runs in three modes from one codebase, selected by `ATLAS_MODE`:
 
 - **Local (default):** reads the full SQLite database. You see everything. No login,
   because it is your machine.
 - **Public (`ATLAS_MODE=public`):** reads only `public-snapshot.json` and serves a
   sanitized, read-only view. Private repos, forks, local file paths, todos, and settings
   are never present. The full database is never deployed, so it cannot leak.
+- **Owner (`ATLAS_MODE=owner`):** reads `owner-snapshot.json` (your full data) behind a
+  GitHub login locked to a single account. Use it to reach your complete dashboard from
+  any device. The snapshot is never committed; it is uploaded only to the login-gated
+  deployment.
 
-To publish a demo:
+### Public demo
 
 1. Choose which owners are public in `atlas.config.json` via `publicOwners`
    (empty means all public repos; list specific orgs/users to scope it).
@@ -112,6 +117,27 @@ To publish a demo:
    The committed `public-snapshot.json` is the data source; no database is needed.
 
 Re-run `npm run snapshot` and redeploy whenever you want to refresh the public view.
+
+### Private remote view (owner mode)
+
+A second, login-gated deployment that shows your full data from any device. Only one
+GitHub account can sign in.
+
+1. Create a GitHub OAuth app (Settings → Developer settings → OAuth Apps). Set the
+   callback URL to `https://<your-owner-deployment>/api/auth/callback/github`.
+2. On the owner deployment, set these environment variables (never commit them):
+   - `ATLAS_MODE=owner`
+   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (from the OAuth app)
+   - `AUTH_SECRET` (`openssl rand -base64 32`)
+   - `OWNER_GITHUB_LOGIN` (your GitHub username, the only account allowed in)
+3. Run `npm run snapshot:owner` to write `owner-snapshot.json` (gitignored, full data).
+4. Deploy as a separate project with the snapshot present in the working directory
+   (for example `vercel deploy --prod`). The snapshot ships via the CLI upload, never
+   through git.
+
+Unauthenticated visitors are redirected to GitHub sign-in; anyone other than
+`OWNER_GITHUB_LOGIN` is denied. Owner mode is read-only (the host has no database), so AI
+generation runs locally, so re-run `npm run snapshot:owner` and redeploy to refresh.
 
 ## Privacy
 

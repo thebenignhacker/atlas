@@ -4,6 +4,8 @@ import { complete } from "@/lib/ai/provider";
 import { isRepoAIEligible } from "@/lib/ai/policy";
 import { getCached, saveOutput, hashContent } from "@/lib/ai/cache";
 import { getLearningPreamble } from "@/lib/ai/learning";
+import { isOwnerMode } from "@/lib/mode";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
 import { relativeTime } from "@/lib/util/date";
 
 const SYSTEM = `You are Atlas, briefing a developer who ships many projects at once.
@@ -130,6 +132,8 @@ export async function generateDigest(force = false): Promise<DigestResult> {
 
 /** Read the last digest from cache without generating a new one. */
 export function getLastDigest(): DigestResult | null {
+  // Owner deployment has no DB; the digest is baked into the snapshot.
+  if (isOwnerMode()) return loadOwnerSnapshot().digest;
   const cached = getCached(
     "portfolio",
     "global",

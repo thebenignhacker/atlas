@@ -1,0 +1,29 @@
+# When this file exists, Vercel uses it (not .gitignore) to decide what to upload
+# on `vercel deploy`. The owner snapshot is GITIGNORED but MUST reach the owner
+# deployment, so it is intentionally NOT listed here. The local SQLite database,
+# environment files, and build output must never be uploaded -- they are.
+#
+# This does not affect the public deployment: that ships via `vercel deploy
+# --prebuilt` (GitHub Actions), which uploads the prebuilt .vercel/output, not
+# this source tree.
+
+node_modules
+.next
+.git
+.vercel
+
+# Local-only data & secrets -- never upload.
+data
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+
+# AI assistant / local tooling files.
+CLAUDE.md
+AGENTS.md
+.claude
+.cursorrules
+.pre-push-review-passed
+.release-test-passed

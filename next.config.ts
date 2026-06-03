@@ -3,11 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // better-sqlite3 is a native module — keep it out of the server bundle.
   serverExternalPackages: ["better-sqlite3"],
-  // public-snapshot.json is read via fs at runtime in public mode. Force Next's
-  // output file tracing to include it in the serverless bundle (Vercel), or the
-  // deployed function 500s with ENOENT.
+  // The snapshots are read via fs at runtime in the deployed modes. Force Next's
+  // output file tracing to include them in the serverless bundle (Vercel), or the
+  // deployed function 500s with ENOENT. owner-snapshot.json is gitignored and only
+  // present when building/deploying the owner project; tracing tolerates its
+  // absence on the public build.
   outputFileTracingIncludes: {
-    "/**/*": ["./public-snapshot.json"],
+    "/**/*": ["./public-snapshot.json", "./owner-snapshot.json"],
   },
 };
 
