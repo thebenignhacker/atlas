@@ -31,6 +31,41 @@ instantly and works offline.
   see where your energy actually went.
 - **AI digest** (optional) — a grounded briefing on what moved, what is stalling, and a
   short suggested-focus list. Built on measured facts, never invented.
+- **Context Store** — verified facts about each project that flag themselves when they
+  go stale, so you stop re-deriving "what's the status of X" every session. See below.
+
+## Context Store — stored context that can't quietly lie
+
+Notes, indexes, and ledgers decay. An index says "last updated April"; a session trusts
+it and acts on a fact that shipped weeks ago. Context that isn't trust-tagged is *worse*
+than none — it misleads with confidence.
+
+The Context Store fixes the part that actually matters: **freshness**. Each fact is a
+small **card** pinned to the source files it came from (content-hashed) plus a one-line
+re-check command. Read a project's cards at the start of a session instead of re-reading
+the repo. When a card's sources change, it shows up flagged **re-verify** — it never
+silently asserts something that has since become false.
+
+```bash
+# write a fact when you verify it (the source files are hashed for you)
+atlas-context add --project nanomind --subject "classifier version" \
+  --claim "classifier published at 0.5.0" \
+  --source nanomind/nanomind-models.json \
+  --verify 'jq -e ".models[\"nanomind-security-classifier\"].huggingface.publishedVersion==\"0.5.0\"" nanomind/nanomind-models.json' \
+  --stale-after 30
+
+# read it back next session — in one call, not a repo re-read
+atlas-context get --project nanomind
+#  [FRESH]   classifier version  nanomind   classifier published at 0.5.0
+#  [DRIFTED] training corpus     nanomind   re-verify: jq -e '...' nanomind-models.json
+```
+
+The dashboard's **Context** view turns this into a panel: the hero number is **stale
+facts caught before they misled a session** (counted from an event log — measured, not
+estimated), alongside a freshness-coverage gauge and a conservative tokens-saved
+estimate (labeled as an estimate, always). Cards default to private and live in the
+gitignored database; only cards you explicitly mark public reach the public demo, with
+their source paths and commands stripped. Full guide: [docs/CONTEXT_STORE.md](docs/CONTEXT_STORE.md).
 
 ## How it works
 

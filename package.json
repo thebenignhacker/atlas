@@ -27,7 +27,12 @@
     "setup-db": "tsx scripts/setup-db.ts",
     "scan": "tsx scripts/scan.ts",
     "snapshot": "tsx scripts/snapshot.ts",
-    "snapshot:owner": "tsx scripts/snapshot-owner.ts"
+    "snapshot:owner": "tsx scripts/snapshot-owner.ts",
+    "context": "tsx bin/atlas-context.ts",
+    "test": "node --import tsx --test test/context/*.test.ts"
+  },
+  "bin": {
+    "atlas-context": "bin/atlas-context.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
