@@ -116,6 +116,48 @@ If maintaining a card ever costs more than it saves, `retire` it.
   the snapshot adversarial check). Mark a card `public` only when its claim is
   safe to show on the public demo.
 
+### Sensitive (never publishable)
+
+`private` means *default-not-published*. **`sensitive` means never-publishable** —
+a hard exclude that holds even when the underlying GitHub repo is public.
+
+- Mark a single card: `atlas-context add ... --sensitive`.
+- Mark a whole repo: add its slug to `sensitiveRepos` in `atlas.config.json`.
+  Every card under that repo (by `repoSlug`, or by a project name that maps to
+  the slug) is excluded too, and the repo itself is dropped from the public
+  snapshot — repos, activity, and AI summaries.
+
+The public snapshot **fails closed**: `scripts/snapshot.ts` independently
+re-derives the sensitive set and aborts (non-zero, no file written) if any
+sensitive repo name/slug, sensitive card id, or sensitive card text would appear
+in the output. Sensitive content still appears in the OAuth-gated owner view
+(that is not a public surface) and is flagged with a lock badge in the UI.
+
+> Upgrading from a database created before the `sensitive` column existed? Run
+> `npm run setup-db` once — it applies the column migration (idempotent, no data
+> loss). The read-only snapshot path never migrates on its own.
+
+## Sessions — which Claude session set this fact
+
+Each card can be attributed to the Claude session that established it
+(`context_cards.originSessionId`). The SessionStart hook captures the harness
+session id into a gitignored state file (`data/.current-session`); a hook can't
+set an env var in the Claude process, so `atlas-context add` reads the session id
+from `--session`, then `$ATLAS_SESSION_ID`, then that state file. The hook also
+registers the session, and each card added under it records the project/repo it
+touched and bumps the session's card count (all measured).
+
+```
+atlas-context session list                       # sessions, newest first
+atlas-context session register --id <id>         # idempotent (the hook calls this)
+atlas-context session update --id <id> --summary "…" --branches a,b
+```
+
+The `/sessions` page (owner/local only — never in the public snapshot) lists each
+session with the repos/branches it touched, the cards it established, and a
+copyable `claude --resume <id>` command to jump back into it. Each context card
+links to its originating session.
+
 ## Where things live
 
 | Path | What |
@@ -126,6 +168,7 @@ If maintaining a card ever costs more than it saves, `retire` it.
 | `lib/context/metrics.ts` | metrics + honesty constants |
 | `data/atlas.db` (table `context_cards`) | the cards (gitignored) |
 | `data/atlas.db` (table `context_events`) | the event log behind the metrics |
+| `data/atlas.db` (table `sessions`) | the Claude session registry (gitignored) |
 
 Run from anywhere: the CLI always uses the Atlas repo's database, while
 `--source` paths and verify commands resolve against your current directory

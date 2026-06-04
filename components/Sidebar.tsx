@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   Compass,
+  History,
   LayoutGrid,
   ListChecks,
   Settings,
@@ -15,6 +16,7 @@ import {
 const NAV = [
   { href: "/", label: "Portfolio", icon: LayoutGrid, ownerOnly: false },
   { href: "/context", label: "Context", icon: ShieldCheck, ownerOnly: false },
+  { href: "/sessions", label: "Sessions", icon: History, ownerOnly: true },
   { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },
   { href: "/activity", label: "Activity", icon: Activity, ownerOnly: false },
   { href: "/digest", label: "AI Digest", icon: Sparkles, ownerOnly: true },

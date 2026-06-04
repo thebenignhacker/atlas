@@ -2,7 +2,13 @@ import os from "node:os";
 import fs from "node:fs";
 import Database from "better-sqlite3";
 import path from "node:path";
-import { generatePublicSnapshot, SNAPSHOT_PATH } from "@/lib/snapshot";
+import {
+  generatePublicSnapshot,
+  distinctiveTokens,
+  SNAPSHOT_PATH,
+} from "@/lib/snapshot";
+import { loadConfig } from "@/lib/config";
+import { slug } from "@/lib/context/store";
 
 /**
  * Generate the public snapshot, then ADVERSARIALLY verify it leaks nothing:
@@ -75,6 +81,8 @@ function main() {
   for (const c of snapshot.contextCards) {
     if (c.visibility !== "public")
       violations.push(`non-public context card "${c.id}" present in snapshot`);
+    if (c.sensitive)
+      violations.push(`SENSITIVE context card "${c.id}" present in snapshot`);
     if (c.provenance.length > 0)
       violations.push(`context card "${c.id}" leaked provenance paths`);
     if (c.verifyCommand)
@@ -99,6 +107,114 @@ function main() {
     );
   if (m.reads !== 0)
     violations.push(`contextMetrics.reads (${m.reads}) should be 0 publicly (owner usage)`);
+
+  // 7) SENSITIVE content must NEVER appear — a hard never-publish that holds
+  //    even for GitHub-public repos. Re-derive the sensitive set independently
+  //    of lib/snapshot (defense in depth) and fail closed if anything leaks:
+  //    a sensitive repo (by slug or name), a sensitive card (by id or its
+  //    distinctive claim/subject text), or any sensitive repo in snapshot.repos.
+  // loadConfig has already canonicalized these to slug form.
+  const sensitiveSlugs = loadConfig().sensitiveRepos;
+  const sensitiveSlugSet = new Set(sensitiveSlugs);
+  if (sensitiveSlugs.length > 0) {
+    if (!fs.existsSync(dbPath)) {
+      violations.push(
+        "source database not found — cannot verify sensitive content is absent (fail-closed)"
+      );
+    } else {
+      const db = new Database(dbPath, { readonly: true });
+      // Fail closed (don't crash) if the DB predates the sensitive column: the
+      // flag-based exclusion can't be trusted, so abort the snapshot.
+      const hasSensitiveCol = (
+        db.prepare("PRAGMA table_info(context_cards)").all() as { name: string }[]
+      ).some((c) => c.name === "sensitive");
+      if (!hasSensitiveCol) {
+        violations.push(
+          "context_cards predates the `sensitive` column — run `npm run setup-db` to migrate (fail-closed)"
+        );
+        db.close();
+      } else {
+        const sensitiveRepoRows = db
+          .prepare(
+            `SELECT slug, name FROM repos WHERE slug IN (${sensitiveSlugs
+              .map(() => "?")
+              .join(",")})`
+          )
+          .all(...sensitiveSlugs) as { slug: string; name: string }[];
+        // All active cards that are sensitive: flagged, under a sensitive repo,
+        // or whose project maps to a sensitive slug. Mirrors lib/snapshot.
+        const sensitiveCards = (
+          db
+            .prepare(
+              "SELECT id, subject, claim, detail, project, repoSlug, sensitive FROM context_cards WHERE status='active'"
+            )
+            .all() as {
+            id: string;
+            subject: string;
+            claim: string;
+            detail: string | null;
+            project: string;
+            repoSlug: string | null;
+            sensitive: number;
+          }[]
+        ).filter(
+          (c) =>
+            c.sensitive === 1 ||
+            (c.repoSlug && sensitiveSlugSet.has(slug(c.repoSlug))) ||
+            sensitiveSlugSet.has(slug(c.project))
+        );
+        db.close();
+
+        const publicSlugSet = new Set(snapshot.repos.map((r) => r.slug));
+        for (const r of sensitiveRepoRows) {
+          if (publicSlugSet.has(r.slug))
+            violations.push(`sensitive repo "${r.slug}" present in snapshot.repos`);
+          for (const token of [r.slug, r.name]) {
+            if (!token) continue;
+            const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (new RegExp(`\\b${esc}\\b`, "i").test(json))
+              violations.push(`sensitive repo identifier "${token}" present in snapshot text`);
+          }
+        }
+        // A sensitive card must not appear by id, nor have its text surface via
+        // any other card — both the whole trimmed claim/subject AND its
+        // distinctive tokens (so a short secret like `prod-db-pw` quoted inside
+        // a public card is still caught, not just long verbatim claims).
+        const publicCardIds = new Set(snapshot.contextCards.map((c) => c.id));
+        for (const c of sensitiveCards) {
+          if (publicCardIds.has(c.id))
+            violations.push(`sensitive context card "${c.id}" present in snapshot`);
+          if (json.includes(c.id))
+            violations.push(`sensitive context card id "${c.id}" referenced in snapshot text`);
+          for (const text of [c.subject, c.claim]) {
+            const t = (text ?? "").trim();
+            if (t.length >= 12 && json.includes(t))
+              violations.push(`sensitive card text from "${c.id}" present in snapshot`);
+          }
+          for (const tok of [
+            ...distinctiveTokens(c.subject),
+            ...distinctiveTokens(c.claim),
+            ...distinctiveTokens(c.detail),
+          ]) {
+            const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            if (new RegExp(`\\b${esc}\\b`, "i").test(json))
+              violations.push(
+                `distinctive sensitive token "${tok}" (from card "${c.id}") present in snapshot text`
+              );
+          }
+        }
+        // Also catch a card under a sensitive repo by slug/project that wasn't
+        // itself flagged sensitive (must still have been dropped upstream).
+        for (const c of snapshot.contextCards) {
+          if (
+            (c.repoSlug && sensitiveSlugSet.has(slug(c.repoSlug))) ||
+            sensitiveSlugSet.has(slug(c.project))
+          )
+            violations.push(`card "${c.id}" under a sensitive repo present in snapshot`);
+        }
+      }
+    }
+  }
 
   if (violations.length > 0) {
     console.error("atlas: SNAPSHOT ABORTED — sanitization failed:");

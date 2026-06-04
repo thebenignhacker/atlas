@@ -1,5 +1,5 @@
 import type Database from "better-sqlite3";
-import type { ContextMetrics, Freshness } from "@/lib/types";
+import type { ContextCard, ContextMetrics, Freshness } from "@/lib/types";
 
 /**
  * Aggregate metrics for the dashboard and README.
@@ -127,5 +127,52 @@ export function getMetrics(
     freshness,
     tokensSavedEstimate,
     reads,
+  };
+}
+
+/**
+ * Metrics derived from an EXACT, already-filtered set of cards — used for the
+ * public snapshot so the published counts describe precisely the cards that
+ * shipped, never more. Because totalCards/freshness are tallied from this same
+ * list, they cannot disclose the existence of a private or SENSITIVE card that
+ * was filtered out upstream, and the snapshot gate's count-match check holds by
+ * construction. Read/usage stats are owner activity and reported as 0.
+ */
+export function getMetricsForCards(
+  db: Database.Database,
+  cards: ContextCard[]
+): ContextMetrics {
+  const freshness: Record<Freshness, number> = {
+    fresh: 0,
+    drifted: 0,
+    expired: 0,
+    stale: 0,
+    unverified: 0,
+  };
+  for (const c of cards) {
+    if (FRESH_STATES.includes(c.freshness)) freshness[c.freshness] += 1;
+  }
+
+  // caught_stale events, scoped to exactly the published cards.
+  const ids = cards.map((c) => c.id);
+  let staleCaught = 0;
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => "?").join(",");
+    staleCaught = (
+      db
+        .prepare(
+          `SELECT count(*) n FROM context_events WHERE kind='caught_stale' AND cardId IN (${placeholders})`
+        )
+        .get(...ids) as { n: number }
+    ).n;
+  }
+
+  return {
+    totalCards: cards.length,
+    activeCards: cards.length,
+    staleCaught,
+    freshness,
+    tokensSavedEstimate: 0,
+    reads: 0,
   };
 }

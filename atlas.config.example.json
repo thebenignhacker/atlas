@@ -8,6 +8,7 @@
   },
   "exclude": ["node_modules", ".next", ".git", "dist", "build", "archive-"],
   "publicOwners": [],
+  "sensitiveRepos": [],
   "ai": {
     "enabled": false,
     "provider": "anthropic",

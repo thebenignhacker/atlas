@@ -7,6 +7,7 @@ import type {
   CardVisibility,
   Freshness,
   Provenance,
+  Session,
 } from "@/lib/types";
 import { captureProvenance, detectDrift } from "@/lib/context/provenance";
 
@@ -20,7 +21,8 @@ const CARD_COLS = [
   "id","project","repoSlug","subject","claim","detail","provenance",
   "verifyCommand","verifyResult","verifyCheckedAt","confidence","derivedAt",
   "lastVerifiedAt","staleAfterDays","freshness","driftedPaths","tags","links",
-  "status","supersededBy","visibility","originSessionId","createdAt","updatedAt",
+  "status","supersededBy","visibility","sensitive","originSessionId",
+  "createdAt","updatedAt",
 ] as const;
 
 const DAY_MS = 86_400_000;
@@ -118,6 +120,7 @@ export function rowToCard(r: CardRow): ContextCard {
     status: (r.status as ContextCard["status"]) ?? "active",
     supersededBy: (r.supersededBy as string) ?? null,
     visibility: (r.visibility as CardVisibility) ?? "private",
+    sensitive: r.sensitive === 1 || r.sensitive === true,
     originSessionId: (r.originSessionId as string) ?? null,
     createdAt: (r.createdAt as string) ?? null,
     updatedAt: (r.updatedAt as string) ?? null,
@@ -186,6 +189,8 @@ export interface AddCardInput {
   links?: string[];
   confidence?: Confidence;
   visibility?: CardVisibility;
+  /** Hard never-publishable flag (see ContextCard.sensitive). */
+  sensitive?: boolean;
   repoSlug?: string | null;
   originSessionId?: string | null;
   /** Working dir to resolve sourcePaths and run the verify command against. */
@@ -262,6 +267,7 @@ export function addCard(
     status: "active",
     supersededBy: null,
     visibility: input.visibility ?? "private",
+    sensitive: input.sensitive ? 1 : 0,
     originSessionId: input.originSessionId ?? null,
     createdAt,
     updatedAt: now,
@@ -278,6 +284,18 @@ export function addCard(
     toState: freshness,
     detail: { sources: provenance.map((p) => p.path), verify: !!verifyCommand },
   });
+  // Attribute the card to its originating session: register the session (if new)
+  // and record that it touched this project/repo. Lets the UI show "established
+  // by session X" and the user jump back. Only when we know it's a new card —
+  // re-adding the same subject under the same session shouldn't double-count.
+  if (input.originSessionId) {
+    touchSession(db, input.originSessionId, {
+      repos: [input.project, input.repoSlug ?? null].filter(
+        (r): r is string => !!r
+      ),
+      countCard: !existing,
+    });
+  }
   return getCard(db, id)!;
 }
 
@@ -504,4 +522,116 @@ export function searchCards(
     )
     .all(like, like, like, like) as CardRow[];
   return rows.map(rowToCard);
+}
+
+// --- sessions --------------------------------------------------------------
+
+function rowToSession(r: Record<string, unknown>): Session {
+  return {
+    id: r.id as string,
+    startedAt: (r.startedAt as string) ?? null,
+    endedAt: (r.endedAt as string) ?? null,
+    summary: (r.summary as string) ?? null,
+    branches: jsonArr<string>(r.branches),
+    repos: jsonArr<string>(r.repos),
+    cardCount: Number(r.cardCount ?? 0),
+    createdAt: (r.createdAt as string) ?? null,
+    updatedAt: (r.updatedAt as string) ?? null,
+  };
+}
+
+export function getSession(db: Database.Database, id: string): Session | null {
+  const row = db.prepare("SELECT * FROM sessions WHERE id = ?").get(id) as
+    | Record<string, unknown>
+    | undefined;
+  return row ? rowToSession(row) : null;
+}
+
+export function getSessions(db: Database.Database): Session[] {
+  const rows = db
+    .prepare("SELECT * FROM sessions ORDER BY startedAt DESC, createdAt DESC")
+    .all() as Record<string, unknown>[];
+  return rows.map(rowToSession);
+}
+
+/**
+ * Register a session (idempotent). Inserts the row on first sight with its
+ * startedAt; a second call never moves startedAt or clobbers accumulated state.
+ */
+export function registerSession(
+  db: Database.Database,
+  input: { id: string; startedAt?: string; summary?: string | null }
+): Session {
+  const existing = getSession(db, input.id);
+  const now = nowIso();
+  if (!existing) {
+    db.prepare(
+      `INSERT INTO sessions (id, startedAt, endedAt, summary, branches, repos, cardCount, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,?)`
+    ).run(
+      input.id,
+      input.startedAt ?? now,
+      null,
+      input.summary ?? null,
+      JSON.stringify([]),
+      JSON.stringify([]),
+      0,
+      now,
+      now
+    );
+  } else if (input.summary !== undefined && input.summary !== null) {
+    db.prepare("UPDATE sessions SET summary=?, updatedAt=? WHERE id=?").run(
+      input.summary,
+      now,
+      input.id
+    );
+  }
+  return getSession(db, input.id)!;
+}
+
+/** Set free-form fields a session can't infer on its own (summary, branches). */
+export function updateSession(
+  db: Database.Database,
+  id: string,
+  patch: { summary?: string | null; branches?: string[]; endedAt?: string }
+): Session | null {
+  if (!getSession(db, id)) registerSession(db, { id });
+  const sets: string[] = [];
+  const vals: (string | null)[] = [];
+  if (patch.summary !== undefined) {
+    sets.push("summary=?");
+    vals.push(patch.summary);
+  }
+  if (patch.branches !== undefined) {
+    sets.push("branches=?");
+    vals.push(JSON.stringify(patch.branches));
+  }
+  if (patch.endedAt !== undefined) {
+    sets.push("endedAt=?");
+    vals.push(patch.endedAt);
+  }
+  if (sets.length === 0) return getSession(db, id);
+  sets.push("updatedAt=?");
+  vals.push(nowIso());
+  db.prepare(`UPDATE sessions SET ${sets.join(", ")} WHERE id=?`).run(...vals, id);
+  return getSession(db, id);
+}
+
+/**
+ * Record that a session touched some repos/projects and (optionally) established
+ * one more card. Auto-registers the session if it wasn't seen at start (a card
+ * can be added with --session before any SessionStart hook ran). Repos are a
+ * deduped union; cardCount only advances for genuinely new cards.
+ */
+export function touchSession(
+  db: Database.Database,
+  id: string,
+  opts: { repos?: string[]; countCard?: boolean }
+): void {
+  const s = getSession(db, id) ?? registerSession(db, { id });
+  const repos = Array.from(new Set([...s.repos, ...(opts.repos ?? [])]));
+  const cardCount = s.cardCount + (opts.countCard ? 1 : 0);
+  db.prepare(
+    "UPDATE sessions SET repos=?, cardCount=?, updatedAt=? WHERE id=?"
+  ).run(JSON.stringify(repos), cardCount, nowIso(), id);
 }
