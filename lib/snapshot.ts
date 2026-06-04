@@ -3,13 +3,14 @@ import path from "node:path";
 import { getReadDb, getMeta } from "@/lib/db";
 import { loadConfig } from "@/lib/config";
 import { computeSignals } from "@/lib/signals";
-import { rowToCard, type CardRow } from "@/lib/context/store";
-import { getMetrics } from "@/lib/context/metrics";
+import { rowToCard, slug, getSessions, type CardRow } from "@/lib/context/store";
+import { getMetrics, getMetricsForCards } from "@/lib/context/metrics";
 import type {
   ActivityEvent,
   ContextCard,
   ContextMetrics,
   Repo,
+  Session,
   Todo,
 } from "@/lib/types";
 import type { AtlasStats, RepoWithSignals } from "@/lib/queries";
@@ -23,6 +24,51 @@ import type { AIAvailability } from "@/lib/ai/provider";
 
 export const SNAPSHOT_PATH = path.join(process.cwd(), "public-snapshot.json");
 export const OWNER_SNAPSHOT_PATH = path.join(process.cwd(), "owner-snapshot.json");
+
+/**
+ * Whether a context card may appear in the PUBLIC snapshot. Pure (no I/O) so the
+ * exclusion rule is unit-testable in isolation. A card is publishable only when
+ * it is public + active AND not sensitive in any of three ways:
+ *   - flagged `sensitive` directly (hard never-publish),
+ *   - attached to a sensitive repo via repoSlug,
+ *   - (defensive) its project name maps to a sensitive repo slug even without a
+ *     repoSlug set.
+ * `sensitiveSlugs` is the configured `sensitiveRepos` set.
+ */
+export function isCardPublishable(
+  card: ContextCard,
+  sensitiveSlugs: Set<string>
+): boolean {
+  // Normalize both comparison inputs to the same slug form the config set is
+  // canonicalized to (see loadConfig) — never compare a raw, possibly mixed-case
+  // value against the normalized set, or the exclusion can silently fail open.
+  return (
+    card.visibility === "public" &&
+    card.status === "active" &&
+    !card.sensitive &&
+    !(card.repoSlug != null && sensitiveSlugs.has(slug(card.repoSlug))) &&
+    !sensitiveSlugs.has(slug(card.project))
+  );
+}
+
+/**
+ * Distinctive tokens to scrub from public free text when they originate in
+ * sensitive content (a sensitive card's subject/claim/detail). A token counts
+ * as distinctive — and therefore redactable/assertable — when it's long enough
+ * or carries a separator (`-_./`), e.g. `prod-db-pw`, an internal hostname, a
+ * key name. Short common words ("auth", "prod") are skipped so the public demo
+ * isn't redacted to noise; the same heuristic governs repo-name redaction.
+ * Exported so the snapshot gate re-derives the identical set independently.
+ */
+export function distinctiveTokens(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const out: string[] = [];
+  for (const tok of text.split(/[^\w.\-/]+/)) {
+    if (!tok) continue;
+    if (tok.length >= 5 && (tok.length >= 12 || /[-_./]/.test(tok))) out.push(tok);
+  }
+  return out;
+}
 
 export interface PublicSnapshot {
   generatedAt: string;
@@ -95,6 +141,8 @@ export interface OwnerSnapshot {
   /** All context cards, unredacted (owner deployment is OAuth-gated). */
   contextCards: ContextCard[];
   contextMetrics: ContextMetrics;
+  /** Claude session registry — owner-only, never in the public snapshot. */
+  sessions: Session[];
 }
 
 /**
@@ -133,17 +181,28 @@ function sanitizeRepo(repo: RepoWithSignals): RepoWithSignals {
 export function generatePublicSnapshot(): PublicSnapshot {
   const db = getReadDb();
   try {
-    const allow = loadConfig().publicOwners;
+    const config = loadConfig();
+    const allow = config.publicOwners;
     if (allow.length === 0) {
       console.warn(
         "atlas: publicOwners is empty — ALL public repos will be published. Set publicOwners in atlas.config.json to scope the demo to specific orgs/users."
       );
     }
+    // SENSITIVE repos are a hard never-publish: dropped here even when the repo
+    // is GitHub-public. We also resolve their names so cards/text that reference
+    // them by slug OR name can be excluded/redacted below. Fail-closed: the
+    // snapshot gate (scripts/snapshot.ts) re-derives this set and aborts if any
+    // sensitive identifier survives into the output.
+    const sensitiveSlugs = new Set(config.sensitiveRepos);
     const rows = db.prepare("SELECT * FROM repos").all() as Repo[];
+    const sensitiveRepoNames = rows
+      .filter((r) => sensitiveSlugs.has(r.slug))
+      .map((r) => r.name);
     const publicRepos = rows.filter(
       (r) =>
         r.visibility === "public" &&
         r.isFork !== 1 &&
+        !sensitiveSlugs.has(r.slug) &&
         (allow.length === 0 || (r.owner !== null && allow.includes(r.owner)))
     );
     const slugs = new Set(publicRepos.map((r) => r.slug));
@@ -156,14 +215,45 @@ export function generatePublicSnapshot(): PublicSnapshot {
       .prepare("SELECT name FROM repos WHERE visibility != 'public' OR isFork = 1")
       .all() as { name: string }[];
     const publicNameSet = new Set(publicRepos.map((r) => r.name));
-    const redactNames = hidden
-      .map((h) => h.name)
-      .filter(
-        (n) =>
-          !publicNameSet.has(n) &&
-          n.length >= 5 &&
-          (n.length >= 12 || /[-_]/.test(n))
-      );
+    // Distinctive tokens from SENSITIVE cards' own text. A sensitive card never
+    // ships, but its claim could be quoted verbatim inside a publishable card
+    // (the owner authors both); scrub those tokens so the secret can't leak by
+    // cross-reference. The gate re-derives the same set and fails closed.
+    const isSensitiveCard = (c: ContextCard): boolean =>
+      c.sensitive ||
+      (c.repoSlug != null && sensitiveSlugs.has(slug(c.repoSlug))) ||
+      sensitiveSlugs.has(slug(c.project));
+    const sensitiveCardRows = (
+      db
+        .prepare("SELECT * FROM context_cards WHERE status = 'active'")
+        .all() as CardRow[]
+    )
+      .map(rowToCard)
+      .filter(isSensitiveCard);
+    const sensitiveCardTokens = sensitiveCardRows.flatMap((c) => [
+      ...distinctiveTokens(c.subject),
+      ...distinctiveTokens(c.claim),
+      ...distinctiveTokens(c.detail),
+    ]);
+    // Redact hidden (private/fork) repo names AND sensitive repo names. A
+    // sensitive repo may be GitHub-public, so it won't appear in `hidden`; add
+    // its name explicitly so any cross-reference in another repo's text is
+    // scrubbed. Sensitive names are redacted regardless of the distinctiveness
+    // heuristic — they are an explicit never-publish.
+    const redactNames = Array.from(
+      new Set([
+        ...hidden
+          .map((h) => h.name)
+          .filter(
+            (n) =>
+              !publicNameSet.has(n) &&
+              n.length >= 5 &&
+              (n.length >= 12 || /[-_]/.test(n))
+          ),
+        ...sensitiveRepoNames.filter((n) => n && !publicNameSet.has(n)),
+        ...sensitiveCardTokens.filter((t) => !publicNameSet.has(t)),
+      ])
+    );
     const redactRes = redactNames.map(
       (n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi")
     );
@@ -213,18 +303,23 @@ export function generatePublicSnapshot(): PublicSnapshot {
       openP0: 0,
     };
 
-    // Only public, active cards reach the demo, fully sanitized + redacted.
-    const cardRows = db
+    // Only public, active, NON-sensitive cards reach the demo. The sensitive
+    // exclusion is enforced in code (not just SQL): drop cards flagged
+    // sensitive, cards under a sensitive repo (by slug), and — defensively —
+    // cards whose project name maps to a sensitive repo slug even without a
+    // repoSlug set. Fail-closed: the snapshot gate re-checks this independently.
+    const eligible = (db
       .prepare(
         "SELECT * FROM context_cards WHERE visibility = 'public' AND status = 'active'"
       )
-      .all() as CardRow[];
-    const contextCards = cardRows
+      .all() as CardRow[])
       .map(rowToCard)
-      .map((c) => sanitizeCard(c, redact));
-    // Metrics scoped to PUBLIC cards only — the public snapshot must not
-    // disclose the count, freshness, or read activity of private cards.
-    const contextMetrics = getMetrics(db, { publicOnly: true });
+      .filter((c) => isCardPublishable(c, sensitiveSlugs));
+    const contextCards = eligible.map((c) => sanitizeCard(c, redact));
+    // Metrics derived from EXACTLY the published cards, so the counts can never
+    // disclose the existence of a private or sensitive card filtered out above
+    // (and the gate's count-match assertion holds by construction).
+    const contextMetrics = getMetricsForCards(db, eligible);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -357,6 +452,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
         .all() as CardRow[]
     ).map(rowToCard);
     const contextMetrics = getMetrics(db);
+    const sessions = getSessions(db);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -371,6 +467,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       ai,
       contextCards,
       contextMetrics,
+      sessions,
     };
   } finally {
     db.close();

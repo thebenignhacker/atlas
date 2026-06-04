@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { slugify } from "@/lib/util/format";
 
 export interface AtlasConfig {
   /** Directories to scan for git repositories. */
@@ -18,6 +19,13 @@ export interface AtlasConfig {
    * public repos. Use this to keep specific accounts out of the public demo.
    */
   publicOwners: string[];
+  /**
+   * Repo slugs marked SENSITIVE — a hard never-publish. A sensitive repo (and
+   * every context card under it) is dropped from the public snapshot even when
+   * the repo is GitHub-public, and the snapshot gate fails closed if one would
+   * leak. Stronger than relying on GitHub visibility.
+   */
+  sensitiveRepos: string[];
   /** AI layer. Disabled by default — Atlas is fully usable without it. */
   ai: {
     enabled: boolean;
@@ -37,6 +45,7 @@ const DEFAULT_CONFIG: AtlasConfig = {
   github: { user: undefined, orgs: [] },
   exclude: ["node_modules", ".next", ".git", "archive-", "dist", "build"],
   publicOwners: [],
+  sensitiveRepos: [],
   ai: {
     enabled: false,
     provider: "anthropic",
@@ -75,5 +84,11 @@ export function loadConfig(): AtlasConfig {
   // Normalize paths up-front so the rest of the code never sees a `~`.
   cached.scanRoots = cached.scanRoots.map(expandHome);
   cached.todoDirs = cached.todoDirs.map(expandHome);
+  // Canonicalize sensitiveRepos to the SAME slug form repos are stored under, so
+  // a hand-typed entry with uppercase or stray whitespace ("My-Repo", "repo ")
+  // still matches and the never-publish guarantee can't silently fail open.
+  cached.sensitiveRepos = Array.from(
+    new Set(cached.sensitiveRepos.map(slugify).filter(Boolean))
+  );
   return cached;
 }

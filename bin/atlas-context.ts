@@ -18,6 +18,7 @@
  * The card database lives in the Atlas repo (data/atlas.db); --source paths and
  * verify commands resolve against your current directory (override with --cwd).
  */
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatDistanceToNow } from "date-fns";
@@ -33,6 +34,26 @@ import type { ContextCard, Freshness } from "@/lib/types";
 const ATLAS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.env.ATLAS_DATA_DIR ||= path.join(ATLAS_ROOT, "data");
 const INVOKE_CWD = process.cwd();
+
+/** Gitignored file the SessionStart hook writes the current harness session id
+ *  into (the hook runs in a child process and can't set a parent env var). */
+const SESSION_STATE_FILE = path.join(ATLAS_ROOT, "data", ".current-session");
+
+/**
+ * Resolve the originating Claude session id for an `add`:
+ *   --session flag  >  $ATLAS_SESSION_ID  >  the state file the hook wrote.
+ * Returns undefined when none is available (session attribution is optional).
+ */
+function resolveSessionId(flag: string | undefined): string | undefined {
+  if (flag) return flag;
+  if (process.env.ATLAS_SESSION_ID) return process.env.ATLAS_SESSION_ID;
+  try {
+    const fromFile = fs.readFileSync(SESSION_STATE_FILE, "utf8").trim();
+    return fromFile || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // --- tiny arg parser -------------------------------------------------------
 
@@ -98,9 +119,13 @@ function ago(iso: string | null): string {
 }
 
 function printCard(c: ContextCard, verbose = true): void {
-  console.log(`${pill(c.freshness)} ${bold(c.subject)}  ${dim(c.project)}`);
+  const sensitive = c.sensitive ? " " + paint(31, "[SENSITIVE]") : "";
+  console.log(`${pill(c.freshness)}${sensitive} ${bold(c.subject)}  ${dim(c.project)}`);
   console.log(`  ${c.claim}`);
   if (verbose && c.detail) console.log(dim(`  ${c.detail}`));
+  if (c.sensitive) console.log(paint(31, "  never published (sensitive)"));
+  if (c.originSessionId)
+    console.log(dim(`  session ${c.originSessionId.slice(0, 8)}`));
   if (c.provenance.length) {
     console.log(
       dim(
@@ -152,7 +177,9 @@ function cmdAdd(a: Args): void {
       links: list(f.links),
       confidence: (str(f.confidence) as ContextCard["confidence"]) ?? "medium",
       visibility: (str(f.visibility) as ContextCard["visibility"]) ?? "private",
+      sensitive: f.sensitive === true,
       repoSlug: str(f.repo) ?? null,
+      originSessionId: resolveSessionId(str(f.session)) ?? null,
       cwd: str(f.cwd) ?? INVOKE_CWD,
       runVerify: f["no-verify"] !== true,
     });
@@ -268,6 +295,64 @@ function cmdSearch(a: Args): void {
   for (const c of store.searchCards(db, q)) printCard(c, false);
 }
 
+function cmdSession(a: Args): void {
+  const db = getDb();
+  initSchema(db);
+  const sub = a._[1];
+  switch (sub) {
+    case "register": {
+      const id = str(a.flags.id);
+      if (!id) {
+        console.error("session register requires --id <session-id>");
+        process.exit(2);
+      }
+      const s = store.registerSession(db, {
+        id,
+        startedAt: str(a.flags.started),
+        summary: str(a.flags.summary) ?? undefined,
+      });
+      console.log(`registered session ${bold(s.id)} (${ago(s.startedAt)})`);
+      break;
+    }
+    case "update": {
+      const id = str(a.flags.id);
+      if (!id) {
+        console.error("session update requires --id <session-id>");
+        process.exit(2);
+      }
+      const s = store.updateSession(db, id, {
+        summary: a.flags.summary !== undefined ? str(a.flags.summary) ?? "" : undefined,
+        branches: a.flags.branches !== undefined ? list(a.flags.branches) : undefined,
+      });
+      console.log(s ? `updated session ${bold(id)}` : `not found: ${id}`);
+      break;
+    }
+    case "list":
+    case undefined: {
+      const sessions = store.getSessions(db);
+      if (a.flags.json === true) {
+        console.log(JSON.stringify(sessions, null, 2));
+        return;
+      }
+      if (!sessions.length) {
+        console.log(dim("no sessions recorded yet."));
+        return;
+      }
+      for (const s of sessions) {
+        const repos = s.repos.length ? dim(` · ${s.repos.join(", ")}`) : "";
+        console.log(
+          `${bold(s.id.slice(0, 8))} ${dim(ago(s.startedAt))}  ${s.cardCount} card${s.cardCount === 1 ? "" : "s"}${repos}`
+        );
+        if (s.summary) console.log(dim(`  ${s.summary}`));
+      }
+      break;
+    }
+    default:
+      console.error(`unknown session subcommand: ${sub}`);
+      process.exit(2);
+  }
+}
+
 function cmdMetrics(a: Args): void {
   const db = getDb();
   initSchema(db);
@@ -294,17 +379,23 @@ usage:
   atlas-context add --project P --subject S --claim C [--source a,b] [--verify '<cmd>']
                     [--detail D] [--stale-after N] [--tags x,y] [--links ...]
                     [--confidence high|medium|low|unverified] [--visibility private|public]
-                    [--repo slug] [--cwd dir] [--no-verify]
+                    [--sensitive] [--session <id>] [--repo slug] [--cwd dir] [--no-verify]
   atlas-context get --project P [--fresh-only] [--json]
   atlas-context verify [<id>] [--project P] [--cwd dir]
   atlas-context list [--stale] [--project P]
   atlas-context search <query>
   atlas-context supersede <id> --by <newId>
   atlas-context retire <id>
+  atlas-context session [list] [--json]
+  atlas-context session register --id <id> [--started <iso>] [--summary S]
+  atlas-context session update --id <id> [--summary S] [--branches a,b]
   atlas-context metrics [--json]
 
 A card needs at least one --source or a --verify command (or --confidence unverified).
-Read at session start; re-verify anything flagged before trusting it.`);
+--sensitive marks a card never-publishable (dropped from every public surface, even
+for a GitHub-public repo); repo-level sensitivity is the "sensitiveRepos" list in
+atlas.config.json. --session attributes the card to a Claude session (auto-filled from
+the SessionStart hook). Read at session start; re-verify anything flagged before trusting it.`);
 }
 
 // --- dispatch --------------------------------------------------------------
@@ -319,6 +410,7 @@ switch (cmd) {
   case "search": cmdSearch(args); break;
   case "supersede": cmdSupersede(args); break;
   case "retire": cmdRetire(args); break;
+  case "session": cmdSession(args); break;
   case "metrics": cmdMetrics(args); break;
   case undefined:
   case "help":

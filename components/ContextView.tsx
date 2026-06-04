@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Copy, FileCode2, ShieldAlert } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, FileCode2, Lock, ShieldAlert, History } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { ContextCard, Freshness } from "@/lib/types";
 
@@ -133,6 +134,15 @@ function Card({ card }: { card: ContextCard }) {
         >
           {pill.label}
         </span>
+        {card.sensitive && (
+          <span
+            className="inline-flex items-center gap-1 rounded bg-clay/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-clay"
+            title="Never published — excluded from every public surface"
+          >
+            <Lock className="h-3 w-3" />
+            sensitive
+          </span>
+        )}
         <span className="text-sm font-medium text-text">{card.subject}</span>
         <span className="rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-muted">
           {card.project}
@@ -167,6 +177,17 @@ function Card({ card }: { card: ContextCard }) {
             </span>
           ))}
         </div>
+      )}
+
+      {card.originSessionId && (
+        <Link
+          href={`/sessions#${card.originSessionId}`}
+          className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-faint transition-colors hover:text-teal"
+          title="Jump to the Claude session that established this fact"
+        >
+          <History className="h-3 w-3" />
+          established by session {card.originSessionId.slice(0, 8)}
+        </Link>
       )}
 
       {flagged && <CopyRow label="re-verify" value={reVerify} />}
