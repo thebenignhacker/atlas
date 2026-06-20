@@ -8,6 +8,7 @@ import {
   History,
   LayoutGrid,
   ListChecks,
+  Map,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -15,6 +16,7 @@ import {
 
 const NAV = [
   { href: "/", label: "Portfolio", icon: LayoutGrid, ownerOnly: false },
+  { href: "/roadmap", label: "Roadmap", icon: Map, ownerOnly: true },
   { href: "/context", label: "Context", icon: ShieldCheck, ownerOnly: false },
   { href: "/sessions", label: "Sessions", icon: History, ownerOnly: true },
   { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },
