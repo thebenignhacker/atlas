@@ -200,6 +200,11 @@ const KNOWN_COMMANDS = new Set([
   "/context", "/cost", "/memory", "/mcp", "/agents", "/doctor", "/status",
 ]);
 
+/** Whether an MCP server name is a known, generic, safe-to-name integration. */
+export function isKnownMcpServer(server: string): boolean {
+  return KNOWN_MCP_SERVERS.has(server);
+}
+
 /**
  * Sanitize a feature key for PUBLIC display. Idempotent — the snapshot gate calls
  * it and asserts `publicFeatureKey(f) === f` for every published feature, so any

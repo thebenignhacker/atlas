@@ -36,7 +36,9 @@ instantly and works offline.
 - **Usage** — which Claude Code features your work actually leans on, mined from your
   local session transcripts: per-feature counts and last-used, a 30-day activity trend,
   category and project breakdowns, and a prompt for high-leverage features you rarely
-  reach for. Metadata only — tool names and timing, never commands or file contents.
+  reach for. It also mines recurring tool-sequences you repeat by hand and proposes a
+  starting scaffold to automate each. Metadata only — tool names and timing, never
+  commands or file contents.
 
 ## Context Store — stored context that can't quietly lie
 

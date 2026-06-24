@@ -6,6 +6,7 @@ import type {
   UsageRollup,
 } from "@/lib/usage/types";
 import { featureMeta, publicFeatureKey } from "@/lib/usage/catalog-meta";
+import { mineRoutines } from "@/lib/usage/sequences";
 
 /**
  * Pure aggregation of mined tool events into a dashboard rollup. The SAME
@@ -178,6 +179,7 @@ export function rollupEvents(events: ToolEvent[], opts: RollupOptions): UsageRol
     byCategory: categories,
     features,
     projects,
+    routines: mineRoutines(events, { public: isPublic, now: opts.now }),
   };
 
   // Owner-only: attach the most recent raw events (with cwd/branch) for the

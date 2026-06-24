@@ -263,6 +263,21 @@ function main() {
             `usage feature "${f.feature}" is not allowlist-clean — possible private name leak`
           );
       }
+      // Routines: every step token must be allowlist-clean (same rule as feature
+      // keys — a routine could otherwise carry a private skill/workflow/command
+      // name), and the generated scaffold text must contain no filesystem path.
+      if (!Array.isArray(usage.routines)) {
+        violations.push("usage rollup malformed — routines is not an array");
+      } else {
+        for (const r of usage.routines) {
+          for (const step of r.steps) {
+            if (publicFeatureKey(step) !== step)
+              violations.push(`routine step "${step}" is not allowlist-clean`);
+          }
+          if (pathish.test(r.scaffold))
+            violations.push("routine scaffold contains a filesystem path");
+        }
+      }
     }
   }
 

@@ -73,6 +73,29 @@ export interface ProjectUsage {
   count: number;
 }
 
+/** Suggested automation kind for a mined routine. */
+export type RoutineKind = "skill" | "loop" | "workflow" | "manual";
+
+/**
+ * A recurring tool-sequence ("motif") mined from per-session usage. Evidence-
+ * backed: `support` and `occurrences` are real counts, never inferred. `steps`
+ * are denoised, sanitized salient tokens (consecutive file/shell/search calls
+ * collapse to a single `·code` step; skill/agent/command/mcp names are
+ * allowlist-sanitized in public mode exactly like feature keys).
+ */
+export interface Routine {
+  steps: string[];
+  /** Distinct sessions the motif appears in (the real "you keep doing this" signal). */
+  support: number;
+  /** Total occurrences across all sessions. */
+  occurrences: number;
+  /** Most recent occurrence (public: date-only). */
+  lastSeen: string | null;
+  kind: RoutineKind;
+  /** A concrete automation scaffold/tip — a STARTING POINT to adapt, not a finished workflow. */
+  scaffold: string;
+}
+
 /**
  * The full rollup rendered by the dashboard. The SAME shape powers the public
  * and owner views; `recentEvents` is owner-only (carries cwd/branch) and is
@@ -92,6 +115,8 @@ export interface UsageRollup {
   byCategory: { category: UsageCategory; count: number }[];
   features: FeatureUsage[];
   projects: ProjectUsage[];
+  /** Recurring tool-sequences you could automate (evidence-backed, sanitized). */
+  routines: Routine[];
   /** Owner-only: last N raw events with cwd/branch. Never set on the public rollup. */
   recentEvents?: ToolEvent[];
 }
@@ -103,4 +128,5 @@ export const EMPTY_USAGE: UsageRollup = {
   byCategory: [],
   features: [],
   projects: [],
+  routines: [],
 };
