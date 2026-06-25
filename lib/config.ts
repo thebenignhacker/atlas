@@ -26,6 +26,13 @@ export interface AtlasConfig {
    * leak. Stronger than relying on GitHub visibility.
    */
   sensitiveRepos: string[];
+  /**
+   * Project / workspace-dir names whose Claude Code usage may be ATTRIBUTED BY
+   * NAME in the public showcase. Anything not listed is bucketed into "other",
+   * so the public usage view never discloses a private client or project. Empty
+   * falls back to DEFAULT_PUBLIC_USAGE_PROJECTS (lib/usage/catalog-meta).
+   */
+  publicUsageProjects: string[];
   /** AI layer. Disabled by default — Atlas is fully usable without it. */
   ai: {
     enabled: boolean;
@@ -46,6 +53,7 @@ const DEFAULT_CONFIG: AtlasConfig = {
   exclude: ["node_modules", ".next", ".git", "archive-", "dist", "build"],
   publicOwners: [],
   sensitiveRepos: [],
+  publicUsageProjects: [],
   ai: {
     enabled: false,
     provider: "anthropic",

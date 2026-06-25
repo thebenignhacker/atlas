@@ -9,6 +9,7 @@ import {
 } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
 import { slug } from "@/lib/context/store";
+import { DEFAULT_PUBLIC_USAGE_PROJECTS, publicFeatureKey } from "@/lib/usage/catalog-meta";
 
 /**
  * Generate the public snapshot, then ADVERSARIALLY verify it leaks nothing:
@@ -211,6 +212,70 @@ function main() {
             sensitiveSlugSet.has(slug(c.project))
           )
             violations.push(`card "${c.id}" under a sensitive repo present in snapshot`);
+        }
+      }
+    }
+  }
+
+  // 8) Feature usage: the public rollup must carry AGGREGATES ONLY. Owner-only
+  //    fields (cwd, gitBranch, paramKeys, raw recentEvents) must be absent by
+  //    construction, project attribution must stay within the allowlist, and no
+  //    tool-use id or path separator may ride along inside a feature name.
+  const usage = snapshot.usage;
+  if (!usage) {
+    violations.push("usage rollup missing from snapshot (fail-closed)");
+  } else {
+    if (usage.recentEvents !== undefined)
+      violations.push("usage.recentEvents present — owner-only raw events leaked");
+    const uj = JSON.stringify(usage);
+    for (const field of ["cwd", "gitBranch", "paramKeys"]) {
+      if (uj.includes(`"${field}"`))
+        violations.push(`usage rollup leaked owner-only field "${field}"`);
+    }
+    if (/toolu_[A-Za-z0-9]+/.test(uj))
+      violations.push("usage rollup leaked a tool-use id");
+    // Shape guard (don't rely on a bare throw to stay fail-closed): if the
+    // rollup is malformed, record a violation instead of crashing past the loops.
+    if (!Array.isArray(usage.projects) || !Array.isArray(usage.features)) {
+      violations.push("usage rollup malformed — projects/features are not arrays");
+    } else {
+      const cfg = loadConfig().publicUsageProjects;
+      const allowedProjects = new Set([
+        ...(cfg.length ? cfg : DEFAULT_PUBLIC_USAGE_PROJECTS),
+        "other",
+      ]);
+      for (const p of usage.projects) {
+        if (!allowedProjects.has(p.project))
+          violations.push(`usage project "${p.project}" not in the public allowlist`);
+      }
+      // A leaked filesystem path — NOT the legitimate "/" in a slash-command key
+      // like "command:/clear". Genuine path markers only (home/system roots, "~/").
+      const pathish = /(?:\/(?:Users|home|root|var|tmp|private|opt|mnt)\/|~\/|\\\\)/;
+      for (const f of usage.features) {
+        if (pathish.test(f.feature) || pathish.test(f.displayName))
+          violations.push(`usage feature "${f.feature}" contains a filesystem path`);
+        // Every published feature key must be allowlist-clean: a user-authored
+        // skill/workflow/command/mcp/agent name that isn't on the known-safe list
+        // could embed a private client/project name. publicFeatureKey is
+        // idempotent on clean keys, so any inequality means a name slipped through.
+        if (publicFeatureKey(f.feature) !== f.feature)
+          violations.push(
+            `usage feature "${f.feature}" is not allowlist-clean — possible private name leak`
+          );
+      }
+      // Routines: every step token must be allowlist-clean (same rule as feature
+      // keys — a routine could otherwise carry a private skill/workflow/command
+      // name), and the generated scaffold text must contain no filesystem path.
+      if (!Array.isArray(usage.routines)) {
+        violations.push("usage rollup malformed — routines is not an array");
+      } else {
+        for (const r of usage.routines) {
+          for (const step of r.steps) {
+            if (publicFeatureKey(step) !== step)
+              violations.push(`routine step "${step}" is not allowlist-clean`);
+          }
+          if (pathish.test(r.scaffold))
+            violations.push("routine scaffold contains a filesystem path");
         }
       }
     }

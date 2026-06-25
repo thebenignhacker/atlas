@@ -33,6 +33,12 @@ instantly and works offline.
   short suggested-focus list. Built on measured facts, never invented.
 - **Context Store** — verified facts about each project that flag themselves when they
   go stale, so you stop re-deriving "what's the status of X" every session. See below.
+- **Usage** — which Claude Code features your work actually leans on, mined from your
+  local session transcripts: per-feature counts and last-used, a 30-day activity trend,
+  category and project breakdowns, and a prompt for high-leverage features you rarely
+  reach for. It also mines recurring tool-sequences you repeat by hand and proposes a
+  starting scaffold to automate each. Metadata only — tool names and timing, never
+  commands or file contents.
 
 ## Context Store — stored context that can't quietly lie
 
@@ -123,6 +129,7 @@ To enable: set `ai.enabled` to `true` and provide a key
 |---|---|
 | `npm run setup-db` | Create the local SQLite schema |
 | `npm run scan` | Scan your repos and todos into the database |
+| `npm run scan:usage` | Mine Claude Code feature usage from local session transcripts |
 | `npm run snapshot` | Generate the sanitized public snapshot (for a public demo) |
 | `npm run snapshot:owner` | Generate the full owner snapshot (for a private remote view) |
 | `npm run dev` | Start the dashboard (full local view) |

@@ -21,6 +21,10 @@ import type { DigestResult } from "@/lib/ai/digest";
 import type { AICostSummary } from "@/lib/ai/cache";
 import type { LearnedItem } from "@/lib/ai/learning";
 import type { AIAvailability } from "@/lib/ai/provider";
+import { getToolEvents } from "@/lib/usage/store";
+import { rollupEvents } from "@/lib/usage/rollup";
+import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
+import type { UsageRollup } from "@/lib/usage/types";
 
 export const SNAPSHOT_PATH = path.join(process.cwd(), "public-snapshot.json");
 export const OWNER_SNAPSHOT_PATH = path.join(process.cwd(), "owner-snapshot.json");
@@ -80,6 +84,17 @@ export interface PublicSnapshot {
   contextCards: ContextCard[];
   /** Aggregate counts only — safe to publish, leak nothing per-card. */
   contextMetrics: ContextMetrics;
+  /**
+   * Claude Code feature-usage rollup. Aggregates only — no raw events, no
+   * cwd/branch/paramKeys, projects bucketed to the allowlist. Built from the
+   * mined tool_events but deliberately omits every owner-only field.
+   */
+  usage: UsageRollup;
+}
+
+/** Resolve the public usage-project allowlist (config override or default). */
+function usageProjects(configList: string[]): string[] {
+  return configList.length ? configList : DEFAULT_PUBLIC_USAGE_PROJECTS;
 }
 
 /**
@@ -143,6 +158,8 @@ export interface OwnerSnapshot {
   contextMetrics: ContextMetrics;
   /** Claude session registry — owner-only, never in the public snapshot. */
   sessions: Session[];
+  /** Feature-usage rollup, full detail (real project names, recent raw events). */
+  usage: UsageRollup;
 }
 
 /**
@@ -321,6 +338,17 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // (and the gate's count-match assertion holds by construction).
     const contextMetrics = getMetricsForCards(db, eligible);
 
+    // Feature usage: PUBLIC rollup. Built from the mined events but the public
+    // path drops cwd/branch/paramKeys (never serialized), buckets non-allowlisted
+    // projects into "other", truncates timestamps to date-only, and reuses the
+    // same `redactNames` set to scrub private identifiers from feature names.
+    const usage = rollupEvents(getToolEvents(db), {
+      public: true,
+      publicProjects: usageProjects(config.publicUsageProjects),
+      redactNames,
+      now: new Date(),
+    });
+
     return {
       generatedAt: new Date().toISOString(),
       stats,
@@ -329,6 +357,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
       summaries,
       contextCards,
       contextMetrics,
+      usage,
     };
   } finally {
     db.close();
@@ -454,6 +483,15 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
     const contextMetrics = getMetrics(db);
     const sessions = getSessions(db);
 
+    // Feature usage: OWNER rollup. Full detail — real project names, full-
+    // precision timestamps, and the last 80 raw events (with cwd/branch) for the
+    // drill-down timeline. Gitignored owner snapshot only; never committed.
+    const usage = rollupEvents(getToolEvents(db), {
+      public: false,
+      now: new Date(),
+      recentLimit: 80,
+    });
+
     return {
       generatedAt: new Date().toISOString(),
       stats,
@@ -468,6 +506,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       contextCards,
       contextMetrics,
       sessions,
+      usage,
     };
   } finally {
     db.close();
