@@ -1,24 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import type { RepoWithSignals } from "@/lib/queries";
 import { languageColor } from "@/lib/display";
 import type { StalenessBucket } from "@/lib/types";
+import { ChartPanel, Donut, RankBar, type Slice } from "@/components/Charts";
 
-const INK = "#211c15";
-const LINE = "#e7dcc6";
 const MARIGOLD = "#e8a317";
+const CLAY = "#c75d3c";
 
 const STALE_ORDER: StalenessBucket[] = ["fresh", "recent", "aging", "stale", "dormant"];
 const STALE_META: Record<StalenessBucket, { label: string; color: string }> = {
@@ -29,62 +18,44 @@ const STALE_META: Record<StalenessBucket, { label: string; color: string }> = {
   dormant: { label: "Dormant", color: "#b7ad9a" },
 };
 
-function Panel({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-[var(--radius-card)] border border-line bg-surface-1 p-4">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h3 className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint">
-          {title}
-        </h3>
-        {hint && <span className="text-[11px] text-faint tnum">{hint}</span>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function tooltipStyle() {
-  return {
-    background: "#fffdf8",
-    border: `1px solid ${LINE}`,
-    borderRadius: 10,
-    fontSize: 12,
-    color: INK,
-    boxShadow: "0 8px 24px -12px rgba(33,28,21,0.25)",
-  } as const;
-}
-
 export function OverviewCharts({ repos }: { repos: RepoWithSignals[] }) {
-  const languages = useMemo(() => {
+  const languages = useMemo<Slice[]>(() => {
     const counts = new Map<string, number>();
-    for (const r of repos) {
-      if (!r.language) continue;
-      counts.set(r.language, (counts.get(r.language) ?? 0) + 1);
-    }
+    for (const r of repos) if (r.language) counts.set(r.language, (counts.get(r.language) ?? 0) + 1);
     return Array.from(counts.entries())
-      .map(([name, value]) => ({ name, value, fill: languageColor(name) }))
+      .map(([name, value]) => ({ name, value, color: languageColor(name) }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 7);
   }, [repos]);
 
-  const freshness = useMemo(() => {
+  const health = useMemo<Slice[]>(() => {
     const counts = new Map<StalenessBucket, number>();
     for (const r of repos)
       counts.set(r.signals.staleness, (counts.get(r.signals.staleness) ?? 0) + 1);
     return STALE_ORDER.map((k) => ({
-      key: k,
       name: STALE_META[k].label,
       value: counts.get(k) ?? 0,
       color: STALE_META[k].color,
     })).filter((d) => d.value > 0);
+  }, [repos]);
+
+  const visibility = useMemo<Slice[]>(() => {
+    let pub = 0,
+      priv = 0,
+      fork = 0,
+      arch = 0;
+    for (const r of repos) {
+      if (r.isArchived === 1) arch++;
+      else if (r.isFork === 1) fork++;
+      else if (r.visibility === "private") priv++;
+      else if (r.visibility === "public") pub++;
+    }
+    return [
+      { name: "Public", value: pub, color: "#1f8a7e" },
+      { name: "Private", value: priv, color: "#211c15" },
+      { name: "Forks", value: fork, color: "#b7ad9a" },
+      { name: "Archived", value: arch, color: "#d8cdb5" },
+    ].filter((d) => d.value > 0);
   }, [repos]);
 
   const active = useMemo(
@@ -92,136 +63,61 @@ export function OverviewCharts({ repos }: { repos: RepoWithSignals[] }) {
       repos
         .filter((r) => r.commitCount30d > 0)
         .sort((a, b) => b.commitCount30d - a.commitCount30d)
-        .slice(0, 6)
+        .slice(0, 7)
         .map((r) => ({ name: r.name, value: r.commitCount30d }))
         .reverse(),
     [repos]
   );
 
-  const liveCount = freshness
-    .filter((d) => d.key === "fresh" || d.key === "recent")
-    .reduce((s, d) => s + d.value, 0);
+  const byWorkspace = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of repos) {
+      const k = r.groupName || "Ungrouped";
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 7)
+      .reverse();
+  }, [repos]);
 
-  return (
-    <div className="mb-7 grid grid-cols-1 gap-3 lg:grid-cols-3">
-      <Panel title="Languages" hint={`${languages.length} shown`}>
-        {languages.length === 0 ? (
-          <Empty />
-        ) : (
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart
-              data={languages}
-              layout="vertical"
-              margin={{ top: 0, right: 16, bottom: 0, left: 4 }}
-              barCategoryGap={6}
-            >
-              <XAxis type="number" hide />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={78}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: INK, fontSize: 11 }}
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(33,28,21,0.04)" }}
-                contentStyle={tooltipStyle()}
-                formatter={(v) => [`${v} repos`, ""]}
-              />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14}>
-                {languages.map((d) => (
-                  <Cell key={d.name} fill={d.fill} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Panel>
-
-      <Panel title="Freshness" hint={`${liveCount} live`}>
-        {freshness.length === 0 ? (
-          <Empty />
-        ) : (
-          <div className="flex items-center gap-3">
-            <ResponsiveContainer width="55%" height={180}>
-              <PieChart>
-                <Pie
-                  data={freshness}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={42}
-                  outerRadius={70}
-                  paddingAngle={2}
-                  stroke="#fffdf8"
-                  strokeWidth={2}
-                >
-                  {freshness.map((d) => (
-                    <Cell key={d.key} fill={d.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={tooltipStyle()}
-                  formatter={(v, n) => [`${v} repos`, n]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <ul className="flex-1 space-y-1.5 text-[11.5px]">
-              {freshness.map((d) => (
-                <li key={d.key} className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1.5 text-muted">
-                    <span
-                      className="h-2 w-2 rounded-full"
-                      style={{ background: d.color }}
-                    />
-                    {d.name}
-                  </span>
-                  <span className="tnum text-text">{d.value}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Panel>
-
-      <Panel title="Most active" hint="commits / 30d">
-        {active.length === 0 ? (
-          <Empty />
-        ) : (
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart
-              data={active}
-              layout="vertical"
-              margin={{ top: 0, right: 16, bottom: 0, left: 4 }}
-              barCategoryGap={6}
-            >
-              <XAxis type="number" hide />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={92}
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: INK, fontSize: 11 }}
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(33,28,21,0.04)" }}
-                contentStyle={tooltipStyle()}
-                formatter={(v) => [`${v} commits`, ""]}
-              />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={14} fill={MARIGOLD} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Panel>
-    </div>
+  const totalCommits = useMemo(
+    () => repos.reduce((s, r) => s + (r.commitCount30d ?? 0), 0),
+    [repos]
   );
-}
 
-function Empty() {
   return (
-    <div className="grid h-[180px] place-items-center text-xs text-faint">
-      Not enough data yet.
+    <div className="space-y-3">
+      <div className="flex items-baseline gap-2">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-text">
+          At a glance
+        </h2>
+        <span className="text-xs text-faint">{repos.length} repos</span>
+      </div>
+
+      {/* Composition — three donuts */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <ChartPanel title="Languages" hint={`${languages.length} shown`}>
+          <Donut data={languages} unit="repos" />
+        </ChartPanel>
+        <ChartPanel title="Health" hint="by activity">
+          <Donut data={health} unit="repos" />
+        </ChartPanel>
+        <ChartPanel title="Visibility" hint="public / private">
+          <Donut data={visibility} unit="repos" />
+        </ChartPanel>
+      </div>
+
+      {/* Ranking — two bars */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ChartPanel title="Most active" hint={`${totalCommits} commits / 30d`}>
+          <RankBar data={active} unit="commits" fill={MARIGOLD} width={108} />
+        </ChartPanel>
+        <ChartPanel title="By workspace" hint={`${byWorkspace.length} shown`}>
+          <RankBar data={byWorkspace} unit="repos" fill={CLAY} width={108} />
+        </ChartPanel>
+      </div>
     </div>
   );
 }

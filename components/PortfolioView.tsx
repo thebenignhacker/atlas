@@ -199,15 +199,22 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
         <div className="space-y-8">
           {/* Primary: owned/active work */}
           {grouped && primaryGroups ? (
-            primaryGroups.map((g) => (
-              <GroupBlock
-                key={g.name}
-                title={g.name}
-                repos={g.repos}
-                collapsed={collapsed.has(`g:${g.name}`)}
-                onToggle={() => toggle(`g:${g.name}`)}
-              />
-            ))
+            primaryGroups.map((g, i) => {
+              // Open the two most-active workspaces; collapse the rest so the page
+              // starts compact. A click on `collapsed` flips that per-group default.
+              const key = `g:${g.name}`;
+              const defaultCollapsed = i >= 2;
+              const isCollapsed = collapsed.has(key) ? !defaultCollapsed : defaultCollapsed;
+              return (
+                <GroupBlock
+                  key={g.name}
+                  title={g.name}
+                  repos={g.repos}
+                  collapsed={isCollapsed}
+                  onToggle={() => toggle(key)}
+                />
+              );
+            })
           ) : (
             <RepoGrid repos={flatPrimary} />
           )}

@@ -11,8 +11,16 @@ import {
 } from "recharts";
 import type { ActivityEvent } from "@/lib/types";
 import { relativeTime } from "@/lib/util/date";
+import { ChartPanel, Donut, RankBar, type Slice } from "@/components/Charts";
 
 const WEEKS = 13;
+
+const TYPE_META: Record<string, { label: string; color: string }> = {
+  commit: { label: "Commits", color: "#e8a317" },
+  pr: { label: "Pull requests", color: "#8b5cf6" },
+  issue: { label: "Issues", color: "#1f8a7e" },
+  release: { label: "Releases", color: "#c75d3c" },
+};
 
 export function ActivityView({
   events,
@@ -57,6 +65,24 @@ export function ActivityView({
     return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered]);
 
+  const topRepos = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const e of filtered) if (e.repoSlug) c.set(e.repoSlug, (c.get(e.repoSlug) ?? 0) + 1);
+    return Array.from(c.entries())
+      .map(([slug, value]) => ({ name: repoMap[slug] ?? slug, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 7)
+      .reverse();
+  }, [filtered, repoMap]);
+
+  const byType = useMemo<Slice[]>(() => {
+    const c = new Map<string, number>();
+    for (const e of filtered) c.set(e.type, (c.get(e.type) ?? 0) + 1);
+    return Object.entries(TYPE_META)
+      .map(([k, m]) => ({ name: m.label, value: c.get(k) ?? 0, color: m.color }))
+      .filter((d) => d.value > 0);
+  }, [filtered]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -75,6 +101,15 @@ export function ActivityView({
         <span className="text-xs text-faint">
           {total} commits in the last {WEEKS} weeks
         </span>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <ChartPanel title="Most active repos" hint={`${topRepos.length} shown`}>
+          <RankBar data={topRepos} unit="events" fill="#e8a317" width={108} />
+        </ChartPanel>
+        <ChartPanel title="By type" hint="events">
+          <Donut data={byType} unit="events" />
+        </ChartPanel>
       </div>
 
       <div className="rounded-[var(--radius-card)] border border-line bg-surface-1 p-4">
