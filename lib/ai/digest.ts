@@ -4,7 +4,7 @@ import { complete } from "@/lib/ai/provider";
 import { isRepoAIEligible } from "@/lib/ai/policy";
 import { getCached, saveOutput, hashContent } from "@/lib/ai/cache";
 import { getLearningPreamble } from "@/lib/ai/learning";
-import { isOwnerMode } from "@/lib/mode";
+import { isOwnerMode, type ResolvedMode } from "@/lib/mode";
 import { loadOwnerSnapshot } from "@/lib/snapshot";
 import { relativeTime } from "@/lib/util/date";
 
@@ -33,7 +33,8 @@ function buildSnapshot(): {
   included: number;
   excluded: number;
 } {
-  const repos = getRepos();
+  // Digest generation runs only on the local host (DB + API key present).
+  const repos = getRepos("local");
   const eligible = repos.filter((r) => isRepoAIEligible(r));
   const excluded = repos.length - eligible.length;
 
@@ -56,12 +57,12 @@ function buildSnapshot(): {
     .map((r) => `- ${r.name}: ${r.signals.attention.join("; ")}`);
 
   const eligibleSlugs = new Set(eligible.map((r) => r.slug));
-  const p0 = getTodos({ priority: "P0", status: "open" })
+  const p0 = getTodos("local", { priority: "P0", status: "open" })
     .filter((t) => !t.repoSlug || eligibleSlugs.has(t.repoSlug))
     .slice(0, 20)
     .map((t) => `- [P0] ${t.title}`);
 
-  const recent = getActivity(40)
+  const recent = getActivity("local", 40)
     .filter((e) => !e.repoSlug || eligibleSlugs.has(e.repoSlug))
     .slice(0, 25)
     .map((e) => `- ${(e.ts ?? "").slice(0, 10)} ${e.title}`);
@@ -131,9 +132,9 @@ export async function generateDigest(force = false): Promise<DigestResult> {
 }
 
 /** Read the last digest from cache without generating a new one. */
-export function getLastDigest(): DigestResult | null {
+export function getLastDigest(mode?: ResolvedMode): DigestResult | null {
   // Owner deployment has no DB; the digest is baked into the snapshot.
-  if (isOwnerMode()) return loadOwnerSnapshot().digest;
+  if (mode ? mode === "owner" : isOwnerMode()) return loadOwnerSnapshot().digest;
   const cached = getCached(
     "portfolio",
     "global",

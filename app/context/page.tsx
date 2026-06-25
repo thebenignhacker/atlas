@@ -1,4 +1,5 @@
 import { getContextCards, getContextMetrics, getStats } from "@/lib/queries";
+import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { ContextMetrics } from "@/components/ContextMetrics";
 import { ContextView } from "@/components/ContextView";
@@ -6,14 +7,15 @@ import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
-export default function ContextPage() {
+export default async function ContextPage() {
+  const mode = await getRequestMode();
   let cards;
   let metrics;
   let stats;
   try {
-    cards = getContextCards();
-    metrics = getContextMetrics();
-    stats = getStats();
+    cards = getContextCards(mode);
+    metrics = getContextMetrics(mode);
+    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

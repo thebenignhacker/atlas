@@ -1,6 +1,7 @@
 import { aiAvailability } from "@/lib/ai/provider";
 import { getLastDigest } from "@/lib/ai/digest";
-import { getStats, isPublicMode, isOwnerMode } from "@/lib/queries";
+import { getStats } from "@/lib/queries";
+import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { DigestView } from "@/components/DigestView";
 import { EmptyState } from "@/components/EmptyState";
@@ -8,12 +9,13 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
 
-export default function DigestPage() {
-  if (isPublicMode()) return <OwnerOnly feature="AI Digest" />;
-  const owner = isOwnerMode();
+export default async function DigestPage() {
+  const mode = await getRequestMode();
+  if (mode === "public") return <OwnerOnly feature="AI Digest" />;
+  const owner = mode === "owner";
   let stats;
   try {
-    stats = getStats();
+    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -22,12 +24,12 @@ export default function DigestPage() {
     );
   }
 
-  const avail = aiAvailability();
+  const avail = aiAvailability(mode);
   let initial = null;
   try {
     // Owner deployment can't generate, but always shows the digest baked into
     // the snapshot regardless of host AI availability.
-    initial = avail.ok || owner ? getLastDigest() : null;
+    initial = avail.ok || owner ? getLastDigest(mode) : null;
   } catch {
     initial = null;
   }

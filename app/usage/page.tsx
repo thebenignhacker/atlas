@@ -3,6 +3,7 @@ import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { UsageCharts } from "@/components/UsageCharts";
 import { Sparkline } from "@/components/Sparkline";
 import { EmptyState } from "@/components/EmptyState";
+import { getRequestMode } from "@/lib/request-mode";
 import { CATEGORY_META } from "@/lib/usage/catalog-meta";
 import type { FeatureUsage, Routine, RoutineKind } from "@/lib/usage/types";
 import { relativeTime } from "@/lib/util/date";
@@ -115,12 +116,13 @@ function FeatureCard({ f }: { f: FeatureUsage }) {
   );
 }
 
-export default function UsagePage() {
+export default async function UsagePage() {
+  const mode = await getRequestMode();
   let usage;
   let scannedAt: string | null = null;
   try {
-    usage = getUsage();
-    scannedAt = getUsageScannedAt();
+    usage = getUsage(mode);
+    scannedAt = getUsageScannedAt(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

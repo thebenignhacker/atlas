@@ -138,7 +138,7 @@ To enable: set `ai.enabled` to `true` and provide a key
 
 ## Deployment modes
 
-Atlas runs in three modes from one codebase, selected by `ATLAS_MODE`:
+Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`:
 
 - **Local (default):** reads the full SQLite database. You see everything. No login,
   because it is your machine.
@@ -146,8 +146,13 @@ Atlas runs in three modes from one codebase, selected by `ATLAS_MODE`:
   sanitized, read-only view. Private repos, forks, local file paths, todos, and settings
   are never present. The full database is never deployed, so it cannot leak.
 - **Owner (`ATLAS_MODE=owner`):** reads `owner-snapshot.json` (your full data) behind a
-  password. Use it to reach your complete dashboard from any device. The snapshot is never
-  committed; it is uploaded only to the password-gated deployment.
+  password — a standalone private deployment.
+- **Unified (`ATLAS_MODE=unified`):** ONE deployment that serves the public showcase to
+  everyone and your full private data once you log in. The data source is chosen **per
+  request** — a request with a valid owner session reads the owner snapshot, everyone else
+  reads the public one. Both snapshots are bundled; owner data is never served without a
+  verified session. This is how the public site and the private view live on a single
+  project.
 
 ### Public demo
 
@@ -160,24 +165,30 @@ Atlas runs in three modes from one codebase, selected by `ATLAS_MODE`:
 
 Re-run `npm run snapshot` and redeploy whenever you want to refresh the public view.
 
-### Private remote view (owner mode)
+### Private view — log in on the public site (unified mode)
 
-A second, password-gated deployment that shows your full data — including private repos —
-from any device. Access is a single password; no OAuth, no third-party login.
+The recommended setup: ONE deployment that shows the public showcase to visitors and your
+full private data — including private repos — once you log in. Access is a single password;
+no OAuth, no second project.
 
 1. Generate the credentials (locally — the plaintext password never leaves your machine):
    - `AUTH_SECRET` for signing sessions: `openssl rand -base64 32`
    - `OWNER_PASSWORD_HASH`: `echo -n 'your-strong-password' | npm run hash-password`
      (prints `OWNER_PASSWORD_HASH=scrypt:…`; use 16+ chars — the scrypt hash is the only
      brute-force barrier).
-2. On the owner deployment, set these environment variables (never commit them):
-   - `ATLAS_MODE=owner`
+2. On the deployment, set these environment variables (never commit them):
+   - `ATLAS_MODE=unified`
    - `AUTH_SECRET` (from step 1)
    - `OWNER_PASSWORD_HASH` (from step 1)
-3. Run `npm run snapshot:owner` to write `owner-snapshot.json` (gitignored, full data).
-4. Deploy as a separate project with the snapshot present in the working directory
-   (for example `vercel deploy --prod`). The snapshot ships via the CLI upload, never
-   through git.
+3. Run `npm run snapshot` (public) and `npm run snapshot:owner` (full, gitignored) — both
+   are bundled; the public one is served to visitors, the owner one only after login.
+4. Deploy with both snapshots present in the working directory (for example
+   `vercel deploy --prod`). `owner-snapshot.json` ships via the CLI upload, never through
+   git, and is read server-side only — it is not an HTTP-reachable static file.
+
+Visitors see the public showcase and an "Owner login" link; logging in unlocks the full
+view (private repos, todos, sessions) on the same URL. (A standalone `ATLAS_MODE=owner`
+deployment also exists if you prefer the private view on a separate project.)
 
 Security: the password is stored only as a salted **scrypt** hash; sessions are
 HMAC-signed (`AUTH_SECRET`), `HttpOnly; Secure; SameSite=Strict` cookies that expire after

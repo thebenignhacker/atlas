@@ -1,5 +1,5 @@
 import { loadRoadmap } from "@/lib/roadmap";
-import { isPublicMode } from "@/lib/mode";
+import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { RoadmapBoard } from "@/components/RoadmapBoard";
 import { OwnerOnly } from "@/components/OwnerOnly";
@@ -7,10 +7,11 @@ import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
-export default function RoadmapPage() {
+export default async function RoadmapPage() {
   // The roadmap reads markdown files on the owner machine; the public snapshot
   // has no filesystem to read them from.
-  if (isPublicMode()) return <OwnerOnly feature="Roadmap" />;
+  const mode = await getRequestMode();
+  if (mode === "public") return <OwnerOnly feature="Roadmap" />;
 
   let items;
   try {

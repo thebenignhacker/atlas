@@ -33,7 +33,8 @@ export async function summarizeRepo(
   slug: string,
   force = false
 ): Promise<SummaryResult> {
-  const repo = getRepo(slug);
+  // Summary generation runs only on the local host (DB + API key present).
+  const repo = getRepo("local", slug);
   if (!repo) throw new Error(`Repo not found: ${slug}`);
 
   if (!isRepoAIEligible(repo)) {
@@ -41,7 +42,7 @@ export async function summarizeRepo(
   }
 
   const readme = readReadme(repo.path);
-  const todos = getTodos({ repoSlug: slug });
+  const todos = getTodos("local", { repoSlug: slug });
   const todoTitles = todos.slice(0, 15).map((t) => `[${t.priority ?? "-"}] ${t.title}`);
 
   const facts = [

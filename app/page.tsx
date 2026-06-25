@@ -1,16 +1,18 @@
 import { getRepos, getStats } from "@/lib/queries";
+import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { PortfolioView } from "@/components/PortfolioView";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
-export default function PortfolioPage() {
+export default async function PortfolioPage() {
+  const mode = await getRequestMode();
   let repos;
   let stats;
   try {
-    repos = getRepos();
-    stats = getStats();
+    repos = getRepos(mode);
+    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

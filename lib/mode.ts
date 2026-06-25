@@ -1,21 +1,27 @@
 /**
- * Atlas runs in one of three data modes, selected by the ATLAS_MODE env var:
+ * Atlas runs in one of four data modes, selected by the ATLAS_MODE env var:
  *
  *  - "local"  (default): reads the local SQLite database. Full data, used by
  *    `npm run dev` on the owner's machine.
  *  - "public": reads the sanitized `public-snapshot.json`. No SQLite, no todos,
- *    no private data. This is the deployed public demo.
+ *    no private data. A deployed public demo.
  *  - "owner":  reads the unsanitized `owner-snapshot.json` (all repos, todos,
- *    activity, digest, settings). Deployed behind GitHub OAuth -- only the owner
- *    sees it. The snapshot is NEVER committed; it is uploaded to the owner
- *    deployment by the Vercel CLI.
+ *    activity). A deployed, fully-private deployment.
+ *  - "unified": ONE deployment that carries BOTH snapshots and decides PER
+ *    REQUEST — a request with a valid owner session sees owner data, everyone
+ *    else sees public data. The env var alone never grants owner access; only a
+ *    verified session does (see lib/request-mode.ts). This is how the public
+ *    showcase and the private view live on a single Vercel project.
  *
- * Both snapshot modes exist because Vercel's serverless filesystem is read-only:
- * the host cannot open the SQLite DB, so a prebuilt JSON snapshot is the data
- * source. Keep this module dependency-free so any layer can ask the mode without
- * pulling in the DB or query stack.
+ * Snapshot modes exist because Vercel's serverless filesystem is read-only: the
+ * host cannot open the SQLite DB, so a prebuilt JSON snapshot is the data source.
+ * Keep this module dependency-free so any layer can ask the env mode without
+ * pulling in the DB, the auth stack, or next/headers.
  */
-export type AtlasMode = "local" | "public" | "owner";
+export type AtlasMode = "local" | "public" | "owner" | "unified";
+
+/** The data mode AFTER per-request resolution — what a query actually reads. */
+export type ResolvedMode = "local" | "public" | "owner";
 
 export function atlasMode(): AtlasMode {
   switch (process.env.ATLAS_MODE) {
@@ -23,6 +29,8 @@ export function atlasMode(): AtlasMode {
       return "public";
     case "owner":
       return "owner";
+    case "unified":
+      return "unified";
     default:
       return "local";
   }
@@ -33,12 +41,12 @@ export function isPublicMode(): boolean {
   return atlasMode() === "public";
 }
 
-/** Owner deployment: full snapshot behind OAuth. */
+/** Owner deployment: full snapshot. */
 export function isOwnerMode(): boolean {
   return atlasMode() === "owner";
 }
 
-/** Either deployed mode reads a JSON snapshot instead of the SQLite DB. */
+/** Any deployed mode reads a JSON snapshot instead of the SQLite DB. */
 export function isSnapshotMode(): boolean {
   return atlasMode() !== "local";
 }

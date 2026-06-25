@@ -4,6 +4,7 @@ import { computeSignals } from "@/lib/signals";
 import { loadPublicSnapshot, loadOwnerSnapshot } from "@/lib/snapshot";
 import { getLatestOutput } from "@/lib/ai/cache";
 import { isPublicMode, isOwnerMode } from "@/lib/mode";
+import type { ResolvedMode } from "@/lib/mode";
 import { getCards, getSessions as getSessionsFromDb } from "@/lib/context/store";
 import { getMetrics } from "@/lib/context/metrics";
 import { getToolEvents } from "@/lib/usage/store";
@@ -26,9 +27,7 @@ export interface RepoWithSignals extends Repo {
   openTodos: number;
 }
 
-// Mode helpers live in lib/mode.ts (dependency-free). Re-exported here so the
-// many call sites that already import { isPublicMode } from "@/lib/queries"
-// keep working, and so isOwnerMode is reachable from the same place.
+// Re-exported for the few non-page importers that still check the env mode.
 export { isPublicMode, isOwnerMode };
 
 export interface AtlasStats {
@@ -43,12 +42,21 @@ export interface AtlasStats {
   openP0: number;
 }
 
-export function getStats(): AtlasStats {
-  if (isPublicMode()) return loadPublicSnapshot().stats;
-  if (isOwnerMode()) return loadOwnerSnapshot().stats;
+/**
+ * Every query takes an explicit, already-RESOLVED mode (from getRequestMode()) as
+ * its FIRST argument. Owner data is returned ONLY for mode === "owner". This is
+ * the hard boundary: threading the mode as a required argument means a page
+ * physically cannot read private data without first resolving it (and the
+ * resolver only returns "owner" for a verified session). "public" → sanitized
+ * snapshot; "local" → SQLite DB.
+ */
+
+export function getStats(mode: ResolvedMode): AtlasStats {
+  if (mode === "public") return loadPublicSnapshot().stats;
+  if (mode === "owner") return loadOwnerSnapshot().stats;
   const db = getReadDb();
   try {
-    const repos = getRepos();
+    const repos = getRepos("local");
     return {
       lastScanAt: getMeta(db, "lastScanAt"),
       repoCount: repos.length,
@@ -71,9 +79,9 @@ export function getStats(): AtlasStats {
 
 let repoCache: RepoWithSignals[] | null = null;
 
-export function getRepos(): RepoWithSignals[] {
-  if (isPublicMode()) return loadPublicSnapshot().repos;
-  if (isOwnerMode()) return loadOwnerSnapshot().repos;
+export function getRepos(mode: ResolvedMode): RepoWithSignals[] {
+  if (mode === "public") return loadPublicSnapshot().repos;
+  if (mode === "owner") return loadOwnerSnapshot().repos;
   if (repoCache) return repoCache;
   const db = getReadDb();
   try {
@@ -98,14 +106,14 @@ export function getRepos(): RepoWithSignals[] {
   }
 }
 
-export function getRepo(slug: string): RepoWithSignals | null {
-  return getRepos().find((r) => r.slug === slug) ?? null;
+export function getRepo(mode: ResolvedMode, slug: string): RepoWithSignals | null {
+  return getRepos(mode).find((r) => r.slug === slug) ?? null;
 }
 
 /** Last AI summary for a repo. Reads the snapshot in deployed modes (no DB). */
-export function getRepoSummary(slug: string): string | null {
-  if (isPublicMode()) return loadPublicSnapshot().summaries[slug] ?? null;
-  if (isOwnerMode()) return loadOwnerSnapshot().summaries[slug] ?? null;
+export function getRepoSummary(mode: ResolvedMode, slug: string): string | null {
+  if (mode === "public") return loadPublicSnapshot().summaries[slug] ?? null;
+  if (mode === "owner") return loadOwnerSnapshot().summaries[slug] ?? null;
   return getLatestOutput("repo", slug, "summary")?.output ?? null;
 }
 
@@ -116,9 +124,9 @@ export interface TodoFilters {
   kind?: string;
 }
 
-export function getTodos(filters: TodoFilters = {}): Todo[] {
-  if (isPublicMode()) return []; // todos are never exposed publicly
-  if (isOwnerMode()) {
+export function getTodos(mode: ResolvedMode, filters: TodoFilters = {}): Todo[] {
+  if (mode === "public") return []; // todos are never exposed publicly
+  if (mode === "owner") {
     return loadOwnerSnapshot().todos.filter(
       (t) =>
         (!filters.priority || t.priority === filters.priority) &&
@@ -157,9 +165,9 @@ export function getTodos(filters: TodoFilters = {}): Todo[] {
   }
 }
 
-export function getActivity(limit = 300): ActivityEvent[] {
-  if (isPublicMode()) return loadPublicSnapshot().activity.slice(0, limit);
-  if (isOwnerMode()) return loadOwnerSnapshot().activity.slice(0, limit);
+export function getActivity(mode: ResolvedMode, limit = 300): ActivityEvent[] {
+  if (mode === "public") return loadPublicSnapshot().activity.slice(0, limit);
+  if (mode === "owner") return loadOwnerSnapshot().activity.slice(0, limit);
   const db = getReadDb();
   try {
     return db
@@ -171,23 +179,20 @@ export function getActivity(limit = 300): ActivityEvent[] {
 }
 
 /**
- * Context cards for the dashboard. Read-only: the UI shows the CACHED freshness
- * (the atlas-context CLI recomputes drift on the owner machine where the source
- * files live). In the public demo only `public` cards are exposed.
+ * Context cards for the dashboard. Read-only: the UI shows the CACHED freshness.
+ * In public mode only `public` cards are exposed.
  */
-export function getContextCards(project?: string): ContextCard[] {
-  if (isPublicMode())
+export function getContextCards(mode: ResolvedMode, project?: string): ContextCard[] {
+  if (mode === "public")
     return (loadPublicSnapshot().contextCards ?? []).filter(
       (c) => !project || c.project === project
     );
-  if (isOwnerMode())
+  if (mode === "owner")
     return (loadOwnerSnapshot().contextCards ?? []).filter(
       (c) => !project || c.project === project
     );
   const db = getReadDb();
   try {
-    // recomputeDrift/logRead would write; the read-only UI must not. Cached
-    // freshness is shown with its age so it stays honest.
     return getCards(db, { project }, { recomputeDrift: false, logRead: false });
   } finally {
     db.close();
@@ -203,9 +208,9 @@ const EMPTY_METRICS: ContextMetrics = {
   reads: 0,
 };
 
-export function getContextMetrics(): ContextMetrics {
-  if (isPublicMode()) return loadPublicSnapshot().contextMetrics ?? EMPTY_METRICS;
-  if (isOwnerMode()) return loadOwnerSnapshot().contextMetrics ?? EMPTY_METRICS;
+export function getContextMetrics(mode: ResolvedMode): ContextMetrics {
+  if (mode === "public") return loadPublicSnapshot().contextMetrics ?? EMPTY_METRICS;
+  if (mode === "owner") return loadOwnerSnapshot().contextMetrics ?? EMPTY_METRICS;
   const db = getReadDb();
   try {
     return getMetrics(db);
@@ -215,14 +220,13 @@ export function getContextMetrics(): ContextMetrics {
 }
 
 /**
- * Claude session registry. Owner/local only — sessions are never written to the
- * public snapshot (they carry harness ids and internal repo/branch state), so
- * the public demo always sees an empty list. The owner snapshot carries them for
- * the login-gated owner deployment.
+ * Claude session registry. Never written to the public snapshot (they carry
+ * harness ids and internal repo/branch state), so public requests see an empty
+ * list. Owner requests get them from the owner snapshot.
  */
-export function getSessions(): Session[] {
-  if (isPublicMode()) return [];
-  if (isOwnerMode()) return loadOwnerSnapshot().sessions ?? [];
+export function getSessions(mode: ResolvedMode): Session[] {
+  if (mode === "public") return [];
+  if (mode === "owner") return loadOwnerSnapshot().sessions ?? [];
   const db = getReadDb();
   try {
     return getSessionsFromDb(db);
@@ -231,12 +235,16 @@ export function getSessions(): Session[] {
   }
 }
 
-export function getActivityForRepo(slug: string, limit = 30): ActivityEvent[] {
-  if (isPublicMode())
+export function getActivityForRepo(
+  mode: ResolvedMode,
+  slug: string,
+  limit = 30
+): ActivityEvent[] {
+  if (mode === "public")
     return loadPublicSnapshot()
       .activity.filter((e) => e.repoSlug === slug)
       .slice(0, limit);
-  if (isOwnerMode())
+  if (mode === "owner")
     return loadOwnerSnapshot()
       .activity.filter((e) => e.repoSlug === slug)
       .slice(0, limit);
@@ -251,14 +259,12 @@ export function getActivityForRepo(slug: string, limit = 30): ActivityEvent[] {
 }
 
 /**
- * Claude Code feature-usage rollup. In the public demo this is the sanitized
- * aggregate from the snapshot (no raw events, projects bucketed). Locally / in
- * the owner view it's the full rollup with real project names and the recent
- * raw-event timeline.
+ * Claude Code feature-usage rollup. Public requests get the sanitized aggregate;
+ * owner/local get the full rollup with real project names and the recent timeline.
  */
-export function getUsage(): UsageRollup {
-  if (isPublicMode()) return loadPublicSnapshot().usage ?? EMPTY_USAGE;
-  if (isOwnerMode()) return loadOwnerSnapshot().usage ?? EMPTY_USAGE;
+export function getUsage(mode: ResolvedMode): UsageRollup {
+  if (mode === "public") return loadPublicSnapshot().usage ?? EMPTY_USAGE;
+  if (mode === "owner") return loadOwnerSnapshot().usage ?? EMPTY_USAGE;
   const db = getReadDb();
   try {
     const cfg = loadConfig().publicUsageProjects;
@@ -274,9 +280,9 @@ export function getUsage(): UsageRollup {
 }
 
 /** When the usage data was last mined from transcripts (null if never). */
-export function getUsageScannedAt(): string | null {
-  if (isPublicMode()) return loadPublicSnapshot().usage?.generatedAt ?? null;
-  if (isOwnerMode()) return loadOwnerSnapshot().usage?.generatedAt ?? null;
+export function getUsageScannedAt(mode: ResolvedMode): string | null {
+  if (mode === "public") return loadPublicSnapshot().usage?.generatedAt ?? null;
+  if (mode === "owner") return loadOwnerSnapshot().usage?.generatedAt ?? null;
   const db = getReadDb();
   try {
     return getMeta(db, "usageScannedAt");

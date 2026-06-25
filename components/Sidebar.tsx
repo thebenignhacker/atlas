@@ -13,6 +13,8 @@ import {
   ShieldCheck,
   Sparkles,
   Zap,
+  LogIn,
+  LogOut,
 } from "lucide-react";
 
 const NAV = [
@@ -27,7 +29,13 @@ const NAV = [
   { href: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
 
-export function Sidebar({ mode = "local" }: { mode?: "local" | "public" | "owner" }) {
+export function Sidebar({
+  mode = "local",
+  authEnabled = false,
+}: {
+  mode?: "local" | "public" | "owner";
+  authEnabled?: boolean;
+}) {
   const pathname = usePathname();
   const publicMode = mode === "public";
   const nav = publicMode ? NAV.filter((n) => !n.ownerOnly) : NAV;
@@ -73,6 +81,30 @@ export function Sidebar({ mode = "local" }: { mode?: "local" | "public" | "owner
           );
         })}
       </nav>
+
+      {authEnabled && (
+        <div className="hidden px-3 pb-1 md:block">
+          {mode === "owner" ? (
+            <form action="/api/logout" method="POST">
+              <button
+                type="submit"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text"
+              >
+                <LogOut className="h-4.5 w-4.5 text-faint" strokeWidth={2} />
+                Sign out
+              </button>
+            </form>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text"
+            >
+              <LogIn className="h-4.5 w-4.5 text-faint" strokeWidth={2} />
+              Owner login
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="hidden px-6 py-5 text-[11px] leading-relaxed text-faint md:block">
         {mode === "public" ? (
