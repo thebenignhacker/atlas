@@ -132,6 +132,7 @@ To enable: set `ai.enabled` to `true` and provide a key
 | `npm run scan:usage` | Mine Claude Code feature usage from local session transcripts |
 | `npm run snapshot` | Generate the sanitized public snapshot (for a public demo) |
 | `npm run snapshot:owner` | Generate the full owner snapshot (for a private remote view) |
+| `npm run hash-password` | Hash the owner password for `OWNER_PASSWORD_HASH` (reads stdin) |
 | `npm run dev` | Start the dashboard (full local view) |
 | `npm run build` / `npm start` | Production build and serve |
 
@@ -145,9 +146,8 @@ Atlas runs in three modes from one codebase, selected by `ATLAS_MODE`:
   sanitized, read-only view. Private repos, forks, local file paths, todos, and settings
   are never present. The full database is never deployed, so it cannot leak.
 - **Owner (`ATLAS_MODE=owner`):** reads `owner-snapshot.json` (your full data) behind a
-  GitHub login locked to a single account. Use it to reach your complete dashboard from
-  any device. The snapshot is never committed; it is uploaded only to the login-gated
-  deployment.
+  password. Use it to reach your complete dashboard from any device. The snapshot is never
+  committed; it is uploaded only to the password-gated deployment.
 
 ### Public demo
 
@@ -162,24 +162,29 @@ Re-run `npm run snapshot` and redeploy whenever you want to refresh the public v
 
 ### Private remote view (owner mode)
 
-A second, login-gated deployment that shows your full data from any device. Only one
-GitHub account can sign in.
+A second, password-gated deployment that shows your full data — including private repos —
+from any device. Access is a single password; no OAuth, no third-party login.
 
-1. Create a GitHub OAuth app (Settings → Developer settings → OAuth Apps). Set the
-   callback URL to `https://<your-owner-deployment>/api/auth/callback/github`.
+1. Generate the credentials (locally — the plaintext password never leaves your machine):
+   - `AUTH_SECRET` for signing sessions: `openssl rand -base64 32`
+   - `OWNER_PASSWORD_HASH`: `echo -n 'your-strong-password' | npm run hash-password`
+     (prints `OWNER_PASSWORD_HASH=scrypt:…`; use 16+ chars — the scrypt hash is the only
+     brute-force barrier).
 2. On the owner deployment, set these environment variables (never commit them):
    - `ATLAS_MODE=owner`
-   - `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` (from the OAuth app)
-   - `AUTH_SECRET` (`openssl rand -base64 32`)
-   - `OWNER_GITHUB_LOGIN` (your GitHub username, the only account allowed in)
+   - `AUTH_SECRET` (from step 1)
+   - `OWNER_PASSWORD_HASH` (from step 1)
 3. Run `npm run snapshot:owner` to write `owner-snapshot.json` (gitignored, full data).
 4. Deploy as a separate project with the snapshot present in the working directory
    (for example `vercel deploy --prod`). The snapshot ships via the CLI upload, never
    through git.
 
-Unauthenticated visitors are redirected to GitHub sign-in; anyone other than
-`OWNER_GITHUB_LOGIN` is denied. Owner mode is read-only (the host has no database), so AI
-generation runs locally, so re-run `npm run snapshot:owner` and redeploy to refresh.
+Security: the password is stored only as a salted **scrypt** hash; sessions are
+HMAC-signed (`AUTH_SECRET`), `HttpOnly; Secure; SameSite=Strict` cookies that expire after
+7 days. Login is rate-limited per IP. The gate **fails closed** — if `AUTH_SECRET` or
+`OWNER_PASSWORD_HASH` is missing, owner mode serves nothing (503). Unauthenticated visitors
+are redirected to `/login`. Owner mode is read-only (the host has no database), so re-run
+`npm run snapshot:owner` and redeploy to refresh.
 
 ## Privacy
 
