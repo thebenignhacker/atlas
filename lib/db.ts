@@ -194,6 +194,30 @@ CREATE TABLE IF NOT EXISTS context_events (
 );
 CREATE INDEX IF NOT EXISTS idx_context_events_kind ON context_events(kind);
 CREATE INDEX IF NOT EXISTS idx_context_events_card ON context_events(cardId);
+
+-- Claude Code feature-usage events, mined from local session transcripts. Stores
+-- METADATA ONLY: the tool name, timestamp, cwd/branch context, and the input KEY
+-- NAMES (paramKeys) — never any input value (no commands, prompts, or file
+-- contents). cwd/gitBranch/paramKeys are OWNER-ONLY; the public rollup is
+-- computed from these rows but never serializes them. Populated by
+-- \`npm run scan:usage\` (full-replace, idempotent).
+CREATE TABLE IF NOT EXISTS tool_events (
+  id TEXT PRIMARY KEY,        -- toolUseId, or sessionId:lineIndex when absent
+  sessionId TEXT,
+  ts TEXT,                    -- ISO 8601 from the transcript event
+  feature TEXT NOT NULL,      -- normalized key: "Bash" | "Skill:x" | "Workflow:x" | "mcp:srv.tool" | "command:/x"
+  category TEXT,              -- file|exec|search|orchestration|skill|mcp|web|command|other
+  project TEXT,               -- derived from cwd; owner-only, bucketed for public
+  howInvoked TEXT,            -- direct|subagent|workflow (v1: always 'direct')
+  paramKeys TEXT,             -- JSON array of input KEY NAMES only; never values. Owner-only.
+  cwd TEXT,                   -- owner-only; never in the public snapshot
+  gitBranch TEXT,             -- owner-only; never in the public snapshot
+  scannedAt TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tool_events_feature ON tool_events(feature);
+CREATE INDEX IF NOT EXISTS idx_tool_events_ts ON tool_events(ts);
+CREATE INDEX IF NOT EXISTS idx_tool_events_project ON tool_events(project);
+CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(sessionId);
 `;
 
 let writeDb: Database.Database | null = null;

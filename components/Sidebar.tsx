@@ -11,11 +11,13 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Zap,
 } from "lucide-react";
 
 const NAV = [
   { href: "/", label: "Portfolio", icon: LayoutGrid, ownerOnly: false },
   { href: "/context", label: "Context", icon: ShieldCheck, ownerOnly: false },
+  { href: "/usage", label: "Usage", icon: Zap, ownerOnly: false },
   { href: "/sessions", label: "Sessions", icon: History, ownerOnly: true },
   { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },
   { href: "/activity", label: "Activity", icon: Activity, ownerOnly: false },

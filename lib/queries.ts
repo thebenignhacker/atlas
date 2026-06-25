@@ -6,6 +6,11 @@ import { getLatestOutput } from "@/lib/ai/cache";
 import { isPublicMode, isOwnerMode } from "@/lib/mode";
 import { getCards, getSessions as getSessionsFromDb } from "@/lib/context/store";
 import { getMetrics } from "@/lib/context/metrics";
+import { getToolEvents } from "@/lib/usage/store";
+import { rollupEvents } from "@/lib/usage/rollup";
+import { EMPTY_USAGE, type UsageRollup } from "@/lib/usage/types";
+import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
+import { loadConfig } from "@/lib/config";
 import type {
   ActivityEvent,
   ContextCard,
@@ -240,6 +245,41 @@ export function getActivityForRepo(slug: string, limit = 30): ActivityEvent[] {
     return db
       .prepare("SELECT * FROM activity WHERE repoSlug = ? ORDER BY ts DESC LIMIT ?")
       .all(slug, limit) as ActivityEvent[];
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Claude Code feature-usage rollup. In the public demo this is the sanitized
+ * aggregate from the snapshot (no raw events, projects bucketed). Locally / in
+ * the owner view it's the full rollup with real project names and the recent
+ * raw-event timeline.
+ */
+export function getUsage(): UsageRollup {
+  if (isPublicMode()) return loadPublicSnapshot().usage ?? EMPTY_USAGE;
+  if (isOwnerMode()) return loadOwnerSnapshot().usage ?? EMPTY_USAGE;
+  const db = getReadDb();
+  try {
+    const cfg = loadConfig().publicUsageProjects;
+    return rollupEvents(getToolEvents(db), {
+      public: false,
+      publicProjects: cfg.length ? cfg : DEFAULT_PUBLIC_USAGE_PROJECTS,
+      now: new Date(),
+      recentLimit: 80,
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/** When the usage data was last mined from transcripts (null if never). */
+export function getUsageScannedAt(): string | null {
+  if (isPublicMode()) return loadPublicSnapshot().usage?.generatedAt ?? null;
+  if (isOwnerMode()) return loadOwnerSnapshot().usage?.generatedAt ?? null;
+  const db = getReadDb();
+  try {
+    return getMeta(db, "usageScannedAt");
   } finally {
     db.close();
   }
