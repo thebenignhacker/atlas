@@ -13,9 +13,8 @@ import {
   getActivityForRepo,
   getTodos,
   getRepoSummary,
-  isPublicMode,
-  isOwnerMode,
 } from "@/lib/queries";
+import { getRequestMode } from "@/lib/request-mode";
 import { STALENESS, languageColor, PRIORITY } from "@/lib/display";
 import { relativeTime } from "@/lib/util/date";
 import { aiAvailability } from "@/lib/ai/provider";
@@ -31,23 +30,23 @@ export default async function RepoPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const mode = await getRequestMode();
   let repo;
   try {
-    repo = getRepo(slug);
+    repo = getRepo(mode, slug);
   } catch {
     notFound();
   }
   if (!repo) notFound();
 
-  const publicMode = isPublicMode();
   // Both deployed modes show the AI summary read-only (the host can't generate).
-  const readOnly = publicMode || isOwnerMode();
-  const todos = getTodos({ repoSlug: slug });
-  const activity = getActivityForRepo(slug, 25);
+  const readOnly = mode !== "local";
+  const todos = getTodos(mode, { repoSlug: slug });
+  const activity = getActivityForRepo(mode, slug, 25);
   const stale = STALENESS[repo.signals.staleness];
-  const avail = aiAvailability();
+  const avail = aiAvailability(mode);
   const eligible = !readOnly && isRepoAIEligible(repo);
-  const initialSummary = getRepoSummary(slug);
+  const initialSummary = getRepoSummary(mode, slug);
   const webUrl =
     repo.owner && repo.repoName
       ? `https://github.com/${repo.owner}/${repo.repoName}`

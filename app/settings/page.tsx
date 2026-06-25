@@ -4,7 +4,8 @@ import { aiAvailability } from "@/lib/ai/provider";
 import { getCostSummary } from "@/lib/ai/cache";
 import { getFeedback } from "@/lib/ai/learning";
 import { isRepoAIEligible } from "@/lib/ai/policy";
-import { getRepos, isPublicMode } from "@/lib/queries";
+import { getRepos } from "@/lib/queries";
+import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
@@ -12,11 +13,12 @@ import { relativeTime } from "@/lib/util/date";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
-  if (isPublicMode()) return <OwnerOnly feature="Settings" />;
+export default async function SettingsPage() {
+  const mode = await getRequestMode();
+  if (mode === "public") return <OwnerOnly feature="Settings" />;
   let repos;
   try {
-    repos = getRepos();
+    repos = getRepos(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -26,9 +28,9 @@ export default function SettingsPage() {
   }
 
   const config = loadConfig();
-  const avail = aiAvailability();
-  const cost = getCostSummary();
-  const feedback = getFeedback(50);
+  const avail = aiAvailability(mode);
+  const cost = getCostSummary(mode);
+  const feedback = getFeedback(50, mode);
   const eligible = repos.filter((r) => isRepoAIEligible(r));
   const excluded = repos.filter((r) => !isRepoAIEligible(r));
 

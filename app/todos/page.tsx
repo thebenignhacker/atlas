@@ -1,4 +1,5 @@
-import { getRepos, getStats, getTodos, isPublicMode } from "@/lib/queries";
+import { getRepos, getStats, getTodos } from "@/lib/queries";
+import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { TodoView } from "@/components/TodoView";
 import { EmptyState } from "@/components/EmptyState";
@@ -6,15 +7,16 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
 
-export default function TodosPage() {
-  if (isPublicMode()) return <OwnerOnly feature="Todos" />;
+export default async function TodosPage() {
+  const mode = await getRequestMode();
+  if (mode === "public") return <OwnerOnly feature="Todos" />;
   let todos;
   let repos;
   let stats;
   try {
-    todos = getTodos();
-    repos = getRepos();
-    stats = getStats();
+    todos = getTodos(mode);
+    repos = getRepos(mode);
+    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

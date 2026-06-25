@@ -1,6 +1,6 @@
 import "server-only";
 import { getDb } from "@/lib/db";
-import { isOwnerMode } from "@/lib/mode";
+import { isOwnerMode, type ResolvedMode } from "@/lib/mode";
 import { loadOwnerSnapshot } from "@/lib/snapshot";
 
 export interface FeedbackInput {
@@ -38,8 +38,8 @@ export interface LearnedItem {
   createdAt: string;
 }
 
-export function getFeedback(limit = 200): LearnedItem[] {
-  if (isOwnerMode()) return loadOwnerSnapshot().feedback.slice(0, limit);
+export function getFeedback(limit = 200, mode?: ResolvedMode): LearnedItem[] {
+  if (mode ? mode === "owner" : isOwnerMode()) return loadOwnerSnapshot().feedback.slice(0, limit);
   return getDb()
     .prepare(
       "SELECT field, aiValue, correctedValue, note, entityId, createdAt FROM feedback ORDER BY createdAt DESC LIMIT ?"
