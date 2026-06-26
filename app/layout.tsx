@@ -37,7 +37,7 @@ export default async function RootLayout({
       <body className="min-h-full">
         <div className="flex min-h-screen">
           <Sidebar mode={mode} authEnabled={authEnabled} />
-          <main className="flex-1 min-w-0 md:pl-60">{children}</main>
+          <main className="flex-1 min-w-0 pl-14 md:pl-60">{children}</main>
         </div>
       </body>
     </html>

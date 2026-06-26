@@ -29,7 +29,13 @@ const STATUS_META: Record<
   done: { label: "Done", dot: "bg-fresh", text: "text-fresh", chip: "bg-fresh/15 text-fresh" },
 };
 
-export function RoadmapBoard({ items }: { items: RoadmapItem[] }) {
+export function RoadmapBoard({
+  items,
+  readOnly = false,
+}: {
+  items: RoadmapItem[];
+  readOnly?: boolean;
+}) {
   const [group, setGroup] = useState<"status" | "area">("status");
   const [area, setArea] = useState("all");
   const router = useRouter();
@@ -61,7 +67,14 @@ export function RoadmapBoard({ items }: { items: RoadmapItem[] }) {
   }
 
   const card = (item: RoadmapItem) => (
-    <RoadmapCard key={item.id} item={item} byId={byId} pending={pending} onMutate={mutate} />
+    <RoadmapCard
+      key={item.id}
+      item={item}
+      byId={byId}
+      pending={pending}
+      readOnly={readOnly}
+      onMutate={mutate}
+    />
   );
 
   return (
@@ -151,11 +164,13 @@ function RoadmapCard({
   item,
   byId,
   pending,
+  readOnly,
   onMutate,
 }: {
   item: RoadmapItem;
   byId: Record<string, RoadmapItem>;
   pending: boolean;
+  readOnly: boolean;
   onMutate: (id: string, body: { status?: RoadmapStatus; comment?: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -185,17 +200,29 @@ function RoadmapCard({
       ].join(" ")}
     >
       <div className="flex items-start gap-2">
-        <button
-          onClick={() => onMutate(item.id, { status: done ? "ready" : "done" })}
-          disabled={pending}
-          title={done ? "Mark not done" : "Mark done"}
-          className={[
-            "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-colors",
-            done ? "border-fresh bg-fresh text-surface-1" : "border-line-strong hover:border-fresh",
-          ].join(" ")}
-        >
-          {done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-        </button>
+        {readOnly ? (
+          <span
+            title={done ? "Done" : item.status}
+            className={[
+              "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border",
+              done ? "border-fresh bg-fresh text-surface-1" : "border-line",
+            ].join(" ")}
+          >
+            {done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+          </span>
+        ) : (
+          <button
+            onClick={() => onMutate(item.id, { status: done ? "ready" : "done" })}
+            disabled={pending}
+            title={done ? "Mark not done" : "Mark done"}
+            className={[
+              "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border transition-colors",
+              done ? "border-fresh bg-fresh text-surface-1" : "border-line-strong hover:border-fresh",
+            ].join(" ")}
+          >
+            {done && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <h3 className={`text-sm font-semibold leading-snug text-text ${done ? "line-through decoration-faint" : ""}`}>
@@ -221,22 +248,31 @@ function RoadmapCard({
 
       {/* Status control */}
       <div className="mt-3 flex items-center gap-2">
-        <div className="relative">
-          <select
-            value={item.status}
-            onChange={(e) => onMutate(item.id, { status: e.target.value as RoadmapStatus })}
-            disabled={pending}
-            className={`appearance-none rounded-md border border-line bg-surface-1 py-1 pl-6 pr-7 text-xs font-medium ${meta.text} focus:border-teal focus:outline-none`}
+        {readOnly ? (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${meta.chip}`}
           >
-            {ROADMAP_STATUSES.map((s) => (
-              <option key={s} value={s} className="text-text">
-                {STATUS_META[s].label}
-              </option>
-            ))}
-          </select>
-          <span className={`pointer-events-none absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full ${meta.dot}`} />
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
-        </div>
+            <span className={`h-2 w-2 rounded-full ${meta.dot}`} />
+            {meta.label}
+          </span>
+        ) : (
+          <div className="relative">
+            <select
+              value={item.status}
+              onChange={(e) => onMutate(item.id, { status: e.target.value as RoadmapStatus })}
+              disabled={pending}
+              className={`appearance-none rounded-md border border-line bg-surface-1 py-1 pl-6 pr-7 text-xs font-medium ${meta.text} focus:border-teal focus:outline-none`}
+            >
+              {ROADMAP_STATUSES.map((s) => (
+                <option key={s} value={s} className="text-text">
+                  {STATUS_META[s].label}
+                </option>
+              ))}
+            </select>
+            <span className={`pointer-events-none absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full ${meta.dot}`} />
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+          </div>
+        )}
         {canStart && (
           <span className="inline-flex items-center gap-1 rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-medium text-teal">
             deps clear — ready to start
@@ -314,22 +350,28 @@ function RoadmapCard({
             </ul>
           )}
 
-          <div className="flex items-center gap-2">
-            <input
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && submitComment()}
-              placeholder="Add a status comment…"
-              className="min-w-0 flex-1 rounded-md border border-line bg-base px-2.5 py-1.5 text-xs text-text placeholder:text-faint focus:border-teal focus:outline-none"
-            />
-            <button
-              onClick={submitComment}
-              disabled={pending || !comment.trim()}
-              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-text px-2.5 py-1.5 text-xs font-medium text-surface-1 disabled:opacity-40"
-            >
-              <MessageSquarePlus className="h-3.5 w-3.5" /> Log
-            </button>
-          </div>
+          {readOnly ? (
+            item.comments.length === 0 && (
+              <p className="text-[11px] text-faint">No log entries yet.</p>
+            )
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submitComment()}
+                placeholder="Add a status comment…"
+                className="min-w-0 flex-1 rounded-md border border-line bg-base px-2.5 py-1.5 text-xs text-text placeholder:text-faint focus:border-teal focus:outline-none"
+              />
+              <button
+                onClick={submitComment}
+                disabled={pending || !comment.trim()}
+                className="inline-flex shrink-0 items-center gap-1 rounded-md bg-text px-2.5 py-1.5 text-xs font-medium text-surface-1 disabled:opacity-40"
+              >
+                <MessageSquarePlus className="h-3.5 w-3.5" /> Log
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

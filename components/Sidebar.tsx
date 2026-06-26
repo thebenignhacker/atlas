@@ -41,29 +41,30 @@ export function Sidebar({
   const nav = publicMode ? NAV.filter((n) => !n.ownerOnly) : NAV;
 
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-20 flex h-14 items-center gap-1 border-t border-line bg-surface-1/90 px-2 backdrop-blur-md md:inset-y-0 md:left-0 md:h-auto md:w-60 md:flex-col md:items-stretch md:gap-0 md:border-t-0 md:border-r md:bg-surface-1/70 md:px-0">
+    <aside className="fixed inset-y-0 left-0 z-20 flex w-14 flex-col items-stretch border-r border-line bg-surface-1/90 px-1.5 py-3 backdrop-blur-md md:w-60 md:gap-0 md:bg-surface-1/70 md:px-0 md:py-0">
       <Link
         href="/"
-        className="hidden items-center gap-2.5 px-6 py-6 md:flex"
+        className="flex items-center justify-center gap-2.5 py-2 md:justify-start md:px-6 md:py-6"
         aria-label="Atlas home"
       >
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-text text-base">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-text text-base">
           <Compass className="h-4.5 w-4.5 text-surface-1" strokeWidth={2.4} />
         </span>
-        <span className="font-display text-2xl font-semibold leading-none tracking-tight text-text">
+        <span className="hidden font-display text-2xl font-semibold leading-none tracking-tight text-text md:inline">
           Atlas
         </span>
       </Link>
 
-      <nav className="flex flex-1 items-center justify-around gap-1 md:flex-col md:items-stretch md:justify-start md:gap-0.5 md:px-3">
+      <nav className="mt-1 flex flex-1 flex-col items-stretch gap-1 md:mt-0 md:gap-0.5 md:px-3">
         {nav.map(({ href, label, icon: Icon }) => {
           const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link
               key={href}
               href={href}
+              title={label}
               className={[
-                "group relative flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all md:flex-row md:gap-2.5 md:px-3 md:py-2 md:text-sm",
+                "group relative flex items-center justify-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-all md:justify-start md:px-3",
                 active
                   ? "bg-surface-2 text-text"
                   : "text-muted hover:bg-surface-2/60 hover:text-text",
@@ -73,34 +74,36 @@ export function Sidebar({
                 <span className="absolute left-0 top-1/2 hidden h-5 w-[3px] -translate-y-1/2 rounded-full bg-clay md:block" />
               )}
               <Icon
-                className={`h-4.5 w-4.5 transition-colors ${active ? "text-clay" : "text-faint group-hover:text-muted"}`}
+                className={`h-4.5 w-4.5 shrink-0 transition-colors ${active ? "text-clay" : "text-faint group-hover:text-muted"}`}
                 strokeWidth={2}
               />
-              <span>{label}</span>
+              <span className="hidden md:inline">{label}</span>
             </Link>
           );
         })}
       </nav>
 
       {authEnabled && (
-        <div className="hidden px-3 pb-1 md:block">
+        <div className="px-0 pb-1 md:px-3">
           {mode === "owner" ? (
             <form action="/api/logout" method="POST">
               <button
                 type="submit"
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text"
+                title="Sign out"
+                className="flex w-full items-center justify-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text md:justify-start md:px-3"
               >
-                <LogOut className="h-4.5 w-4.5 text-faint" strokeWidth={2} />
-                Sign out
+                <LogOut className="h-4.5 w-4.5 shrink-0 text-faint" strokeWidth={2} />
+                <span className="hidden md:inline">Sign out</span>
               </button>
             </form>
           ) : (
             <Link
               href="/login"
-              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text"
+              title="Owner login"
+              className="flex items-center justify-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text md:justify-start md:px-3"
             >
-              <LogIn className="h-4.5 w-4.5 text-faint" strokeWidth={2} />
-              Owner login
+              <LogIn className="h-4.5 w-4.5 shrink-0 text-faint" strokeWidth={2} />
+              <span className="hidden md:inline">Owner login</span>
             </Link>
           )}
         </div>

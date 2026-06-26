@@ -1,4 +1,6 @@
 import { loadRoadmap } from "@/lib/roadmap";
+import type { RoadmapItem } from "@/lib/roadmap-shared";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { RoadmapBoard } from "@/components/RoadmapBoard";
@@ -8,14 +10,17 @@ import { EmptyState } from "@/components/EmptyState";
 export const dynamic = "force-dynamic";
 
 export default async function RoadmapPage() {
-  // The roadmap reads markdown files on the owner machine; the public snapshot
-  // has no filesystem to read them from.
   const mode = await getRequestMode();
   if (mode === "public") return <OwnerOnly feature="Roadmap" />;
 
-  let items;
+  // Local mode reads the live markdown files (editable). A deployed owner host
+  // has no filesystem to read them from, so it serves the items baked into the
+  // owner snapshot — and the board is read-only there (edits are local-only).
+  const readOnly = mode !== "local";
+
+  let items: RoadmapItem[];
   try {
-    items = loadRoadmap();
+    items = mode === "owner" ? loadOwnerSnapshot().roadmap ?? [] : loadRoadmap();
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -44,7 +49,11 @@ export default async function RoadmapPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Roadmap"
-        subtitle="Institutional Roadmap v2.2 — every build unit, in dependency order. Check items off and log status as work lands."
+        subtitle={
+          readOnly
+            ? "Institutional Roadmap v2.2 — every build unit, in dependency order. Read-only here; edit from local Atlas."
+            : "Institutional Roadmap v2.2 — every build unit, in dependency order. Check items off and log status as work lands."
+        }
       />
       <StatStrip
         stats={[
@@ -60,7 +69,7 @@ export default async function RoadmapPage() {
           { label: "Done", value: count("done"), accent: "text-fresh" },
         ]}
       />
-      <RoadmapBoard items={items} />
+      <RoadmapBoard items={items} readOnly={readOnly} />
     </div>
   );
 }

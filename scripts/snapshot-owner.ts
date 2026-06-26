@@ -44,7 +44,8 @@ function main() {
   fs.writeFileSync(OWNER_SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
   console.log(
     `atlas: owner snapshot written (${snapshot.repos.length} repos, ${snapshot.todos.length} todos, ` +
-      `${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries, ` +
+      `${snapshot.activity.length} events, ${snapshot.roadmap.length} roadmap, ` +
+      `${Object.keys(snapshot.summaries).length} summaries, ` +
       `digest ${snapshot.digest ? "present" : "none"}). NOT for commit -- deploy via Vercel CLI only.`
   );
 }

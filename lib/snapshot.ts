@@ -25,6 +25,8 @@ import { getToolEvents } from "@/lib/usage/store";
 import { rollupEvents } from "@/lib/usage/rollup";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
 import type { UsageRollup } from "@/lib/usage/types";
+import { loadRoadmap } from "@/lib/roadmap";
+import type { RoadmapItem } from "@/lib/roadmap-shared";
 
 export const SNAPSHOT_PATH = path.join(process.cwd(), "public-snapshot.json");
 export const OWNER_SNAPSHOT_PATH = path.join(process.cwd(), "owner-snapshot.json");
@@ -160,6 +162,13 @@ export interface OwnerSnapshot {
   sessions: Session[];
   /** Feature-usage rollup, full detail (real project names, recent raw events). */
   usage: UsageRollup;
+  /**
+   * Roadmap items parsed from the local `<todoDir>/roadmap/*.md` files. Owner-only
+   * (never in the public snapshot) — the host has no filesystem to read them from,
+   * so they are baked in here. On the deployed host the board is read-only; edits
+   * write markdown files and are local-mode only (see app/api/roadmap/route.ts).
+   */
+  roadmap: RoadmapItem[];
 }
 
 /**
@@ -507,6 +516,9 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       contextMetrics,
       sessions,
       usage,
+      // Roadmap markdown lives on the owner machine; read it here so the deployed
+      // host (which has no filesystem) can still render the board.
+      roadmap: loadRoadmap(),
     };
   } finally {
     db.close();
