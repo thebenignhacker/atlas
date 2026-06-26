@@ -10,6 +10,14 @@ export interface AtlasConfig {
   scanDepth: number;
   /** Directories containing todo markdown files. */
   todoDirs: string[];
+  /**
+   * Markdown docs tracked on the owner-only /strategy page. Kept deliberately
+   * separate from todoDirs/roadmap so strategy/fundraising work never mixes with
+   * coding or standards-filing todos. Only checkbox lines tagged `#strategy` are
+   * surfaced. These docs are read live (filesystem) and never enter the public
+   * snapshot, so investor names and raise numbers stay owner-only.
+   */
+  strategyDocs: string[];
   /** GitHub identity used for enrichment (visibility, stars, forks, counts). */
   github: { user?: string; orgs?: string[] };
   /** Directory name fragments to skip while walking. */
@@ -49,6 +57,7 @@ const DEFAULT_CONFIG: AtlasConfig = {
   scanRoots: ["~/workspace"],
   scanDepth: 2,
   todoDirs: [],
+  strategyDocs: [],
   github: { user: undefined, orgs: [] },
   exclude: ["node_modules", ".next", ".git", "archive-", "dist", "build"],
   publicOwners: [],
@@ -92,6 +101,7 @@ export function loadConfig(): AtlasConfig {
   // Normalize paths up-front so the rest of the code never sees a `~`.
   cached.scanRoots = cached.scanRoots.map(expandHome);
   cached.todoDirs = cached.todoDirs.map(expandHome);
+  cached.strategyDocs = (cached.strategyDocs ?? []).map(expandHome);
   // Canonicalize sensitiveRepos to the SAME slug form repos are stored under, so
   // a hand-typed entry with uppercase or stray whitespace ("My-Repo", "repo ")
   // still matches and the never-publish guarantee can't silently fail open.

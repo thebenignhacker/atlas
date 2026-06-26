@@ -42,8 +42,10 @@ function findRepos(root: string, maxDepth: number, exclude: string[]): string[] 
 
 export interface RepoScanResult {
   repos: Repo[];
-  /** Repo paths that resolved to a GitHub remote (for enrichment reporting). */
+  /** Repo paths that resolved to a GitHub remote (enrichment was attempted). */
   githubTargets: number;
+  /** Repos GitHub enrichment actually succeeded for (visibility/stars/forks set). */
+  githubEnriched: number;
 }
 
 export async function scanRepos(config: AtlasConfig): Promise<RepoScanResult> {
@@ -118,5 +120,9 @@ export async function scanRepos(config: AtlasConfig): Promise<RepoScanResult> {
     repo.description = e.description;
   }
 
-  return { repos, githubTargets: enrichTargets.length };
+  return {
+    repos,
+    githubTargets: enrichTargets.length,
+    githubEnriched: enrichment.size,
+  };
 }

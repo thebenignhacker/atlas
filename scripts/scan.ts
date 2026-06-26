@@ -24,7 +24,7 @@ async function main() {
   initSchema(db);
 
   console.log(`atlas: scanning roots: ${config.scanRoots.join(", ")}`);
-  const { repos, githubTargets } = await scanRepos(config);
+  const { repos, githubTargets, githubEnriched } = await scanRepos(config);
   console.log(`atlas: found ${repos.length} repos (${githubTargets} with GitHub remotes)`);
 
   const todos = scanTodos(config, repos);
@@ -53,8 +53,13 @@ async function main() {
   setMeta("repoCount", String(repos.length));
   setMeta("todoCount", String(todos.length));
   setMeta("activityCount", String(activity.length));
-  setMeta("githubEnriched", String(githubTargets));
+  setMeta("githubEnriched", String(githubEnriched));
 
+  if (githubTargets > 0 && githubEnriched < githubTargets) {
+    console.warn(
+      `atlas: enriched ${githubEnriched}/${githubTargets} GitHub repos — ${githubTargets - githubEnriched} missing visibility/stars/forks (token or rate limit).`
+    );
+  }
   console.log(`atlas: scan complete in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 

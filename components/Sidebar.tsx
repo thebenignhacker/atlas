@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Target,
   Zap,
   LogIn,
   LogOut,
@@ -20,6 +21,7 @@ import {
 const NAV = [
   { href: "/", label: "Portfolio", icon: LayoutGrid, ownerOnly: false },
   { href: "/roadmap", label: "Roadmap", icon: Map, ownerOnly: true },
+  { href: "/strategy", label: "Strategy", icon: Target, ownerOnly: true },
   { href: "/context", label: "Context", icon: ShieldCheck, ownerOnly: false },
   { href: "/usage", label: "Usage", icon: Zap, ownerOnly: false },
   { href: "/sessions", label: "Sessions", icon: History, ownerOnly: true },
