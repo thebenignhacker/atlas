@@ -10,6 +10,7 @@ import {
   MessageSquarePlus,
   Code2,
   FileText,
+  Search,
 } from "lucide-react";
 import {
   ROADMAP_STATUSES,
@@ -38,6 +39,10 @@ export function RoadmapBoard({
 }) {
   const [group, setGroup] = useState<"status" | "area">("status");
   const [area, setArea] = useState("all");
+  const [priority, setPriority] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const [hideDone, setHideDone] = useState(false);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -50,7 +55,59 @@ export function RoadmapBoard({
     [items]
   );
 
-  const visible = area === "all" ? items : items.filter((i) => i.area === area);
+  // A blocked item is "ready to start" when it has dependencies and they are all
+  // done — the same rule the card uses to flag "deps clear".
+  const depsClear = (i: RoadmapItem) => {
+    const deps = i.dependsOn.map((id) => byId[id]).filter(Boolean);
+    return deps.length > 0 && deps.every((d) => d.status === "done");
+  };
+
+  const q = query.trim().toLowerCase();
+  const visible = items.filter((i) => {
+    if (area !== "all" && i.area !== area) return false;
+    if (priority !== "all" && i.priority !== priority) return false;
+    if (statusFilter === "active") {
+      if (i.status !== "in-progress" && i.status !== "in-review") return false;
+    } else if (statusFilter === "ready-to-start") {
+      if (i.status !== "ready" && !depsClear(i)) return false;
+    } else if (statusFilter !== "all" && i.status !== statusFilter) {
+      return false;
+    }
+    if (hideDone && i.status === "done") return false;
+    if (q && !`${i.title} ${i.area} ${i.id} ${i.body}`.toLowerCase().includes(q))
+      return false;
+    return true;
+  });
+
+  const filtersActive =
+    area !== "all" ||
+    priority !== "all" ||
+    statusFilter !== "all" ||
+    hideDone ||
+    q !== "";
+
+  function clearFilters() {
+    setArea("all");
+    setPriority("all");
+    setStatusFilter("all");
+    setQuery("");
+    setHideDone(false);
+  }
+
+  // Quick "focus" chips — one-tap shortcuts onto the most common views. Each
+  // toggles, so a second tap clears it. Track chips (Standards/GTM/Fundraise)
+  // only appear when those areas exist in the data.
+  const chips: { label: string; active: boolean; on: () => void }[] = [
+    { label: "P0", active: priority === "P0", on: () => setPriority(priority === "P0" ? "all" : "P0") },
+    { label: "In progress", active: statusFilter === "in-progress", on: () => setStatusFilter(statusFilter === "in-progress" ? "all" : "in-progress") },
+    { label: "Ready to start", active: statusFilter === "ready-to-start", on: () => setStatusFilter(statusFilter === "ready-to-start" ? "all" : "ready-to-start") },
+    { label: "Active", active: statusFilter === "active", on: () => setStatusFilter(statusFilter === "active" ? "all" : "active") },
+  ];
+  for (const t of ["Standards", "GTM", "Fundraise"]) {
+    if (areas.includes(t)) {
+      chips.push({ label: t, active: area === t, on: () => setArea(area === t ? "all" : t) });
+    }
+  }
 
   async function mutate(id: string, body: { status?: RoadmapStatus; comment?: string }) {
     const res = await fetch("/api/roadmap", {
@@ -79,37 +136,113 @@ export function RoadmapBoard({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="inline-flex overflow-hidden rounded-lg border border-line">
-          {(["status", "area"] as const).map((g) => (
+      <div className="space-y-2.5">
+        {/* Quick focus chips */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-[11px] uppercase tracking-wide text-faint">Focus</span>
+          {chips.map((c) => (
             <button
-              key={g}
-              onClick={() => setGroup(g)}
+              key={c.label}
+              onClick={c.on}
               className={[
-                "px-3 py-1.5 text-sm capitalize transition-colors",
-                group === g ? "bg-surface-2 text-text" : "bg-surface-1 text-muted hover:text-text",
+                "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+                c.active
+                  ? "border-teal bg-teal/15 text-teal"
+                  : "border-line bg-surface-1 text-muted hover:text-text",
               ].join(" ")}
             >
-              By {g}
+              {c.label}
             </button>
           ))}
+          {filtersActive && (
+            <button
+              onClick={clearFilters}
+              className="rounded-full px-2 py-1 text-xs font-medium text-faint underline-offset-2 hover:text-text hover:underline"
+            >
+              Clear
+            </button>
+          )}
         </div>
-        <select
-          value={area}
-          onChange={(e) => setArea(e.target.value)}
-          className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
-        >
-          <option value="all">All areas</option>
-          {areas.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        {pending && <span className="text-xs text-faint">saving…</span>}
+
+        {/* Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-lg border border-line">
+            {(["status", "area"] as const).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGroup(g)}
+                className={[
+                  "px-3 py-1.5 text-sm capitalize transition-colors",
+                  group === g ? "bg-surface-2 text-text" : "bg-surface-1 text-muted hover:text-text",
+                ].join(" ")}
+              >
+                By {g}
+              </button>
+            ))}
+          </div>
+
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-faint" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search roadmap…"
+              className="w-40 rounded-lg border border-line bg-surface-1 py-1.5 pl-8 pr-2.5 text-sm text-text placeholder:text-faint focus:border-teal focus:outline-none sm:w-48"
+            />
+          </div>
+
+          <select
+            value={area}
+            onChange={(e) => setArea(e.target.value)}
+            className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
+          >
+            <option value="all">All areas</option>
+            {areas.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
+          >
+            <option value="all">All priorities</option>
+            <option value="P0">P0</option>
+            <option value="P1">P1</option>
+            <option value="P2">P2</option>
+            <option value="P3">P3</option>
+          </select>
+
+          <label className="inline-flex items-center gap-1.5 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={hideDone}
+              onChange={(e) => setHideDone(e.target.checked)}
+              className="accent-teal"
+            />
+            Hide done
+          </label>
+
+          <span className="text-xs text-faint">
+            {visible.length} of {items.length}
+          </span>
+          {pending && <span className="text-xs text-faint">saving…</span>}
+        </div>
       </div>
 
-      {group === "status" ? (
+      {visible.length === 0 ? (
+        <div className="rounded-[var(--radius-card)] border border-dashed border-line py-16 text-center text-sm text-faint">
+          No items match these filters.
+          {filtersActive && (
+            <button onClick={clearFilters} className="ml-1.5 text-teal hover:underline">
+              Clear filters
+            </button>
+          )}
+        </div>
+      ) : group === "status" ? (
         <div className="grid gap-4 lg:grid-cols-5">
           {ROADMAP_STATUSES.map((s) => {
             const col = visible.filter((i) => i.status === s);
