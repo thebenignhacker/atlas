@@ -2,7 +2,7 @@
 
 **Area:** Feature
 **Kind:** code
-**Status:** ready
+**Status:** done
 **Priority:** P2
 **Order:** 30
 **Depends:**
@@ -19,3 +19,4 @@ hosted owner view renders them.
 ## Log
 
 - 2026-07-13 — Filed from the "No data yet" diagnosis session: hosted owner view was broken by a git-built deploy (no owner snapshot); /strategy additionally can never work hosted until docs are baked into the snapshot.
+- 2026-07-13 — BUILT + verified. OwnerSnapshot gains `strategy: StrategyDoc[]` (lib/snapshot.ts bakes loadStrategyDocs() beside roadmap); /strategy dispatches by mode like /roadmap (owner → snapshot with ?? [] fallback for older snapshots, local → live files). Verified against the real failure mode: dev server in unified mode with the strategy markdown moved aside (host simulation), real browser login → /strategy rendered the full 71-task board from the snapshot; unauth stayed owner-gated. 73/73 tests, build+lint clean.

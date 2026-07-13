@@ -27,6 +27,8 @@ import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
 import type { UsageRollup } from "@/lib/usage/types";
 import { loadRoadmap } from "@/lib/roadmap";
 import type { RoadmapItem } from "@/lib/roadmap-shared";
+import { loadStrategyDocs } from "@/lib/strategy";
+import type { StrategyDoc } from "@/lib/strategy-shared";
 
 export const SNAPSHOT_PATH = path.join(process.cwd(), "public-snapshot.json");
 export const OWNER_SNAPSHOT_PATH = path.join(process.cwd(), "owner-snapshot.json");
@@ -169,6 +171,12 @@ export interface OwnerSnapshot {
    * write markdown files and are local-mode only (see app/api/roadmap/route.ts).
    */
   roadmap: RoadmapItem[];
+  /**
+   * Strategy docs parsed from the `strategyDocs` markdown files. Owner-only
+   * (fundraising content — never in the public snapshot), baked in for the same
+   * reason as roadmap: the deployed host has no filesystem to read them from.
+   */
+  strategy: StrategyDoc[];
 }
 
 /**
@@ -516,9 +524,10 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       contextMetrics,
       sessions,
       usage,
-      // Roadmap markdown lives on the owner machine; read it here so the deployed
-      // host (which has no filesystem) can still render the board.
+      // Roadmap and strategy markdown live on the owner machine; read them here
+      // so the deployed host (which has no filesystem) can still render them.
       roadmap: loadRoadmap(),
+      strategy: loadStrategyDocs(),
     };
   } finally {
     db.close();

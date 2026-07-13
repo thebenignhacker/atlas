@@ -45,6 +45,7 @@ function main() {
   console.log(
     `atlas: owner snapshot written (${snapshot.repos.length} repos, ${snapshot.todos.length} todos, ` +
       `${snapshot.activity.length} events, ${snapshot.roadmap.length} roadmap, ` +
+      `${snapshot.strategy.length} strategy docs, ` +
       `${Object.keys(snapshot.summaries).length} summaries, ` +
       `digest ${snapshot.digest ? "present" : "none"}). NOT for commit -- deploy via Vercel CLI only.`
   );

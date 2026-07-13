@@ -1,4 +1,6 @@
 import { loadStrategyDocs } from "@/lib/strategy";
+import type { StrategyDoc } from "@/lib/strategy-shared";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { StrategyBoard } from "@/components/StrategyBoard";
@@ -8,13 +10,22 @@ export const dynamic = "force-dynamic";
 
 export default async function StrategyPage() {
   const mode = await getRequestMode();
-  // Strategy/fundraising is owner-only — never served to the public demo, and
-  // (being read from the filesystem) never baked into the public snapshot.
+  // Strategy/fundraising is owner-only — never served to the public demo and
+  // never in the public snapshot. Local mode reads the live markdown files; a
+  // deployed owner host has no filesystem for them, so it serves the docs baked
+  // into the owner snapshot (same pattern as roadmap). `?? []` keeps older
+  // owner snapshots without the field on the empty state instead of crashing.
   if (mode !== "local" && mode !== "owner") {
     return <OwnerOnly feature="Strategy" />;
   }
 
-  const docs = loadStrategyDocs();
+  let docs: StrategyDoc[];
+  try {
+    docs =
+      mode === "owner" ? loadOwnerSnapshot().strategy ?? [] : loadStrategyDocs();
+  } catch {
+    docs = [];
+  }
   const doc = docs[0];
 
   if (!doc || doc.totalTasks === 0) {
