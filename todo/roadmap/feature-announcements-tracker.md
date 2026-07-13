@@ -2,7 +2,7 @@
 
 **Area:** Feature
 **Kind:** code
-**Status:** ready
+**Status:** done
 **Priority:** P1
 **Order:** 10
 **Depends:**
@@ -25,3 +25,4 @@ The user wants Atlas to track ALL work, including comms. Announcements currently
 
 ## Log
 - 2026-07-06 — Filed at the user's request. Build in a fresh session using `components/SubmissionsView.tsx` + `lib/submissions.ts` + `app/submissions/page.tsx` as the template.
+- 2026-07-06 — BUILT + verified. New `/announcements` page (owner-only + local, mirrors Submissions): `lib/announcements.ts` (reads `<todoDir>/roadmap/announcements/*.md`, fields Title/Channels/Status/Date/Link/What/Why + per-channel copy blocks), `components/AnnouncementsView.tsx` (channel chips, status pills idea/drafted/scheduled/posted, All/To-post filter, reused CopyBlock), `app/announcements/page.tsx`, Sidebar entry (Megaphone). Seeded with `opena2a-org/todo/roadmap/announcements/01-standards-milestones.md` (the gtm-announce-standards-milestones content: W3C DID registration + 3 IETF drafts + ai-safety.txt, 5 per-channel drafts blog/W3C-CCG/changelog/X/LinkedIn, honest early-stage framing). Committed on atlas branch **feat/announcements-tracker** (off feat/roadmap-epics-stories-tasks, which carries the Submissions base). tsc clean, rendered 200 in local dev, filter click + console verified, screenshot checked. NOT pushed/deployed — Atlas deploy is manual (`vercel --prod`); works now in `npm run dev`.
