@@ -20,7 +20,7 @@
     "git"
   ],
   "scripts": {
-    "dev": "next dev",
+    "dev": "ATLAS_MODE=local next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -31,7 +31,7 @@
     "snapshot:owner": "tsx scripts/snapshot-owner.ts",
     "context": "tsx bin/atlas-context.ts",
     "hash-password": "tsx scripts/hash-password.ts",
-    "test": "node --import tsx --test test/context/*.test.ts test/usage/*.test.ts test/auth/*.test.ts test/github/*.test.ts test/strategy/*.test.ts"
+    "test": "node --import tsx --test test/mode/*.test.ts test/context/*.test.ts test/usage/*.test.ts test/auth/*.test.ts test/github/*.test.ts test/strategy/*.test.ts"
   },
   "bin": {
     "atlas-context": "bin/atlas-context.ts"
