@@ -222,7 +222,10 @@ CREATE INDEX IF NOT EXISTS idx_tool_events_feature ON tool_events(feature);
 CREATE INDEX IF NOT EXISTS idx_tool_events_ts ON tool_events(ts);
 CREATE INDEX IF NOT EXISTS idx_tool_events_project ON tool_events(project);
 CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(sessionId);
-CREATE INDEX IF NOT EXISTS idx_tool_events_source ON tool_events(sourceFile);
+-- NOTE: the index on sourceFile is created in initSchema AFTER the column
+-- migration, for the same reason as context_cards.sensitive below: on a database
+-- that already has tool_events, CREATE TABLE IF NOT EXISTS is a no-op, so the
+-- column does not exist yet at this point and indexing it here fails outright.
 
 -- Mining ledger for the usage scan: which transcript was read, at what
 -- mtime/size, and how many events it yielded. A file whose mtime and size are
