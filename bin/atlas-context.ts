@@ -23,21 +23,24 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatDistanceToNow } from "date-fns";
 import { getDb, initSchema } from "@/lib/db";
+import { legacySessionStateFile, sessionStateFile } from "@/lib/paths";
 import * as store from "@/lib/context/store";
 import { getMetrics } from "@/lib/context/metrics";
 import type { ContextCard, Freshness } from "@/lib/types";
 
 // Route the DB to the Atlas repo regardless of where this is invoked from, but
-// keep the real cwd for resolving --source paths and verify commands. db.ts
-// reads ATLAS_DATA_DIR lazily (at getDb() call time), so setting it in the
+// keep the real cwd for resolving --source paths and verify commands.
+// lib/paths.ts resolves lazily (at call time), so setting the root in the
 // module body — before any command handler runs — is sufficient.
+//
+// Anchor the repo root to this file's own location, not the caller's cwd, then
+// let lib/paths.ts derive everything from it. Previously this set
+// ATLAS_DATA_DIR directly while `.current-session` was resolved against the
+// repo regardless — so pointing the database elsewhere detached session
+// attribution from the cards it labels, with nothing failing to show it.
 const ATLAS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-process.env.ATLAS_DATA_DIR ||= path.join(ATLAS_ROOT, "data");
+process.env.ATLAS_ROOT ||= ATLAS_ROOT;
 const INVOKE_CWD = process.cwd();
-
-/** Gitignored file the SessionStart hook writes the current harness session id
- *  into (the hook runs in a child process and can't set a parent env var). */
-const SESSION_STATE_FILE = path.join(ATLAS_ROOT, "data", ".current-session");
 
 /**
  * Resolve the originating Claude session id for an `add`:
@@ -47,12 +50,37 @@ const SESSION_STATE_FILE = path.join(ATLAS_ROOT, "data", ".current-session");
 function resolveSessionId(flag: string | undefined): string | undefined {
   if (flag) return flag;
   if (process.env.ATLAS_SESSION_ID) return process.env.ATLAS_SESSION_ID;
+  assertNoLegacySessionState();
   try {
-    const fromFile = fs.readFileSync(SESSION_STATE_FILE, "utf8").trim();
+    const fromFile = fs.readFileSync(sessionStateFile(), "utf8").trim();
     return fromFile || undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Refuse to run while a session-state file sits at the pre-unification
+ * location AND we are now reading a different one.
+ *
+ * Failing loudly is the point. Both files look valid, so any silent policy —
+ * prefer the new one, prefer the newer mtime, merge — stamps some session id
+ * onto every card written from here on, and a wrong origin is worse than none
+ * because it reads as evidence. The condition is also self-clearing: delete the
+ * stale file and the message goes away.
+ */
+function assertNoLegacySessionState(): void {
+  const legacy = legacySessionStateFile();
+  if (!legacy) return;
+  console.error(
+    `atlas: found a session-state file at the old location:\n` +
+      `  ${legacy}\n` +
+      `but session state is now read from:\n` +
+      `  ${sessionStateFile()}\n` +
+      `Refusing to guess which is current — a wrong originSessionId is worse ` +
+      `than none. Delete the old file to continue.`
+  );
+  process.exit(1);
 }
 
 // --- tiny arg parser -------------------------------------------------------
@@ -314,6 +342,27 @@ function cmdSession(a: Args): void {
       console.log(`registered session ${bold(s.id)} (${ago(s.startedAt)})`);
       break;
     }
+    // `begin` = write the state file + register, in one call.
+    //
+    // Exists so the SessionStart hook never computes a path. The hook used to
+    // `mkdir -p "$ATLAS/data"` itself, which recreated that directory inside
+    // the repo on EVERY session — reopening the "no data directory in the
+    // public tree" property by itself, the morning after any migration, with
+    // no failure to notice. A shell script cannot be kept in sync with
+    // lib/paths.ts; not letting it try is the fix.
+    case "begin": {
+      const id = str(a.flags.id);
+      if (!id) {
+        console.error("session begin requires --id <session-id>");
+        process.exit(2);
+      }
+      const stateFile = sessionStateFile();
+      fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+      fs.writeFileSync(stateFile, `${id}\n`);
+      const s = store.registerSession(db, { id, startedAt: str(a.flags.started) });
+      console.log(`began session ${bold(s.id)} (state: ${stateFile})`);
+      break;
+    }
     case "update": {
       const id = str(a.flags.id);
       if (!id) {
@@ -387,6 +436,7 @@ usage:
   atlas-context supersede <id> --by <newId>
   atlas-context retire <id>
   atlas-context session [list] [--json]
+  atlas-context session begin    --id <id> [--started <iso>]
   atlas-context session register --id <id> [--started <iso>] [--summary S]
   atlas-context session update --id <id> [--summary S] [--branches a,b]
   atlas-context metrics [--json]

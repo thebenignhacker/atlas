@@ -6,9 +6,10 @@ import {
   generatePublicSnapshot,
   distinctiveTokens,
   hiddenNameLeak,
-  SNAPSHOT_PATH,
+  snapshotPath,
 } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
+import { dbPath } from "@/lib/paths";
 import { slug } from "@/lib/context/store";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS, publicFeatureKey } from "@/lib/usage/catalog-meta";
 
@@ -39,13 +40,16 @@ function main() {
 
   // 2) No private/fork repo names anywhere (incl. bare references in commit
   //    messages, descriptions, AI summaries). FAIL CLOSED if the DB is absent.
-  const dbPath = path.join(process.cwd(), "data", "atlas.db");
-  if (!fs.existsSync(dbPath)) {
+  // Was path.join(process.cwd(), "data", "atlas.db"): the gate opened a
+  // DIFFERENT database from the one lib/snapshot just read whenever
+  // ATLAS_DATA_DIR was set, so it could verify the wrong data and pass.
+  const gateDbPath = dbPath();
+  if (!fs.existsSync(gateDbPath)) {
     violations.push(
       "source database not found — cannot verify private repo names are absent (fail-closed)"
     );
   } else {
-    const db = new Database(dbPath, { readonly: true });
+    const db = new Database(gateDbPath, { readonly: true });
     const hidden = db
       .prepare("SELECT name FROM repos WHERE visibility != 'public' OR isFork = 1")
       .all() as { name: string }[];
@@ -133,12 +137,12 @@ function main() {
   const sensitiveSlugs = loadConfig().sensitiveRepos;
   const sensitiveSlugSet = new Set(sensitiveSlugs);
   if (sensitiveSlugs.length > 0) {
-    if (!fs.existsSync(dbPath)) {
+    if (!fs.existsSync(gateDbPath)) {
       violations.push(
         "source database not found — cannot verify sensitive content is absent (fail-closed)"
       );
     } else {
-      const db = new Database(dbPath, { readonly: true });
+      const db = new Database(gateDbPath, { readonly: true });
       // Fail closed (don't crash) if the DB predates the sensitive column: the
       // flag-based exclusion can't be trusted, so abort the snapshot.
       const hasSensitiveCol = (
@@ -334,7 +338,7 @@ function main() {
     process.exit(1);
   }
 
-  fs.writeFileSync(SNAPSHOT_PATH, json);
+  fs.writeFileSync(snapshotPath(), json);
   const usageFresh = snapshot.freshness?.usage;
   console.log(
     `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries, ${snapshot.contextCards.length} public context cards). Sanitization checks passed.`

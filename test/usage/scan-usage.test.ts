@@ -96,6 +96,14 @@ const lastRunRow = () =>
 
 before(() => {
   fs.mkdirSync(projects, { recursive: true });
+  // getDb() refuses to create a database, so the collector cannot bootstrap one
+  // by accident — a real install runs setup-db first and so must this harness.
+  const r = spawnSync("npx", ["tsx", "scripts/setup-db.ts"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: { ...process.env, HOME: home, ATLAS_DATA_DIR: dataDir },
+  });
+  assert.equal(r.status, 0, `setup-db failed: ${r.stderr}`);
 });
 
 after(() => {

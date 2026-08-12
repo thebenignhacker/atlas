@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { slugify } from "@/lib/util/format";
+import { configPath } from "@/lib/paths";
 
 export interface AtlasConfig {
   /** Directories to scan for git repositories. */
@@ -83,11 +84,11 @@ let cached: AtlasConfig | null = null;
 
 export function loadConfig(): AtlasConfig {
   if (cached) return cached;
-  const configPath = path.join(process.cwd(), "atlas.config.json");
+  const file = configPath();
   let userConfig: Partial<AtlasConfig> = {};
-  if (fs.existsSync(configPath)) {
+  if (fs.existsSync(file)) {
     try {
-      userConfig = JSON.parse(fs.readFileSync(configPath, "utf8"));
+      userConfig = JSON.parse(fs.readFileSync(file, "utf8"));
     } catch (err) {
       console.warn(`atlas: failed to parse atlas.config.json, using defaults:`, err);
     }

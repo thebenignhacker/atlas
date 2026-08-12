@@ -1,18 +1,11 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
-import path from "node:path";
+import { dataDir, dbPath } from "@/lib/paths";
 
-// Resolved lazily (not at module load) so callers can route the DB elsewhere
-// via ATLAS_DATA_DIR — used by the atlas-context CLI, which runs from arbitrary
-// working directories but must always read/write the Atlas repo's database.
-function dataDir(): string {
-  return process.env.ATLAS_DATA_DIR
-    ? path.resolve(process.env.ATLAS_DATA_DIR)
-    : path.join(process.cwd(), "data");
-}
-function dbPath(): string {
-  return path.join(dataDir(), "atlas.db");
-}
+// Path resolution lives in lib/paths.ts — the single resolver. Resolved lazily
+// (not at module load) so callers can route the DB elsewhere via
+// ATLAS_DATA_DIR: the atlas-context CLI runs from arbitrary working
+// directories but must always reach the same database.
 
 /** Schema is idempotent (CREATE IF NOT EXISTS) so setup-db can run anytime. */
 const SCHEMA = `
@@ -258,15 +251,51 @@ CREATE INDEX IF NOT EXISTS idx_scan_runs_stage ON scan_runs(stage, id);
 
 let writeDb: Database.Database | null = null;
 
-/** Get a read-write connection. Used by scanners and API mutations. */
+function open(): Database.Database {
+  const db = new Database(dbPath());
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  return db;
+}
+
+/**
+ * Get a read-write connection to an EXISTING database.
+ *
+ * Deliberately refuses to create one. `new Database(path)` creates the file
+ * silently, so any caller that resolved the wrong directory — a script run from
+ * the wrong cwd, a hook that recreated a deleted folder, an unset
+ * ATLAS_DATA_DIR — got a brand-new empty database instead of an error, and
+ * wrote to it happily. Nothing failed; the writes simply landed somewhere
+ * nobody reads, producing two half-populated stores with no way to tell which
+ * is current. Split-brain is the worst outcome in the set precisely because it
+ * is the quietest.
+ *
+ * Creation happens in exactly one place: `createDb()`, called by
+ * `scripts/setup-db.ts`.
+ */
 export function getDb(): Database.Database {
   if (!writeDb) {
-    const dir = dataDir();
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    writeDb = new Database(dbPath());
-    writeDb.pragma("journal_mode = WAL");
-    writeDb.pragma("foreign_keys = ON");
+    if (!fs.existsSync(dbPath())) {
+      throw new Error(
+        `atlas: no database at ${dbPath()} — refusing to create one here, ` +
+          `because a mistyped or unset ATLAS_DATA_DIR would silently start a ` +
+          `second empty store. Run \`npm run setup-db\` if this path is right.`
+      );
+    }
+    writeDb = open();
   }
+  return writeDb;
+}
+
+/**
+ * Create the database if absent and return a write connection. The ONE
+ * sanctioned creation path; `scripts/setup-db.ts` is its only caller, so
+ * "the database appeared" is always traceable to someone running setup-db.
+ */
+export function createDb(): Database.Database {
+  const dir = dataDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!writeDb) writeDb = open();
   return writeDb;
 }
 

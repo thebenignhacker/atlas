@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import path from "node:path";
 import { getReadDb, getMeta } from "@/lib/db";
+import { ownerSnapshotPath, publicSnapshotPath } from "@/lib/paths";
 import { loadConfig } from "@/lib/config";
 import { computeSignals } from "@/lib/signals";
 import { rowToCard, slug, getSessions, type CardRow } from "@/lib/context/store";
@@ -33,8 +33,11 @@ import type { RoadmapItem } from "@/lib/roadmap-shared";
 import { loadStrategyDocs } from "@/lib/strategy";
 import type { StrategyDoc } from "@/lib/strategy-shared";
 
-export const SNAPSHOT_PATH = path.join(process.cwd(), "public-snapshot.json");
-export const OWNER_SNAPSHOT_PATH = path.join(process.cwd(), "owner-snapshot.json");
+// Were module-load constants off process.cwd(): frozen at import time, so any
+// entry point that resolved its cwd differently read one file and wrote
+// another. Functions now, resolved through the single resolver at call time.
+export const snapshotPath = publicSnapshotPath;
+export const ownerSnapshotFile = ownerSnapshotPath;
 
 /**
  * Whether a context card may appear in the PUBLIC snapshot. Pure (no I/O) so the
@@ -504,12 +507,12 @@ let snapshotCache: PublicSnapshot | null = null;
 /** Load the deployed public snapshot (used when ATLAS_MODE=public). */
 export function loadPublicSnapshot(): PublicSnapshot {
   if (snapshotCache) return snapshotCache;
-  if (!fs.existsSync(SNAPSHOT_PATH)) {
+  if (!fs.existsSync(publicSnapshotPath())) {
     throw new Error(
       "atlas: public-snapshot.json not found. Run `npm run snapshot` to generate it."
     );
   }
-  snapshotCache = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8")) as PublicSnapshot;
+  snapshotCache = JSON.parse(fs.readFileSync(publicSnapshotPath(), "utf8")) as PublicSnapshot;
   return snapshotCache;
 }
 
@@ -668,13 +671,13 @@ let ownerSnapshotCache: OwnerSnapshot | null = null;
 /** Load the deployed owner snapshot (used when ATLAS_MODE=owner). */
 export function loadOwnerSnapshot(): OwnerSnapshot {
   if (ownerSnapshotCache) return ownerSnapshotCache;
-  if (!fs.existsSync(OWNER_SNAPSHOT_PATH)) {
+  if (!fs.existsSync(ownerSnapshotPath())) {
     throw new Error(
       "atlas: owner-snapshot.json not found. Run `npm run snapshot:owner` to generate it."
     );
   }
   ownerSnapshotCache = JSON.parse(
-    fs.readFileSync(OWNER_SNAPSHOT_PATH, "utf8")
+    fs.readFileSync(ownerSnapshotPath(), "utf8")
   ) as OwnerSnapshot;
   return ownerSnapshotCache;
 }
