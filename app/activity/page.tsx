@@ -1,4 +1,4 @@
-import { getActivity, getArtifactBuiltAt, getFreshness, getRepos, getStats } from "@/lib/queries";
+import { getActivity, getArtifactBuiltAt, getFreshness, getRepos } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { ActivityView } from "@/components/ActivityView";
@@ -10,11 +10,9 @@ export default async function ActivityPage() {
   const mode = await getRequestMode();
   let events;
   let repos;
-  let stats;
   try {
     events = getActivity(mode, 1000);
     repos = getRepos(mode);
-    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

@@ -1,4 +1,4 @@
-import { getArtifactBuiltAt, getContextCards, getFreshness, getSessions, getStats } from "@/lib/queries";
+import { getArtifactBuiltAt, getContextCards, getFreshness, getSessions } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { SessionsView } from "@/components/SessionsView";
@@ -14,11 +14,9 @@ export default async function SessionsPage() {
   if (mode === "public") return <OwnerOnly feature="Sessions" />;
   let sessions;
   let cards;
-  let stats;
   try {
     sessions = getSessions(mode);
     cards = getContextCards(mode);
-    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

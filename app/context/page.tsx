@@ -1,4 +1,4 @@
-import { getArtifactBuiltAt, getContextCards, getContextMetrics, getFreshness, getStats } from "@/lib/queries";
+import { getArtifactBuiltAt, getContextCards, getContextMetrics, getFreshness } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { ContextMetrics } from "@/components/ContextMetrics";
@@ -11,11 +11,9 @@ export default async function ContextPage() {
   const mode = await getRequestMode();
   let cards;
   let metrics;
-  let stats;
   try {
     cards = getContextCards(mode);
     metrics = getContextMetrics(mode);
-    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">

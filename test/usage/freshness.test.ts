@@ -28,6 +28,9 @@ const origCwd = process.cwd();
 /** Mining ran three weeks ago; the snapshot is being built right now. */
 const MINED_AT = "2026-07-22T19:31:01.259Z";
 const NEWEST_EVENT = "2026-07-22T19:30:49.571Z";
+/** The private card is written AFTER the public one, on purpose. */
+const PUBLIC_CARD_AT = "2026-08-10T08:00:00.000Z";
+const PRIVATE_CARD_AT = "2026-08-12T20:00:00.000Z";
 
 function seed(): void {
   const db = new Database(path.join(dataDir, "atlas.db"));
@@ -59,6 +62,44 @@ function seed(): void {
   db.prepare(
     "INSERT INTO repos (slug, name, path, owner, visibility, isFork, lastCommitAt) VALUES (?,?,?,?,?,?,?)"
   ).run("pub-repo", "pub-repo", "/x/pub-repo", "testorg", "public", 0, "2026-08-11T00:00:00.000Z");
+
+  // Two cards where the PRIVATE one is written LATER. A freshness clock taken
+  // from the database-wide max would carry the private write time into the
+  // public artifact; only a fixture ordered this way can catch that.
+  const card = db.prepare(
+    `INSERT INTO context_cards
+       (id, project, repoSlug, subject, claim, derivedAt, lastVerifiedAt, freshness,
+        status, visibility, sensitive, createdAt, updatedAt)
+     VALUES (@id,@project,@repoSlug,@subject,@claim,@derivedAt,@lastVerifiedAt,@freshness,
+        @status,@visibility,@sensitive,@createdAt,@updatedAt)`
+  );
+  const base = {
+    project: "pub-repo",
+    repoSlug: "pub-repo",
+    derivedAt: PUBLIC_CARD_AT,
+    lastVerifiedAt: PUBLIC_CARD_AT,
+    freshness: "fresh",
+    status: "active",
+    sensitive: 0,
+  };
+  card.run({
+    ...base,
+    id: "pub:card",
+    subject: "published fact",
+    claim: "safe to publish",
+    visibility: "public",
+    createdAt: PUBLIC_CARD_AT,
+    updatedAt: PUBLIC_CARD_AT,
+  });
+  card.run({
+    ...base,
+    id: "priv:card",
+    subject: "withheld fact",
+    claim: "owner only",
+    visibility: "private",
+    createdAt: PRIVATE_CARD_AT,
+    updatedAt: PRIVATE_CARD_AT,
+  });
   db.close();
 }
 
@@ -133,6 +174,27 @@ test("public freshness omits owner-only sections entirely", async () => {
       `owner-only section ${ownerOnly} leaked into the public freshness`
     );
   }
+});
+
+test("public context freshness never discloses private card write timing", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const snap = generatePublicSnapshot();
+  const ctx = snap.freshness.context;
+  // Only one card is publishable in this fixture; the private one is newer.
+  // Both clocks must come from the published card, or the timestamp itself
+  // reports that something private was touched afterwards.
+  assert.equal(ctx.count, snap.contextCards.length);
+  assert.equal(
+    ctx.collectedAt,
+    ctx.dataAt,
+    "context has no separate collector; a differing clock can only come from unpublished rows"
+  );
+  const publishedMax = snap.contextCards
+    .map((c) => c.updatedAt)
+    .filter(Boolean)
+    .sort()
+    .pop();
+  assert.equal(ctx.dataAt, publishedMax ?? null);
 });
 
 test("public usage clocks are date-only, matching the rollup's own precision", async () => {
