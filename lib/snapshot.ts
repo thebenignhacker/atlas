@@ -63,6 +63,34 @@ export function isCardPublishable(
 }
 
 /**
+ * Whether a hidden (private or fork) repo name actually leaks into published
+ * text, and if so as what. Returns the offending token, or null when the name
+ * is absent or appears only inside identifiers that are themselves published.
+ *
+ * A plain `\b${name}\b` test does not work here: `\b` treats `-` as a boundary,
+ * so a private `crypto-census` matches inside the PUBLIC `crypto-census-data`
+ * and blocks every publish on a repo whose name is already public. Repo names
+ * contain `-` and `_`, so the token — not the word — is the right unit.
+ *
+ * Deliberately NOT weakened into "ignore any hyphenated extension": an
+ * unpublished compound like `crypto-census-secrets` still leaks, and only an
+ * exact match against something this snapshot publishes on purpose clears it.
+ *
+ * Pure (no I/O) so the boundary can be tested in both directions — that a real
+ * mention is caught matters as much as that a public name is not.
+ */
+export function hiddenNameLeak(
+  hiddenName: string,
+  text: string,
+  publicIdentifiers: Set<string>
+): string | null {
+  const esc = hiddenName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tokens =
+    text.match(new RegExp(`(?<![\\w-])[\\w-]*${esc}[\\w-]*(?![\\w-])`, "gi")) ?? [];
+  return tokens.find((t) => !publicIdentifiers.has(t.toLowerCase())) ?? null;
+}
+
+/**
  * Distinctive tokens to scrub from public free text when they originate in
  * sensitive content (a sensitive card's subject/claim/detail). A token counts
  * as distinctive — and therefore redactable/assertable — when it's long enough
@@ -392,10 +420,17 @@ export function generatePublicSnapshot(): PublicSnapshot {
     const freshness: SnapshotFreshness = {
       repos: publishedSection(base.repos, repos.map((r) => r.lastCommitAt), repos.length),
       activity: publishedSection(base.activity, activity.map((a) => a.ts), activity.length),
-      context: publishedSection(
-        base.context,
-        contextCards.map((c) => c.updatedAt),
-        contextCards.length
+      // Context has no separate collector — the last card write IS the last
+      // collection — so its `collectedAt` must be re-derived from the PUBLISHED
+      // cards too. Left at the database-wide max it would disclose the minute a
+      // private card was last touched, which is precisely what withholding the
+      // card is meant to prevent.
+      context: sameClock(
+        publishedSection(
+          base.context,
+          contextCards.map((c) => c.updatedAt),
+          contextCards.length
+        )
       ),
       // The public rollup deliberately truncates event timestamps to date-only;
       // the freshness block must not hand back the full-precision instant the
@@ -446,6 +481,16 @@ function publishedSection(
     // publish outage; strip here so the gate stays a second line of defense.
     note: stripPaths(base.note),
   };
+}
+
+/**
+ * Collapse a collector-less section's two clocks onto the published one. Only
+ * valid where the write IS the collection (context cards): there is no separate
+ * "looking" step whose age could differ, so keeping a second, database-wide
+ * value would add no information and disclose private write timing.
+ */
+function sameClock(f: SectionFreshness): SectionFreshness {
+  return { ...f, collectedAt: f.dataAt };
 }
 
 /** Truncate a section's clocks to date-only, matching public rollup precision. */

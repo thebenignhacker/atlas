@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   generatePublicSnapshot,
   distinctiveTokens,
+  hiddenNameLeak,
   SNAPSHOT_PATH,
 } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
@@ -49,17 +50,26 @@ function main() {
       .prepare("SELECT name FROM repos WHERE visibility != 'public' OR isFork = 1")
       .all() as { name: string }[];
     db.close();
-    const publicNames = new Set(snapshot.repos.map((r) => r.name));
+    // Every identifier this snapshot publishes on purpose. Compared against the
+    // WHOLE token a hidden name is found inside, below.
+    const publicIdentifiers = new Set(
+      snapshot.repos
+        .flatMap((r) => [r.name, r.slug, r.repoName])
+        .filter((s): s is string => !!s)
+        .map((s) => s.toLowerCase())
+    );
     for (const h of hidden) {
-      if (publicNames.has(h.name)) continue; // name also belongs to a public repo
+      if (publicIdentifiers.has(h.name.toLowerCase())) continue; // also a public repo
       // Only flag DISTINCTIVE names. Generic single words ("test", "registry")
       // collide with normal commit-message English and reveal no private repo;
       // compound/namespaced or long names ("aim-roadmap") are the real signal.
       const distinctive = h.name.length >= 5 && (h.name.length >= 12 || /[-_]/.test(h.name));
       if (!distinctive) continue;
-      const esc = h.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`\\b${esc}\\b`, "i").test(json))
-        violations.push(`hidden repo name "${h.name}" referenced in snapshot text`);
+      const leaked = hiddenNameLeak(h.name, json, publicIdentifiers);
+      if (leaked !== null)
+        violations.push(
+          `hidden repo name "${h.name}" referenced in snapshot text (as "${leaked}")`
+        );
     }
   }
 
