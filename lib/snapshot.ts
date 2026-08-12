@@ -21,6 +21,9 @@ import type { DigestResult } from "@/lib/ai/digest";
 import type { AICostSummary } from "@/lib/ai/cache";
 import type { LearnedItem } from "@/lib/ai/learning";
 import type { AIAvailability } from "@/lib/ai/provider";
+import { computeFreshness } from "@/lib/freshness";
+import { liveSection } from "@/lib/freshness-shared";
+import type { SectionFreshness, SnapshotFreshness } from "@/lib/freshness-shared";
 import { getToolEvents } from "@/lib/usage/store";
 import { rollupEvents } from "@/lib/usage/rollup";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
@@ -94,6 +97,14 @@ export interface PublicSnapshot {
    * mined tool_events but deliberately omits every owner-only field.
    */
   usage: UsageRollup;
+  /**
+   * Per-section data age. Carries the COLLECTION time of each section, which is
+   * not the same clock as `generatedAt` above (the build time) — conflating the
+   * two is exactly how a dead collector rendered as "scanned just now". Absent
+   * on artifacts built before this existed; readers must render that as
+   * unavailable rather than assume freshness. See lib/freshness.ts.
+   */
+  freshness: SnapshotFreshness;
 }
 
 /** Resolve the public usage-project allowlist (config override or default). */
@@ -164,6 +175,8 @@ export interface OwnerSnapshot {
   sessions: Session[];
   /** Feature-usage rollup, full detail (real project names, recent raw events). */
   usage: UsageRollup;
+  /** Per-section data age — see PublicSnapshot.freshness and lib/freshness.ts. */
+  freshness: SnapshotFreshness;
   /**
    * Roadmap items parsed from the local `<todoDir>/roadmap/*.md` files. Owner-only
    * (never in the public snapshot) — the host has no filesystem to read them from,
@@ -366,8 +379,32 @@ export function generatePublicSnapshot(): PublicSnapshot {
       now: new Date(),
     });
 
+    // One instant for the whole artifact: `generatedAt` and every section's
+    // `builtAt` must be the same clock reading, or comparing them later reports
+    // drift that is really just two `new Date()` calls.
+    const builtAt = new Date().toISOString();
+
+    // Freshness for the PUBLIC artifact is re-derived from the published arrays,
+    // never taken from the database totals. `max(updatedAt)` over every card, or
+    // over private repos, would disclose activity on rows this snapshot exists to
+    // withhold — a freshness block is still a side channel.
+    const base = computeFreshness(db, builtAt, { owner: false });
+    const freshness: SnapshotFreshness = {
+      repos: publishedSection(base.repos, repos.map((r) => r.lastCommitAt), repos.length),
+      activity: publishedSection(base.activity, activity.map((a) => a.ts), activity.length),
+      context: publishedSection(
+        base.context,
+        contextCards.map((c) => c.updatedAt),
+        contextCards.length
+      ),
+      // The public rollup deliberately truncates event timestamps to date-only;
+      // the freshness block must not hand back the full-precision instant the
+      // rollup just gave up.
+      usage: toDateOnly(publishedSection(base.usage, [], usage.totals.events)),
+    };
+
     return {
-      generatedAt: new Date().toISOString(),
+      generatedAt: builtAt,
       stats,
       repos,
       activity,
@@ -375,10 +412,46 @@ export function generatePublicSnapshot(): PublicSnapshot {
       contextCards,
       contextMetrics,
       usage,
+      freshness,
     };
   } finally {
     db.close();
   }
+}
+
+/**
+ * Re-key a section's data age and size to what actually got published. `status`,
+ * `collectedAt` and the collector's note are kept: they describe the pipeline,
+ * which is the same pipeline regardless of how much of its output is public.
+ */
+function publishedSection(
+  base: SectionFreshness,
+  timestamps: (string | null)[],
+  count: number
+): SectionFreshness {
+  const present = timestamps.filter((t): t is string => !!t);
+  const dataAt = present.length
+    ? present.reduce((a, b) => (a > b ? a : b))
+    : // No published rows carry a timestamp: fall back to the collector's own
+      // clock rather than inventing one, and let `count` say the rest.
+      null;
+  return {
+    ...base,
+    dataAt: count === 0 ? null : dataAt ?? base.dataAt,
+    count,
+    status: count === 0 && base.status === "ok" ? "empty" : base.status,
+    // A collector's error text quotes what it was looking at — scan roots,
+    // transcript roots — so the note is an absolute-path carrier. The gate would
+    // catch it and refuse to publish, but that turns any scan failure into a
+    // publish outage; strip here so the gate stays a second line of defense.
+    note: stripPaths(base.note),
+  };
+}
+
+/** Truncate a section's clocks to date-only, matching public rollup precision. */
+function toDateOnly(f: SectionFreshness): SectionFreshness {
+  const day = (s: string | null) => (s ? s.slice(0, 10) : null);
+  return { ...f, dataAt: day(f.dataAt), collectedAt: day(f.collectedAt) };
 }
 
 let snapshotCache: PublicSnapshot | null = null;
@@ -509,8 +582,14 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       recentLimit: 80,
     });
 
+    const builtAt = new Date().toISOString();
+    // Roadmap and strategy markdown live on the owner machine; read them here
+    // so the deployed host (which has no filesystem) can still render them.
+    const roadmap = loadRoadmap();
+    const strategy = loadStrategyDocs();
+
     return {
-      generatedAt: new Date().toISOString(),
+      generatedAt: builtAt,
       stats,
       repos,
       activity,
@@ -524,10 +603,15 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       contextMetrics,
       sessions,
       usage,
-      // Roadmap and strategy markdown live on the owner machine; read them here
-      // so the deployed host (which has no filesystem) can still render them.
-      roadmap: loadRoadmap(),
-      strategy: loadStrategyDocs(),
+      roadmap,
+      strategy,
+      freshness: {
+        ...computeFreshness(db, builtAt, { owner: true }),
+        // Read straight off disk in the line above, so the build instant IS the
+        // collection instant. Not a file mtime — that records a checkout.
+        roadmap: liveSection(builtAt, roadmap.length),
+        strategy: liveSection(builtAt, strategy.length),
+      },
     };
   } finally {
     db.close();

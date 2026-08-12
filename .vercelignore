@@ -3,9 +3,13 @@
 # deployment, so it is intentionally NOT listed here. The local SQLite database,
 # environment files, and build output must never be uploaded -- they are.
 #
-# This does not affect the public deployment: that ships via `vercel deploy
-# --prebuilt` (GitHub Actions), which uploads the prebuilt .vercel/output, not
-# this source tree.
+# This file governs EVERY deployment. An earlier version of this comment claimed
+# the public deployment bypassed it via `vercel deploy --prebuilt` from GitHub
+# Actions; there is no .github/ directory in this repo and no CI of any kind, so
+# nothing bypasses these rules. Both channels are hand-run from this tree with
+# the Vercel CLI. If a prebuilt or CI path is ever added, update this comment in
+# the same change -- a stale exemption note here is how an upload rule gets
+# assumed away.
 
 node_modules
 .next

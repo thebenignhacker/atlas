@@ -212,12 +212,45 @@ CREATE TABLE IF NOT EXISTS tool_events (
   paramKeys TEXT,             -- JSON array of input KEY NAMES only; never values. Owner-only.
   cwd TEXT,                   -- owner-only; never in the public snapshot
   gitBranch TEXT,             -- owner-only; never in the public snapshot
-  scannedAt TEXT
+  scannedAt TEXT,
+  -- Transcript this row was mined from. Load-bearing: it makes a re-mine
+  -- replaceable PER FILE, which is what lets the scan be incremental and
+  -- crash-safe instead of truncate-then-refill. Owner-only (a local path).
+  sourceFile TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tool_events_feature ON tool_events(feature);
 CREATE INDEX IF NOT EXISTS idx_tool_events_ts ON tool_events(ts);
 CREATE INDEX IF NOT EXISTS idx_tool_events_project ON tool_events(project);
 CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(sessionId);
+CREATE INDEX IF NOT EXISTS idx_tool_events_source ON tool_events(sourceFile);
+
+-- Mining ledger for the usage scan: which transcript was read, at what
+-- mtime/size, and how many events it yielded. A file whose mtime and size are
+-- unchanged is skipped, so a 1.2 GB corpus is re-read only where it actually
+-- changed. Deleting a row forces that file to be re-mined.
+CREATE TABLE IF NOT EXISTS usage_files (
+  path TEXT PRIMARY KEY,
+  mtimeMs INTEGER NOT NULL,
+  size INTEGER NOT NULL,
+  eventCount INTEGER NOT NULL DEFAULT 0,
+  scannedAt TEXT
+);
+
+-- Per-stage collector run log. Exists so that "never ran", "ran and found
+-- nothing" and "ran and failed" are three distinguishable outcomes rather than
+-- one empty table. Read by lib/freshness.ts; written by the collectors.
+CREATE TABLE IF NOT EXISTS scan_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  stage TEXT NOT NULL,        -- 'scan' | 'scan:usage' | ...
+  startedAt TEXT NOT NULL,
+  endedAt TEXT,
+  status TEXT NOT NULL,       -- 'running' | 'ok' | 'empty' | 'error'
+  rowsIn INTEGER,
+  rowsOut INTEGER,
+  error TEXT,
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_scan_runs_stage ON scan_runs(stage, id);
 `;
 
 let writeDb: Database.Database | null = null;
@@ -272,6 +305,10 @@ export function initSchema(db: Database.Database = getDb()): void {
   addColumnIfMissing(db, "context_cards", "sensitive", "sensitive INTEGER DEFAULT 0");
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_context_sensitive ON context_cards(sensitive)"
+  );
+  addColumnIfMissing(db, "tool_events", "sourceFile", "sourceFile TEXT");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_tool_events_source ON tool_events(sourceFile)"
   );
 }
 

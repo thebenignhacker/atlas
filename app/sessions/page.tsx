@@ -1,4 +1,4 @@
-import { getSessions, getContextCards, getStats } from "@/lib/queries";
+import { getArtifactBuiltAt, getContextCards, getFreshness, getSessions, getStats } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { SessionsView } from "@/components/SessionsView";
@@ -32,7 +32,8 @@ export default async function SessionsPage() {
       <PageHeader
         title="Sessions"
         subtitle="The Claude sessions that established your context cards — trace a fact back to the session that set it and jump back into it."
-        lastScanAt={stats.lastScanAt}
+        freshness={getFreshness(mode, "sessions")}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <SessionsView sessions={sessions} cards={cards} />
     </div>

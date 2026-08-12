@@ -1,4 +1,4 @@
-import { getRepos, getStats, getTodos } from "@/lib/queries";
+import { getArtifactBuiltAt, getFreshness, getRepos, getStats, getTodos } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { TodoView } from "@/components/TodoView";
@@ -35,7 +35,8 @@ export default async function TodosPage() {
       <PageHeader
         title="Todos"
         subtitle="Every scattered note, unified and triageable."
-        lastScanAt={stats.lastScanAt}
+        freshness={getFreshness(mode, "todos")}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <StatStrip
         stats={[

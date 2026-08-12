@@ -1,0 +1,223 @@
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import Database from "better-sqlite3";
+import { initSchema } from "@/lib/db";
+import {
+  freshnessLabel,
+  freshnessTone,
+  lagDays,
+  liveSection,
+} from "@/lib/freshness-shared";
+import type { SectionFreshness } from "@/lib/freshness-shared";
+
+/**
+ * Regression cover for "the dashboard reported its own build time as the age of
+ * the data". Each test below fails on the pre-fix code.
+ *
+ * The Node test runner isolates each test FILE in its own process, so
+ * ATLAS_DATA_DIR, the chdir, and the module-level loadConfig cache are safe here.
+ */
+
+const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-fresh-work-"));
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-fresh-data-"));
+const origCwd = process.cwd();
+
+/** Mining ran three weeks ago; the snapshot is being built right now. */
+const MINED_AT = "2026-07-22T19:31:01.259Z";
+const NEWEST_EVENT = "2026-07-22T19:30:49.571Z";
+
+function seed(): void {
+  const db = new Database(path.join(dataDir, "atlas.db"));
+  initSchema(db);
+  db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(
+    "usageScannedAt",
+    MINED_AT
+  );
+  db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(
+    "lastScanAt",
+    "2026-08-12T00:33:35.000Z"
+  );
+  db.prepare(
+    "INSERT INTO tool_events (id, sessionId, ts, feature, category, project, howInvoked, paramKeys, cwd, gitBranch, scannedAt, sourceFile) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+  ).run(
+    "evt-1",
+    "sess-1",
+    NEWEST_EVENT,
+    "Bash",
+    "exec",
+    "atlas",
+    "direct",
+    "[]",
+    null,
+    null,
+    MINED_AT,
+    "/x/sess-1.jsonl"
+  );
+  db.prepare(
+    "INSERT INTO repos (slug, name, path, owner, visibility, isFork, lastCommitAt) VALUES (?,?,?,?,?,?,?)"
+  ).run("pub-repo", "pub-repo", "/x/pub-repo", "testorg", "public", 0, "2026-08-11T00:00:00.000Z");
+  db.close();
+}
+
+before(() => {
+  fs.writeFileSync(
+    path.join(work, "atlas.config.json"),
+    JSON.stringify({
+      scanRoots: [],
+      todoDirs: [],
+      github: { user: "tester", orgs: [] },
+      publicOwners: ["testorg"],
+      sensitiveRepos: [],
+    })
+  );
+  process.env.ATLAS_DATA_DIR = dataDir;
+  process.chdir(work);
+  seed();
+});
+
+after(() => {
+  process.chdir(origCwd);
+  fs.rmSync(work, { recursive: true, force: true });
+  fs.rmSync(dataDir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// The defect itself
+// ---------------------------------------------------------------------------
+
+test("snapshot reports the MINING clock as usage data age, not the build time", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const snap = generatePublicSnapshot();
+  const usage = snap.freshness.usage;
+
+  // The pre-fix read path returned `usage.generatedAt`, which rollup sets to the
+  // build instant — so this assertion is the whole bug in one line.
+  assert.notEqual(
+    usage.collectedAt,
+    snap.generatedAt.slice(0, 10),
+    "usage freshness must not be the snapshot build time"
+  );
+  assert.equal(usage.collectedAt, MINED_AT.slice(0, 10));
+  assert.equal(usage.dataAt, NEWEST_EVENT.slice(0, 10));
+  // ...and the build clock is still recorded, separately, so a stale artifact
+  // can be identified as stale rather than inferred to be current.
+  assert.equal(usage.builtAt, snap.generatedAt);
+  assert.notEqual(usage.collectedAt, usage.builtAt);
+});
+
+test("every published section carries its own age, all stamped one build instant", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const snap = generatePublicSnapshot();
+  for (const name of ["repos", "activity", "usage", "context"]) {
+    assert.ok(snap.freshness[name], `section ${name} missing from freshness`);
+    assert.equal(
+      snap.freshness[name].builtAt,
+      snap.generatedAt,
+      `${name}.builtAt must equal the snapshot's own generatedAt`
+    );
+  }
+});
+
+test("public freshness omits owner-only sections entirely", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const snap = generatePublicSnapshot();
+  // Presence alone would disclose that private todos/sessions exist and when
+  // they were last touched, so absence is asserted, not emptiness.
+  for (const ownerOnly of ["todos", "sessions", "roadmap", "strategy"]) {
+    assert.equal(
+      snap.freshness[ownerOnly],
+      undefined,
+      `owner-only section ${ownerOnly} leaked into the public freshness`
+    );
+  }
+});
+
+test("public usage clocks are date-only, matching the rollup's own precision", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const usage = generatePublicSnapshot().freshness.usage;
+  assert.match(usage.collectedAt ?? "", /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(usage.dataAt ?? "", /^\d{4}-\d{2}-\d{2}$/);
+});
+
+// ---------------------------------------------------------------------------
+// Rendering: a stale section must not be able to look current
+// ---------------------------------------------------------------------------
+
+const NOW = new Date("2026-08-12T21:00:00.000Z");
+
+function section(over: Partial<SectionFreshness> = {}): SectionFreshness {
+  return {
+    dataAt: "2026-08-12T09:00:00.000Z",
+    collectedAt: "2026-08-12T09:00:00.000Z",
+    builtAt: "2026-08-12T21:00:00.000Z",
+    status: "ok",
+    count: 10,
+    note: null,
+    ...over,
+  };
+}
+
+test("a section collected 21 days ago renders degraded however new the build is", () => {
+  const stale = section({ dataAt: NEWEST_EVENT, collectedAt: MINED_AT });
+  assert.equal(freshnessTone(stale, NOW), "degraded");
+  // Rebuilding the artifact must not improve the tone — the pre-fix page got
+  // "fresh" purely because someone re-ran the snapshot.
+  const rebuilt = section({
+    dataAt: NEWEST_EVENT,
+    collectedAt: MINED_AT,
+    builtAt: NOW.toISOString(),
+  });
+  assert.equal(freshnessTone(rebuilt, NOW), "degraded");
+});
+
+test("tone tracks the collection clock across the staleness scale", () => {
+  assert.equal(freshnessTone(section(), NOW), "fresh");
+  assert.equal(
+    freshnessTone(section({ collectedAt: "2026-08-08T09:00:00.000Z" }), NOW),
+    "ok"
+  );
+  assert.equal(
+    freshnessTone(section({ collectedAt: "2026-07-01T09:00:00.000Z" }), NOW),
+    "degraded"
+  );
+});
+
+test("missing freshness is 'unavailable', never quietly treated as fresh", () => {
+  assert.equal(freshnessTone(null, NOW), "unknown");
+  assert.equal(freshnessTone(undefined, NOW), "unknown");
+  assert.equal(freshnessLabel(null, NOW), "freshness unavailable");
+});
+
+test("did-not-run, ran-and-found-nothing and ran-and-errored read differently", () => {
+  const never = freshnessLabel(
+    section({ status: "never", collectedAt: null, dataAt: null, count: 0 }),
+    NOW
+  );
+  const empty = freshnessLabel(section({ status: "empty", count: 0 }), NOW);
+  const errored = freshnessLabel(section({ status: "error" }), NOW);
+
+  assert.equal(never, "never collected");
+  assert.match(empty, /found nothing/);
+  assert.match(errored, /failed/);
+  // The point of the requirement: three distinct strings, not one.
+  assert.equal(new Set([never, empty, errored]).size, 3);
+});
+
+test("a large gap between collection and newest datum is surfaced in the label", () => {
+  const dead = section({ dataAt: NEWEST_EVENT, collectedAt: NOW.toISOString() });
+  assert.equal(lagDays(dead), 21);
+  // A collector that runs every 10 minutes over frozen events keeps its own
+  // clock fresh; the label must still say what the data actually covers.
+  assert.match(freshnessLabel(dead, NOW), /data through .* · checked/);
+});
+
+test("liveSection marks build-time reads as collected at build time", () => {
+  const live = liveSection("2026-08-12T21:00:00.000Z", 18);
+  assert.equal(live.dataAt, live.collectedAt);
+  assert.equal(live.collectedAt, live.builtAt);
+  assert.equal(live.status, "ok");
+  assert.equal(liveSection("2026-08-12T21:00:00.000Z", 0).status, "empty");
+});

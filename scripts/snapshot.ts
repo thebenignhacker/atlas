@@ -11,6 +11,11 @@ import { loadConfig } from "@/lib/config";
 import { slug } from "@/lib/context/store";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS, publicFeatureKey } from "@/lib/usage/catalog-meta";
 
+/** Anything that looks like an absolute or home-relative filesystem path. One
+ *  definition, used by every per-field check below, so a path shape can never
+ *  be caught in one section and missed in another. */
+const pathish = /(?:\/(?:Users|home|root|var|tmp|private|opt|mnt)\/|~\/|\\\\)/;
+
 /**
  * Generate the public snapshot, then ADVERSARIALLY verify it leaks nothing:
  *  - no home directory / username strings
@@ -250,7 +255,6 @@ function main() {
       }
       // A leaked filesystem path — NOT the legitimate "/" in a slash-command key
       // like "command:/clear". Genuine path markers only (home/system roots, "~/").
-      const pathish = /(?:\/(?:Users|home|root|var|tmp|private|opt|mnt)\/|~\/|\\\\)/;
       for (const f of usage.features) {
         if (pathish.test(f.feature) || pathish.test(f.displayName))
           violations.push(`usage feature "${f.feature}" contains a filesystem path`);
@@ -281,6 +285,39 @@ function main() {
     }
   }
 
+  // 9) Freshness block. Two separate failures are checked here, and the FIRST is
+  //    a fail-closed publish gate rather than a leak check: an artifact without
+  //    per-section ages cannot be read honestly (the reader has nothing to show
+  //    but the build time, which is the defect this block exists to remove), so
+  //    it must not be publishable at all.
+  const freshness = snapshot.freshness;
+  if (!freshness || typeof freshness !== "object") {
+    violations.push("freshness block missing from snapshot (fail-closed)");
+  } else {
+    for (const required of ["repos", "activity", "usage", "context"]) {
+      if (!freshness[required])
+        violations.push(`freshness section "${required}" missing`);
+    }
+    // Owner-only sections must not appear even as an empty shell: their mere
+    // presence would disclose that private todos/sessions exist and when they
+    // were last touched.
+    for (const ownerOnly of ["todos", "sessions", "roadmap", "strategy"]) {
+      if (freshness[ownerOnly])
+        violations.push(`freshness leaked owner-only section "${ownerOnly}"`);
+    }
+    for (const [name, f] of Object.entries(freshness)) {
+      if (f.builtAt !== snapshot.generatedAt)
+        violations.push(
+          `freshness section "${name}" builtAt disagrees with snapshot generatedAt`
+        );
+      // Collector notes quote what they were reading; the sanitizer strips paths
+      // and check 3 greps the whole document, but assert per-field so a failure
+      // names the section instead of the whole file.
+      if (f.note && pathish.test(f.note))
+        violations.push(`freshness note for "${name}" contains a filesystem path`);
+    }
+  }
+
   if (violations.length > 0) {
     console.error("atlas: SNAPSHOT ABORTED — sanitization failed:");
     for (const v of violations) console.error(`  - ${v}`);
@@ -288,8 +325,15 @@ function main() {
   }
 
   fs.writeFileSync(SNAPSHOT_PATH, json);
+  const usageFresh = snapshot.freshness?.usage;
   console.log(
     `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries, ${snapshot.contextCards.length} public context cards). Sanitization checks passed.`
+  );
+  // Print the age of what was just published. A build that silently republishes
+  // week-old mining output should say so at the moment it happens, not only on
+  // the page nobody reloads.
+  console.log(
+    `atlas: usage data collected ${usageFresh?.collectedAt ?? "never"}, newest event ${usageFresh?.dataAt ?? "none"} (status: ${usageFresh?.status ?? "unknown"})`
   );
 }
 

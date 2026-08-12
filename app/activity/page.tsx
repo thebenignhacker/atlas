@@ -1,4 +1,4 @@
-import { getActivity, getRepos, getStats } from "@/lib/queries";
+import { getActivity, getArtifactBuiltAt, getFreshness, getRepos, getStats } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { ActivityView } from "@/components/ActivityView";
@@ -30,7 +30,8 @@ export default async function ActivityPage() {
       <PageHeader
         title="Activity"
         subtitle="Where your energy went, across every repo."
-        lastScanAt={stats.lastScanAt}
+        freshness={getFreshness(mode, "activity")}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <ActivityView events={events} repoMap={repoMap} />
     </div>

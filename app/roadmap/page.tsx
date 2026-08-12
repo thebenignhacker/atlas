@@ -1,5 +1,7 @@
 import { loadRoadmap } from "@/lib/roadmap";
 import type { RoadmapItem } from "@/lib/roadmap-shared";
+import { getArtifactBuiltAt, getFreshness } from "@/lib/queries";
+import { liveSection } from "@/lib/freshness-shared";
 import { loadOwnerSnapshot } from "@/lib/snapshot";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
@@ -45,6 +47,14 @@ export default async function RoadmapPage() {
 
   const count = (s: string) => items.filter((i) => i.status === s).length;
 
+  // Local mode re-reads the markdown on every request, so its freshness IS the
+  // request instant. A deployed owner host serves whatever was baked in, which
+  // can be arbitrarily old — the distinction the badge exists to show.
+  const freshness =
+    mode === "local"
+      ? liveSection(new Date().toISOString(), items.length)
+      : getFreshness(mode, "roadmap");
+
   return (
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
@@ -54,6 +64,8 @@ export default async function RoadmapPage() {
             ? "Institutional Roadmap v2.2 — every build unit, in dependency order. Read-only here; edit from local Atlas."
             : "Institutional Roadmap v2.2 — every build unit, in dependency order. Check items off and log status as work lands."
         }
+        freshness={freshness}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <StatStrip
         stats={[

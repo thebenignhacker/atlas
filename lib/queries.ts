@@ -7,6 +7,8 @@ import { isPublicMode, isOwnerMode } from "@/lib/mode";
 import type { ResolvedMode } from "@/lib/mode";
 import { getCards, getSessions as getSessionsFromDb } from "@/lib/context/store";
 import { getMetrics } from "@/lib/context/metrics";
+import { computeFreshness } from "@/lib/freshness";
+import type { SectionFreshness } from "@/lib/freshness-shared";
 import { getToolEvents } from "@/lib/usage/store";
 import { rollupEvents } from "@/lib/usage/rollup";
 import { EMPTY_USAGE, type UsageRollup } from "@/lib/usage/types";
@@ -279,14 +281,59 @@ export function getUsage(mode: ResolvedMode): UsageRollup {
   }
 }
 
-/** When the usage data was last mined from transcripts (null if never). */
+/**
+ * When the usage data was last mined from transcripts (null if never).
+ *
+ * Deployed modes used to return `usage.generatedAt`, which `lib/usage/rollup.ts`
+ * sets to the SNAPSHOT BUILD TIME — so the page rendered "scanned <build age>"
+ * over events that could be arbitrarily old. They agreed only by coincidence,
+ * because nothing had rebuilt the snapshot since the last mine. Read the mining
+ * clock out of the freshness block instead, and return null (rendered
+ * "unavailable") for an artifact built before that block existed, rather than
+ * falling back to the value that caused the defect.
+ */
 export function getUsageScannedAt(mode: ResolvedMode): string | null {
-  if (mode === "public") return loadPublicSnapshot().usage?.generatedAt ?? null;
-  if (mode === "owner") return loadOwnerSnapshot().usage?.generatedAt ?? null;
+  if (mode === "public" || mode === "owner")
+    return getFreshness(mode, "usage")?.collectedAt ?? null;
   const db = getReadDb();
   try {
     return getMeta(db, "usageScannedAt");
   } finally {
     db.close();
   }
+}
+
+/**
+ * Freshness for one section, in whatever mode the request resolved to.
+ *
+ * Returns null — meaning "unavailable", which the UI must render as such — when
+ * the artifact predates the freshness block or the section is unknown. Never
+ * substitutes a different clock: a wrong timestamp reads as authoritative,
+ * while a missing one reads as missing.
+ */
+export function getFreshness(
+  mode: ResolvedMode,
+  section: string
+): SectionFreshness | null {
+  if (mode === "public") return loadPublicSnapshot().freshness?.[section] ?? null;
+  if (mode === "owner") return loadOwnerSnapshot().freshness?.[section] ?? null;
+  const db = getReadDb();
+  try {
+    return (
+      computeFreshness(db, new Date().toISOString(), { owner: true })[section] ??
+      null
+    );
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * When the artifact being read was built. Null in local mode, where pages read
+ * the database directly and there is no artifact standing between them and it.
+ */
+export function getArtifactBuiltAt(mode: ResolvedMode): string | null {
+  if (mode === "public") return loadPublicSnapshot().generatedAt ?? null;
+  if (mode === "owner") return loadOwnerSnapshot().generatedAt ?? null;
+  return null;
 }
