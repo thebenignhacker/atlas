@@ -77,9 +77,13 @@ export function lastRun(db: Database.Database, stage: string): ScanRunRow | null
         )
         .get(stage) as ScanRunRow | undefined) ?? null
     );
-  } catch {
-    // Pre-migration database: no scan_runs table yet.
-    return null;
+  } catch (err) {
+    // ONLY the pre-migration case (no scan_runs table yet). A broader catch
+    // would turn a corrupt database into "this stage has no run history",
+    // which reads as benign and is how a broken pipeline looks healthy.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/no such table|no such column/i.test(msg)) return null;
+    throw err;
   }
 }
 

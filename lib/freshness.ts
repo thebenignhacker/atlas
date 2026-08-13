@@ -9,20 +9,34 @@ import type { SectionFreshness, SectionStatus, SnapshotFreshness } from "@/lib/f
  * without dragging better-sqlite3 toward the client bundle.
  */
 
+/**
+ * A missing table is the ONE error worth swallowing here: a database created
+ * before a collector existed legitimately has no rows for it, and that is
+ * "never collected", not a reason to fail the whole snapshot.
+ *
+ * Everything else rethrows. Catching broadly would report a corrupt or
+ * unreadable database as a section that has simply never been collected — a
+ * plausible-looking answer to the exact question this module exists to answer
+ * honestly.
+ */
 function scalar(db: Database.Database, sql: string): string | null {
   try {
     const row = db.prepare(sql).get() as Record<string, unknown> | undefined;
     if (!row) return null;
     const v = Object.values(row)[0];
     return v == null ? null : String(v);
-  } catch {
-    // A table that does not exist yet (fresh DB, pre-migration) is "never
-    // collected", not a crash of the whole snapshot.
-    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/no such table|no such column/i.test(msg)) return null;
+    throw err;
   }
 }
 
+/** Table names are compile-time literals below; the guard keeps it that way. */
 function count(db: Database.Database, table: string): number {
+  if (!/^[a-z_]+$/.test(table)) {
+    throw new Error(`atlas: refusing to interpolate "${table}" into SQL`);
+  }
   const v = scalar(db, `SELECT count(*) AS c FROM ${table}`);
   return v == null ? 0 : Number(v);
 }
