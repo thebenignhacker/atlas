@@ -128,9 +128,23 @@ interface Listing {
 function listTranscripts(root: string): Listing {
   const out: TranscriptFile[] = [];
   const unreadableDirs: string[] = [];
+  // `Dirent.isDirectory()`/`isFile()` are FALSE for a symlink, so testing them
+  // would skip a symlinked project or transcript without recording it as
+  // unreadable — invisible to the guard below, absent from the present-set, and
+  // therefore silently pruned as "removed". `statSync` follows the link, which
+  // is what the miner does when it reads the file anyway.
   for (const dir of fs.readdirSync(root, { withFileTypes: true })) {
-    if (!dir.isDirectory()) continue;
     const dirPath = path.join(root, dir.name);
+    let isDir: boolean;
+    try {
+      isDir = fs.statSync(dirPath).isDirectory();
+    } catch {
+      // A broken symlink or a dir we cannot even stat. Counted, not skipped:
+      // whatever it points at may hold transcripts we have already mined.
+      unreadableDirs.push(dirPath);
+      continue;
+    }
+    if (!isDir) continue;
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -139,10 +153,11 @@ function listTranscripts(root: string): Listing {
       continue;
     }
     for (const f of entries) {
-      if (!f.isFile() || !f.name.endsWith(".jsonl")) continue;
+      if (!f.name.endsWith(".jsonl")) continue;
       const full = path.join(dirPath, f.name);
       try {
         const st = fs.statSync(full);
+        if (!st.isFile()) continue;
         out.push({ path: full, mtimeMs: Math.floor(st.mtimeMs), size: st.size });
       } catch {
         continue; // vanished between readdir and stat
@@ -231,11 +246,14 @@ async function main() {
     finish("error", {
       rowsIn: files.length,
       rowsOut: priorCount,
+      // Deliberately NAMELESS. A transcript directory is
+      // `~/.claude/projects/<encoded-cwd>/`, so its basename is the whole
+      // workspace path with the separators swapped — an absolute path in
+      // disguise that neither `stripPaths` nor the gate's `pathish` recognises.
+      // The count is the actionable part; the operator can list the directory.
       error: `${unreadableDirs.length} project director${
         unreadableDirs.length === 1 ? "y" : "ies"
-      } could not be read (first: ${path.basename(
-        unreadableDirs[0]
-      )}) — refusing to prune against an incomplete listing`,
+      } could not be read — refusing to prune against an incomplete listing`,
     });
   }
 

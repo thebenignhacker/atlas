@@ -286,3 +286,38 @@ test("a run spanning more than one commit chunk still lands every file", () => {
     450
   );
 });
+
+test("REGRESSION: a symlinked project directory is followed, not silently pruned", () => {
+  // Dirent.isDirectory() is FALSE for a symlink, so testing it skipped the entry
+  // without recording it as unreadable: invisible to the fail-closed guard,
+  // absent from the present-set, and therefore deleted as "removed since last
+  // scan" -- with exit 0 and an advanced clock. Same class as the unreadable
+  // directory above, reached with no permission error at all.
+  const real = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-scan-real-"));
+  try {
+    fs.writeFileSync(
+      path.join(real, "sess-linked.jsonl"),
+      JSON.stringify(toolLine("sess-linked", "2026-08-07T10:00:00Z", "Bash", "toolu_link_1")) + "\n"
+    );
+    fs.symlinkSync(real, path.join(projects, "proj-symlinked"));
+
+    const before = eventCount();
+    const r = runScan();
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(eventCount(), before + 1, "the symlinked project's events must be mined");
+    assert.equal(
+      db((d) => (d.prepare("SELECT count(*) c FROM usage_files WHERE path LIKE ?").get("%proj-symlinked%") as { c: number }).c),
+      1,
+      "the symlinked transcript must have a ledger row"
+    );
+
+    // And a second run must not treat it as vanished.
+    const r2 = runScan();
+    assert.equal(r2.status, 0, r2.stderr);
+    assert.equal(eventCount(), before + 1, "a symlinked project must not be pruned on re-run");
+    assert.doesNotMatch(lastRunRow()?.note ?? "", /removed since last scan/);
+  } finally {
+    fs.rmSync(path.join(projects, "proj-symlinked"), { force: true });
+    fs.rmSync(real, { recursive: true, force: true });
+  }
+});

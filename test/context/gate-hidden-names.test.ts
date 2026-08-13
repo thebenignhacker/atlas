@@ -126,7 +126,28 @@ test("REGRESSION: a private name matching a public repo's repoName is still chec
   assert.equal(r.published, false, "no artifact may be written when the gate aborts");
 });
 
-test("REGRESSION: case-differing private name is still checked", () => {
+test("REGRESSION: a private name is matched case-insensitively inside a token", () => {
+  // The private name is NOT any published repo's name, so the exemption does not
+  // apply and the token must be caught despite differing in case. (A private
+  // name that merely differs in CASE from a published name is a different
+  // situation and is exempt -- that string is already public; see below.)
+  const r = runGate({
+    repos: [
+      ...PUBLIC_ONLY,
+      { slug: "crypto-census-data", name: "crypto-census-data", repoName: "crypto-census-data", visibility: "public" },
+      { slug: "crypto-census", name: "crypto-census", repoName: "crypto-census", visibility: "private" },
+    ],
+    cardProject: "Crypto-Census-Secrets",
+    cardClaim: "benign text",
+  });
+  assert.notEqual(r.status, 0, `gate must abort; got:\n${r.out}`);
+  assert.equal(r.published, false);
+});
+
+test("a private name differing only in CASE from a published name is exempt", () => {
+  // Repo names are case-insensitive for uniqueness on GitHub, and the published
+  // name already discloses the string; only the exact casing would be new, which
+  // is not worth deadlocking every publish over.
   const r = runGate({
     repos: [
       ...PUBLIC_ONLY,
@@ -136,8 +157,8 @@ test("REGRESSION: case-differing private name is still checked", () => {
     cardProject: "Crypto-Census-Secrets",
     cardClaim: "benign text",
   });
-  assert.notEqual(r.status, 0, `gate must abort; got:\n${r.out}`);
-  assert.equal(r.published, false);
+  assert.equal(r.status, 0, `gate must publish; got:\n${r.out}`);
+  assert.equal(r.published, true);
 });
 
 test("a public repo whose name extends a private one still publishes", () => {
@@ -180,4 +201,39 @@ test("the freshness block publishes no collector note", () => {
   for (const [name, f] of Object.entries(snap.freshness as Record<string, { note: unknown }>)) {
     assert.equal(f.note, null, `freshness.${name}.note must not be published`);
   }
+});
+
+test("a hidden repo whose NAME is already published does not deadlock the publish", () => {
+  // A fork (hidden by isFork) sharing a published repo's name. That name is
+  // already public, so a token extending it discloses nothing -- and checking it
+  // would abort every future publish with no configuration remedy, reinstating
+  // the outage the token anchoring was written to remove.
+  const r = runGate({
+    repos: [
+      ...PUBLIC_ONLY,
+      { slug: "vendor-sdk", name: "vendor-sdk", repoName: "vendor-sdk", visibility: "public" },
+      { slug: "vendor-sdk-fork", name: "vendor-sdk", repoName: "vendor-sdk", visibility: "public", isFork: 1 },
+    ],
+    cardProject: "vendor-sdk-patches",
+    cardClaim: "benign text",
+  });
+  assert.equal(r.status, 0, `gate must publish; got:\n${r.out}`);
+  assert.equal(r.published, true);
+});
+
+test("the name-only exemption does NOT reopen the slug/repoName bypass", () => {
+  // The exemption is published NAMES only. A private repo whose name matches a
+  // published repo's repoName -- but no published NAME -- must still be checked.
+  // This is the pair that makes the narrow exemption safe rather than a bypass.
+  const r = runGate({
+    repos: [
+      ...PUBLIC_ONLY,
+      { slug: "secretless", name: "secretless", repoName: "secretless-ai", visibility: "public" },
+      { slug: "secretless-ai", name: "secretless-ai", repoName: "secretless-ai", visibility: "private" },
+    ],
+    cardProject: "secretless-ai-internal",
+    cardClaim: "benign text",
+  });
+  assert.notEqual(r.status, 0, `gate must abort; got:\n${r.out}`);
+  assert.equal(r.published, false);
 });

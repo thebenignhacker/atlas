@@ -62,15 +62,21 @@ function main() {
         .filter((s): s is string => !!s)
         .map((s) => s.toLowerCase())
     );
+    // Published repo NAMES only — deliberately not slugs or repoNames. A hidden
+    // repo whose name is literally a published repo's name (a fork, or two repos
+    // of the same name in different orgs) is already disclosed by that published
+    // name, so tokens extending it reveal nothing further, and checking it would
+    // deadlock the publish with no configuration remedy.
+    //
+    // Widening THIS set is what created a gate bypass: with slugs and repoNames
+    // in it, a private `secretless-ai` was exempted wholesale merely because an
+    // unrelated public repo carried `repoName: "secretless-ai"`, and every token
+    // containing that private name published freely. The wider set is still used
+    // below for per-TOKEN clearing, which is safe because each of its members is
+    // serialized into the artifact verbatim anyway.
+    const publishedNames = new Set(snapshot.repos.map((r) => r.name.toLowerCase()));
     for (const h of hidden) {
-      // NO early exit for "this name is also public". There used to be one, and
-      // widening its set from public NAMES to name+slug+repoName turned it into
-      // a gate bypass: a private repo whose name matched some public repo's slug
-      // had its check skipped ENTIRELY, so any token containing that private
-      // name published freely. `hiddenNameLeak` already clears an exact-name
-      // token via the same set, per token rather than per repo, so the early
-      // exit bought nothing and only removed coverage.
-      //
+      if (publishedNames.has(h.name.toLowerCase())) continue;
       // Only flag DISTINCTIVE names. Generic single words ("test", "registry")
       // collide with normal commit-message English and reveal no private repo;
       // compound/namespaced or long names ("aim-roadmap") are the real signal.

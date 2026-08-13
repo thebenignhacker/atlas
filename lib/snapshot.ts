@@ -435,11 +435,17 @@ export function generatePublicSnapshot(): PublicSnapshot {
           contextCards.length
         )
       ),
-      // Derived from the dates the rollup ITSELF publishes (`features[].lastUsed`,
-      // already date-only), not from the database-wide max over every event
-      // including private projects. Passing an empty list here and leaning on a
-      // fallback to the collector's own clock is what made the fallback a
-      // disclosure channel in the first place.
+      // Derived from the dates the rollup ITSELF publishes
+      // (`features[].lastUsed`, already date-only) rather than from a fallback
+      // to the collector's clock.
+      //
+      // Honest about what this does and does not buy: the public rollup
+      // aggregates EVERY event, bucketing non-allowlisted projects into "other",
+      // so this max equals the database-wide max date either way. It discloses
+      // nothing new — that same date already ships as `features[].lastUsed` —
+      // and the point here is structural: no section reaches for a clock derived
+      // from rows it did not publish, so the pattern cannot rot into a leak the
+      // way the fallback did for repos, activity and context.
       //
       // toDateOnly still applies, because `collectedAt` comes from the mining
       // clock at full precision and the rollup gave that precision up.
