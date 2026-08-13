@@ -32,13 +32,22 @@ function scalar(db: Database.Database, sql: string): string | null {
   }
 }
 
-/** Table names are compile-time literals below; the guard keeps it that way. */
-function count(db: Database.Database, table: string): number {
+/**
+ * Row count, or null when the table does not exist.
+ *
+ * The null matters: a MISSING table and an EMPTY one are different states, and
+ * collapsing them to 0 made a dropped table render as "the collector ran and
+ * found nothing" — which the badge tones as fresh. Absent infrastructure must
+ * read as "never collected", the worse of the two, not the better.
+ *
+ * Table names are compile-time literals below; the guard keeps it that way.
+ */
+function count(db: Database.Database, table: string): number | null {
   if (!/^[a-z_]+$/.test(table)) {
     throw new Error(`atlas: refusing to interpolate "${table}" into SQL`);
   }
   const v = scalar(db, `SELECT count(*) AS c FROM ${table}`);
-  return v == null ? 0 : Number(v);
+  return v == null ? null : Number(v);
 }
 
 /**
@@ -52,7 +61,8 @@ function section(
   opts: {
     dataAt: string | null;
     collectedAt: string | null;
-    count: number;
+    /** null = the table itself is absent, which is not the same as zero rows. */
+    count: number | null;
     stage?: string;
   }
 ): SectionFreshness {
@@ -63,6 +73,11 @@ function section(
   if (run?.status === "error") {
     status = "error";
     note = run.error ?? "collector reported an error";
+  } else if (opts.count == null) {
+    // The table is gone. Never claim a collector "ran and found nothing" when
+    // the thing it writes into does not exist — that tones as fresh and idle.
+    status = "never";
+    note = "the table this section reads does not exist";
   } else if (opts.collectedAt == null) {
     status = "never";
     note = opts.stage ? `\`npm run ${opts.stage}\` has never completed` : null;
@@ -79,7 +94,9 @@ function section(
     collectedAt: opts.collectedAt,
     builtAt,
     status,
-    count: opts.count,
+    // An absent table publishes as 0 alongside status "never" — the status
+    // carries the distinction, and the count field stays a plain number.
+    count: opts.count ?? 0,
     note,
   };
 }

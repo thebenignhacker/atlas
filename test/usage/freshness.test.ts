@@ -31,6 +31,9 @@ const NEWEST_EVENT = "2026-07-22T19:30:49.571Z";
 /** The private card is written AFTER the public one, on purpose. */
 const PUBLIC_CARD_AT = "2026-08-10T08:00:00.000Z";
 const PRIVATE_CARD_AT = "2026-08-12T20:00:00.000Z";
+/** A PRIVATE repo's commit time. The only published repo is deliberately left
+ *  undated so the "no published timestamp" branch is actually reached. */
+const PRIVATE_REPO_COMMIT_AT = "2026-08-11T17:45:31.913Z";
 
 function seed(): void {
   const db = new Database(path.join(dataDir, "atlas.db"));
@@ -59,9 +62,14 @@ function seed(): void {
     MINED_AT,
     "/x/sess-1.jsonl"
   );
-  db.prepare(
+  const repo = db.prepare(
     "INSERT INTO repos (slug, name, path, owner, visibility, isFork, lastCommitAt) VALUES (?,?,?,?,?,?,?)"
-  ).run("pub-repo", "pub-repo", "/x/pub-repo", "testorg", "public", 0, "2026-08-11T00:00:00.000Z");
+  );
+  // The published repo carries NO commit date and the private one does. That is
+  // what forces the "no published row has a timestamp" branch — with any dated
+  // published row the branch is unreachable and a test of it measures nothing.
+  repo.run("pub-repo", "pub-repo", "/x/pub-repo", "testorg", "public", 0, null);
+  repo.run("priv-repo", "priv-repo", "/x/priv-repo", "testorg", "private", 0, PRIVATE_REPO_COMMIT_AT);
 
   // Two cards where the PRIVATE one is written LATER. A freshness clock taken
   // from the database-wide max would carry the private write time into the
@@ -90,6 +98,19 @@ function seed(): void {
     visibility: "public",
     createdAt: PUBLIC_CARD_AT,
     updatedAt: PUBLIC_CARD_AT,
+  });
+  // A PUBLISHED card with NO updatedAt. This is what makes the fallback branch
+  // reachable: with every published card carrying a timestamp, the code path
+  // that reaches for the database-wide clock is never taken, and a test that
+  // never reaches it cannot fail when that clock leaks.
+  card.run({
+    ...base,
+    id: "pub:card-no-timestamp",
+    subject: "published, undated",
+    claim: "safe to publish",
+    visibility: "public",
+    createdAt: PUBLIC_CARD_AT,
+    updatedAt: null,
   });
   card.run({
     ...base,
@@ -195,6 +216,35 @@ test("public context freshness never discloses private card write timing", async
     .sort()
     .pop();
   assert.equal(ctx.dataAt, publishedMax ?? null);
+});
+
+test("with no published timestamp, dataAt is null rather than a private row's clock", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const snap = generatePublicSnapshot();
+
+  // Precondition, asserted rather than assumed: if a published repo ever gains a
+  // commit date this fixture stops reaching the branch, and this test would go
+  // green while measuring nothing.
+  assert.deepEqual(
+    snap.repos.map((r) => r.lastCommitAt),
+    [null],
+    "fixture must publish exactly one repo with no commit date"
+  );
+  assert.equal(
+    snap.freshness.repos.dataAt,
+    null,
+    "no published row carries a timestamp, so there is no honest dataAt"
+  );
+  assert.equal(
+    JSON.stringify(snap).includes(PRIVATE_REPO_COMMIT_AT),
+    false,
+    "a private repo's commit time leaked into the public snapshot"
+  );
+  assert.equal(
+    JSON.stringify(snap).includes(PRIVATE_CARD_AT),
+    false,
+    "a private card's write time leaked into the public snapshot"
+  );
 });
 
 test("public usage clocks are date-only, matching the rollup's own precision", async () => {

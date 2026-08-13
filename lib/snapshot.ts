@@ -435,10 +435,21 @@ export function generatePublicSnapshot(): PublicSnapshot {
           contextCards.length
         )
       ),
-      // The public rollup deliberately truncates event timestamps to date-only;
-      // the freshness block must not hand back the full-precision instant the
-      // rollup just gave up.
-      usage: toDateOnly(publishedSection(base.usage, [], usage.totals.events)),
+      // Derived from the dates the rollup ITSELF publishes (`features[].lastUsed`,
+      // already date-only), not from the database-wide max over every event
+      // including private projects. Passing an empty list here and leaning on a
+      // fallback to the collector's own clock is what made the fallback a
+      // disclosure channel in the first place.
+      //
+      // toDateOnly still applies, because `collectedAt` comes from the mining
+      // clock at full precision and the rollup gave that precision up.
+      usage: toDateOnly(
+        publishedSection(
+          base.usage,
+          usage.features.map((f) => f.lastUsed),
+          usage.totals.events
+        )
+      ),
     };
 
     return {
@@ -458,9 +469,18 @@ export function generatePublicSnapshot(): PublicSnapshot {
 }
 
 /**
- * Re-key a section's data age and size to what actually got published. `status`,
- * `collectedAt` and the collector's note are kept: they describe the pipeline,
- * which is the same pipeline regardless of how much of its output is public.
+ * Re-key a section's data age and size to what actually got published, and DROP
+ * the collector's note.
+ *
+ * `note` is free text a collector composes from whatever it was looking at —
+ * scan roots, transcript roots, and counts taken over the WHOLE database
+ * (including private repos and private projects). It is the only published field
+ * that never passes through `redact()`, and path-stripping it is not enough: the
+ * sanitizer's root alphabet and the gate's differ, so `/Volumes/...`,
+ * `/data/...` and `/media/...` escape both. Rather than keep two alphabets in
+ * sync forever, the public artifact carries no note at all — status and the
+ * clocks are what a public reader needs, and the operational prose stays owner-
+ * side where it is useful.
  */
 function publishedSection(
   base: SectionFreshness,
@@ -468,21 +488,15 @@ function publishedSection(
   count: number
 ): SectionFreshness {
   const present = timestamps.filter((t): t is string => !!t);
-  const dataAt = present.length
-    ? present.reduce((a, b) => (a > b ? a : b))
-    : // No published rows carry a timestamp: fall back to the collector's own
-      // clock rather than inventing one, and let `count` say the rest.
-      null;
   return {
     ...base,
-    dataAt: count === 0 ? null : dataAt ?? base.dataAt,
+    // No fallback to the collector's database-wide clock. When no PUBLISHED row
+    // carries a timestamp the honest answer is "none", not the write time of
+    // whichever private or sensitive row happened to be newest.
+    dataAt: count === 0 || !present.length ? null : present.reduce((a, b) => (a > b ? a : b)),
     count,
     status: count === 0 && base.status === "ok" ? "empty" : base.status,
-    // A collector's error text quotes what it was looking at — scan roots,
-    // transcript roots — so the note is an absolute-path carrier. The gate would
-    // catch it and refuse to publish, but that turns any scan failure into a
-    // publish outage; strip here so the gate stays a second line of defense.
-    note: stripPaths(base.note),
+    note: null,
   };
 }
 

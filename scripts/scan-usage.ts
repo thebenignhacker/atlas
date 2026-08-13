@@ -110,9 +110,24 @@ async function eventsFromFile(file: string): Promise<ToolEvent[]> {
   return out;
 }
 
-/** Every top-level session transcript, with the stat fields the ledger compares. */
-function listTranscripts(root: string): TranscriptFile[] {
+interface Listing {
+  files: TranscriptFile[];
+  /** Project directories that could not be listed at all. */
+  unreadableDirs: string[];
+}
+
+/**
+ * Every top-level session transcript, with the stat fields the ledger compares.
+ *
+ * Unreadable project directories are COUNTED, not skipped. A directory we cannot
+ * list makes its transcripts absent from the present-set, and the caller deletes
+ * rows for anything absent — so silently continuing turns a permissions error
+ * into "those sessions were removed", deleting real data and reporting success.
+ * The caller must know the present-set is incomplete before it prunes anything.
+ */
+function listTranscripts(root: string): Listing {
   const out: TranscriptFile[] = [];
+  const unreadableDirs: string[] = [];
   for (const dir of fs.readdirSync(root, { withFileTypes: true })) {
     if (!dir.isDirectory()) continue;
     const dirPath = path.join(root, dir.name);
@@ -120,7 +135,8 @@ function listTranscripts(root: string): TranscriptFile[] {
     try {
       entries = fs.readdirSync(dirPath, { withFileTypes: true });
     } catch {
-      continue; // unreadable project dir; the run record carries the shortfall
+      unreadableDirs.push(dirPath);
+      continue;
     }
     for (const f of entries) {
       if (!f.isFile() || !f.name.endsWith(".jsonl")) continue;
@@ -133,7 +149,7 @@ function listTranscripts(root: string): TranscriptFile[] {
       }
     }
   }
-  return out;
+  return { files: out, unreadableDirs };
 }
 
 interface LedgerRow {
@@ -205,7 +221,24 @@ async function main() {
     });
   }
 
-  const files = listTranscripts(root);
+  const { files, unreadableDirs } = listTranscripts(root);
+
+  // Fail closed BEFORE anything is pruned. The present-set drives deletion, so
+  // an incomplete listing would delete live sessions and call it "removed since
+  // last scan" — data loss reported as a successful run with a fresh clock.
+  // Nothing has been written at this point, so the previous data stands.
+  if (unreadableDirs.length > 0) {
+    finish("error", {
+      rowsIn: files.length,
+      rowsOut: priorCount,
+      error: `${unreadableDirs.length} project director${
+        unreadableDirs.length === 1 ? "y" : "ies"
+      } could not be read (first: ${path.basename(
+        unreadableDirs[0]
+      )}) — refusing to prune against an incomplete listing`,
+    });
+  }
+
   if (files.length === 0) {
     // Zero files where there were previously events is a collection failure
     // (moved/emptied root), not a report that no work happened.

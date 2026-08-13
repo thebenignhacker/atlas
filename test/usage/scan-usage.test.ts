@@ -238,3 +238,51 @@ test("rows predating per-file tracking are re-mined rather than stranded", () =>
   );
   assert.equal(eventCount(), 1);
 });
+
+test("REGRESSION: an unreadable project directory fails closed, deleting nothing", () => {
+  const before = eventCount();
+  assert.ok(before > 0, "precondition: there is data to lose");
+
+  // A directory we cannot list makes its transcripts absent from the present-set,
+  // and the present-set drives deletion. Continuing past it deleted live sessions
+  // and reported them as "removed since last scan" -- data loss recorded as a
+  // successful run with a freshly advanced clock.
+  const locked = path.join(projects, "proj-locked");
+  fs.mkdirSync(locked, { recursive: true });
+  fs.writeFileSync(path.join(locked, "sess-locked.jsonl"), "");
+  const scannedBefore = meta("usageScannedAt");
+  fs.chmodSync(locked, 0o000);
+  try {
+    const r = runScan();
+    assert.notEqual(r.status, 0, "an incomplete listing must not exit 0");
+    assert.equal(eventCount(), before, "no rows may be pruned against a partial listing");
+    assert.equal(meta("usageScannedAt"), scannedBefore, "the clock must not advance");
+    assert.equal(lastRunRow()?.status, "error");
+    assert.match(lastRunRow()?.error ?? "", /could not be read/);
+  } finally {
+    fs.chmodSync(locked, 0o755);
+    fs.rmSync(locked, { recursive: true, force: true });
+  }
+});
+
+test("a run spanning more than one commit chunk still lands every file", () => {
+  // CHUNK is 200; the earlier tests use 2 files, so nothing ever crossed a commit
+  // boundary and the "an interruption can only lose whole chunks" claim was
+  // untested. 450 files exercises three commits.
+  for (let i = 0; i < 450; i++) {
+    transcript("proj-bulk", `bulk-${i}`, [
+      toolLine(`bulk-${i}`, "2026-08-06T10:00:00Z", "Bash", `toolu_bulk_${i}`),
+    ]);
+  }
+  const r = runScan();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(
+    db((d) => (d.prepare("SELECT count(*) c FROM usage_files WHERE path LIKE ?").get(`%proj-bulk%`) as { c: number }).c),
+    450,
+    "every mined file must have a ledger row, including across chunk commits"
+  );
+  assert.equal(
+    db((d) => (d.prepare("SELECT count(*) c FROM tool_events WHERE sourceFile LIKE ?").get(`%proj-bulk%`) as { c: number }).c),
+    450
+  );
+});

@@ -63,7 +63,14 @@ function main() {
         .map((s) => s.toLowerCase())
     );
     for (const h of hidden) {
-      if (publicIdentifiers.has(h.name.toLowerCase())) continue; // also a public repo
+      // NO early exit for "this name is also public". There used to be one, and
+      // widening its set from public NAMES to name+slug+repoName turned it into
+      // a gate bypass: a private repo whose name matched some public repo's slug
+      // had its check skipped ENTIRELY, so any token containing that private
+      // name published freely. `hiddenNameLeak` already clears an exact-name
+      // token via the same set, per token rather than per repo, so the early
+      // exit bought nothing and only removed coverage.
+      //
       // Only flag DISTINCTIVE names. Generic single words ("test", "registry")
       // collide with normal commit-message English and reveal no private repo;
       // compound/namespaced or long names ("aim-roadmap") are the real signal.
