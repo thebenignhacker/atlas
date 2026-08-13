@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-13T12:38:23.375Z",
+  "generatedAt": "2026-08-13T12:41:00.396Z",
   "stats": {
-    "lastScanAt": "2026-08-13T12:38:23.165Z",
+    "lastScanAt": "2026-08-13T12:41:00.039Z",
     "repoCount": 48,
     "todoCount": 0,
     "activityCount": 553,
@@ -6686,9 +6686,9 @@
     "reads": 0
   },
   "usage": {
-    "generatedAt": "2026-08-13T12:38:23.308Z",
+    "generatedAt": "2026-08-13T12:41:00.322Z",
     "totals": {
-      "events": 88230,
+      "events": 88257,
       "features": 55,
       "sessions": 392,
       "activeDays": 32,
@@ -6724,16 +6724,16 @@
       2911,
       4044,
       2760,
-      2786
+      2813
     ],
     "byCategory": [
       {
         "category": "exec",
-        "count": 57121
+        "count": 57146
       },
       {
         "category": "file",
-        "count": 25184
+        "count": 25186
       },
       {
         "category": "orchestration",
@@ -6771,7 +6771,7 @@
         "displayName": "Shell",
         "description": "Runs a shell command in the working directory.",
         "whenToUse": "Builds, tests, git, and anything a dedicated file/search tool doesn't cover.",
-        "count": 57121,
+        "count": 57146,
         "firstUsed": "2026-07-02",
         "lastUsed": "2026-08-13",
         "spark": [
@@ -6804,7 +6804,7 @@
           1876,
           2794,
           1870,
-          2151
+          2176
         ],
         "underused": false
       },
@@ -6814,7 +6814,7 @@
         "displayName": "Edit file",
         "description": "Exact string-replacement edit on a previously read file.",
         "whenToUse": "Targeted changes that preserve the surrounding code.",
-        "count": 14073,
+        "count": 14075,
         "firstUsed": "2026-07-02",
         "lastUsed": "2026-08-13",
         "spark": [
@@ -6847,7 +6847,7 @@
           438,
           416,
           418,
-          296
+          298
         ],
         "underused": false
       },
@@ -9220,7 +9220,7 @@
     "projects": [
       {
         "project": "opena2a-org",
-        "count": 42080
+        "count": 42095
       },
       {
         "project": "csnp",
@@ -9228,7 +9228,7 @@
       },
       {
         "project": "other",
-        "count": 20880
+        "count": 20892
       }
     ],
     "routines": [
@@ -9363,7 +9363,7 @@
     "repos": {
       "dataAt": "2026-08-13T06:27:59-06:00",
       "collectedAt": "2026-08-13T12:34:41.232Z",
-      "builtAt": "2026-08-13T12:38:23.375Z",
+      "builtAt": "2026-08-13T12:41:00.396Z",
       "status": "ok",
       "count": 48,
       "note": null
@@ -9371,7 +9371,7 @@
     "activity": {
       "dataAt": "2026-08-13T06:27:59-06:00",
       "collectedAt": "2026-08-13T12:34:41.232Z",
-      "builtAt": "2026-08-13T12:38:23.375Z",
+      "builtAt": "2026-08-13T12:41:00.396Z",
       "status": "ok",
       "count": 553,
       "note": null
@@ -9379,7 +9379,7 @@
     "context": {
       "dataAt": "2026-08-13T12:08:38.040Z",
       "collectedAt": "2026-08-13T12:08:38.040Z",
-      "builtAt": "2026-08-13T12:38:23.375Z",
+      "builtAt": "2026-08-13T12:41:00.396Z",
       "status": "ok",
       "count": 1,
       "note": null
@@ -9387,9 +9387,9 @@
     "usage": {
       "dataAt": "2026-08-13",
       "collectedAt": "2026-08-13",
-      "builtAt": "2026-08-13T12:38:23.375Z",
+      "builtAt": "2026-08-13T12:41:00.396Z",
       "status": "ok",
-      "count": 88230,
+      "count": 88257,
       "note": null
     }
   }

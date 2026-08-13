@@ -132,7 +132,13 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("atlas: scan failed:", err);
+  // Print the MESSAGE, not the Error object. getDb() refusing to create a
+  // database is now the ordinary first-run failure, and its message already
+  // says exactly what to run; burying that under seven stack frames turns an
+  // actionable line into something that reads like a crash. Stack stays
+  // available behind ATLAS_DEBUG for the genuinely unexpected cases.
+  console.error(`atlas: scan failed: ${err instanceof Error ? err.message : String(err)}`);
+  if (process.env.ATLAS_DEBUG && err instanceof Error) console.error(err.stack);
   try {
     const db = getDb();
     const open = db

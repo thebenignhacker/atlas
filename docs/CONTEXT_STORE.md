@@ -140,16 +140,23 @@ in the output. Sensitive content still appears in the OAuth-gated owner view
 ## Sessions — which Claude session set this fact
 
 Each card can be attributed to the Claude session that established it
-(`context_cards.originSessionId`). The SessionStart hook captures the harness
-session id into a gitignored state file (`data/.current-session`); a hook can't
-set an env var in the Claude process, so `atlas-context add` reads the session id
-from `--session`, then `$ATLAS_SESSION_ID`, then that state file. The hook also
-registers the session, and each card added under it records the project/repo it
-touched and bumps the session's card count (all measured).
+(`context_cards.originSessionId`). The SessionStart hook calls
+`atlas-context session begin`, which writes the harness session id to a
+gitignored state file and registers the session in one step; a hook can't set an
+env var in the Claude process, so `atlas-context add` reads the session id from
+`--session`, then `$ATLAS_SESSION_ID`, then that state file. Each card added
+under a session records the project/repo it touched and bumps the session's card
+count (all measured).
+
+The hook deliberately computes no path of its own. It used to `mkdir` the data
+directory and write the file itself, which recreated that directory inside the
+repo on every session start; the location now comes from `lib/paths.ts` like
+every other data path, so moving the store moves the session state with it.
 
 ```
 atlas-context session list                       # sessions, newest first
-atlas-context session register --id <id>         # idempotent (the hook calls this)
+atlas-context session begin --id <id>            # state file + register (the hook calls this)
+atlas-context session register --id <id>         # register only, idempotent
 atlas-context session update --id <id> --summary "…" --branches a,b
 ```
 
@@ -169,6 +176,8 @@ links to its originating session.
 | `data/atlas.db` (table `context_cards`) | the cards (gitignored) |
 | `data/atlas.db` (table `context_events`) | the event log behind the metrics |
 | `data/atlas.db` (table `sessions`) | the Claude session registry (gitignored) |
+| `data/.current-session` | the harness session id the hook records (gitignored) |
+| `lib/paths.ts` | the ONLY module that computes a data or artifact path |
 
 Run from anywhere: the CLI always uses the Atlas repo's database, while
 `--source` paths and verify commands resolve against your current directory

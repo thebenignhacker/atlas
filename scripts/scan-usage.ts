@@ -432,7 +432,13 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("atlas: usage scan failed:", err);
+  // Print the MESSAGE, not the Error object. getDb() refusing to create a
+  // database is now the ordinary first-run failure, and its message already
+  // says exactly what to run; burying that under seven stack frames turns an
+  // actionable line into something that reads like a crash. Stack stays
+  // available behind ATLAS_DEBUG for the genuinely unexpected cases.
+  console.error(`atlas: usage scan failed: ${err instanceof Error ? err.message : String(err)}`);
+  if (process.env.ATLAS_DEBUG && err instanceof Error) console.error(err.stack);
   // Best-effort: mark the open run as errored so freshness reports the failure
   // rather than an indefinite "running".
   try {
