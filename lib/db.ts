@@ -1,18 +1,11 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
-import path from "node:path";
+import { dataDir, dbPath } from "@/lib/paths";
 
-// Resolved lazily (not at module load) so callers can route the DB elsewhere
-// via ATLAS_DATA_DIR — used by the atlas-context CLI, which runs from arbitrary
-// working directories but must always read/write the Atlas repo's database.
-function dataDir(): string {
-  return process.env.ATLAS_DATA_DIR
-    ? path.resolve(process.env.ATLAS_DATA_DIR)
-    : path.join(process.cwd(), "data");
-}
-function dbPath(): string {
-  return path.join(dataDir(), "atlas.db");
-}
+// Path resolution lives in lib/paths.ts — the single resolver. Resolved lazily
+// (not at module load) so callers can route the DB elsewhere via
+// ATLAS_DATA_DIR: the atlas-context CLI runs from arbitrary working
+// directories but must always reach the same database.
 
 /** Schema is idempotent (CREATE IF NOT EXISTS) so setup-db can run anytime. */
 const SCHEMA = `
@@ -212,25 +205,125 @@ CREATE TABLE IF NOT EXISTS tool_events (
   paramKeys TEXT,             -- JSON array of input KEY NAMES only; never values. Owner-only.
   cwd TEXT,                   -- owner-only; never in the public snapshot
   gitBranch TEXT,             -- owner-only; never in the public snapshot
-  scannedAt TEXT
+  scannedAt TEXT,
+  -- Transcript this row was mined from. Load-bearing: it makes a re-mine
+  -- replaceable PER FILE, which is what lets the scan be incremental and
+  -- crash-safe instead of truncate-then-refill. Owner-only (a local path).
+  sourceFile TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tool_events_feature ON tool_events(feature);
 CREATE INDEX IF NOT EXISTS idx_tool_events_ts ON tool_events(ts);
 CREATE INDEX IF NOT EXISTS idx_tool_events_project ON tool_events(project);
 CREATE INDEX IF NOT EXISTS idx_tool_events_session ON tool_events(sessionId);
+-- NOTE: the index on sourceFile is created in initSchema AFTER the column
+-- migration, for the same reason as context_cards.sensitive below: on a database
+-- that already has tool_events, CREATE TABLE IF NOT EXISTS is a no-op, so the
+-- column does not exist yet at this point and indexing it here fails outright.
+
+-- Mining ledger for the usage scan: which transcript was read, at what
+-- mtime/size, and how many events it yielded. A file whose mtime and size are
+-- unchanged is skipped, so a 1.2 GB corpus is re-read only where it actually
+-- changed. Deleting a row forces that file to be re-mined.
+CREATE TABLE IF NOT EXISTS usage_files (
+  path TEXT PRIMARY KEY,
+  mtimeMs INTEGER NOT NULL,
+  size INTEGER NOT NULL,
+  eventCount INTEGER NOT NULL DEFAULT 0,
+  scannedAt TEXT
+);
+
+-- Per-stage collector run log. Exists so that "never ran", "ran and found
+-- nothing" and "ran and failed" are three distinguishable outcomes rather than
+-- one empty table. Read by lib/freshness.ts; written by the collectors.
+CREATE TABLE IF NOT EXISTS scan_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  stage TEXT NOT NULL,        -- 'scan' | 'scan:usage' | ...
+  startedAt TEXT NOT NULL,
+  endedAt TEXT,
+  status TEXT NOT NULL,       -- 'running' | 'ok' | 'empty' | 'error'
+  rowsIn INTEGER,
+  rowsOut INTEGER,
+  error TEXT,
+  note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_scan_runs_stage ON scan_runs(stage, id);
+
+-- Release trains: per-repo release coordination as DATA (queue of obligations,
+-- one advisory conductor lease, deadline triggers). See lib/context/train.ts.
+-- Reporting-only: the publish gates stay the enforcement of last resort, so
+-- nothing here is a runtime dependency of a release.
+CREATE TABLE IF NOT EXISTS release_trains (
+  repo TEXT PRIMARY KEY,
+  leaseSessionId TEXT,
+  leaseTakenAt TEXT,
+  leaseExpiresAt TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS train_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  repo TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'obligation',   -- 'obligation' | 'closing-step'
+  item TEXT NOT NULL,
+  deadline TEXT,            -- YYYY-MM-DD; due/overdue is derived at read time
+  deadlineAction TEXT,      -- what to cut when the deadline passes unmet
+  status TEXT NOT NULL DEFAULT 'pending',    -- 'pending' | 'done'
+  addedBySessionId TEXT,
+  addedAt TEXT NOT NULL,
+  doneAt TEXT,
+  doneBySessionId TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_train_items_repo ON train_items(repo, status);
 `;
 
 let writeDb: Database.Database | null = null;
 
-/** Get a read-write connection. Used by scanners and API mutations. */
+function open(): Database.Database {
+  const db = new Database(dbPath());
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  return db;
+}
+
+/**
+ * Get a read-write connection to an EXISTING database.
+ *
+ * Deliberately refuses to create one. `new Database(path)` creates the file
+ * silently, so any caller that resolved the wrong directory — a script run from
+ * the wrong cwd, a hook that recreated a deleted folder, an unset
+ * ATLAS_DATA_DIR — got a brand-new empty database instead of an error, and
+ * wrote to it happily. Nothing failed; the writes simply landed somewhere
+ * nobody reads, producing two half-populated stores with no way to tell which
+ * is current. Split-brain is the worst outcome in the set precisely because it
+ * is the quietest.
+ *
+ * Creation happens in exactly one place: `createDb()`, called by
+ * `scripts/setup-db.ts`.
+ */
 export function getDb(): Database.Database {
   if (!writeDb) {
-    const dir = dataDir();
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    writeDb = new Database(dbPath());
-    writeDb.pragma("journal_mode = WAL");
-    writeDb.pragma("foreign_keys = ON");
+    if (!fs.existsSync(dbPath())) {
+      throw new Error(
+        `atlas: no database at ${dbPath()} — refusing to create one here, ` +
+          `because a mistyped or unset ATLAS_DATA_DIR would silently start a ` +
+          `second empty store. Run \`npm run setup-db\` if this path is right.`
+      );
+    }
+    writeDb = open();
   }
+  return writeDb;
+}
+
+/**
+ * Create the database if absent and return a write connection. The ONE
+ * sanctioned creation path; `scripts/setup-db.ts` is its only caller, so
+ * "the database appeared" is always traceable to someone running setup-db.
+ */
+export function createDb(): Database.Database {
+  const dir = dataDir();
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!writeDb) writeDb = open();
   return writeDb;
 }
 
@@ -272,6 +365,10 @@ export function initSchema(db: Database.Database = getDb()): void {
   addColumnIfMissing(db, "context_cards", "sensitive", "sensitive INTEGER DEFAULT 0");
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_context_sensitive ON context_cards(sensitive)"
+  );
+  addColumnIfMissing(db, "tool_events", "sourceFile", "sourceFile TEXT");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_tool_events_source ON tool_events(sourceFile)"
   );
 }
 

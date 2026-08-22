@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import { generateOwnerSnapshot, OWNER_SNAPSHOT_PATH } from "@/lib/snapshot";
+import { generateOwnerSnapshot, ownerSnapshotFile } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
 import type { AIAvailability } from "@/lib/ai/provider";
 
@@ -41,7 +41,7 @@ function computeAiAvailability(): AIAvailability {
  */
 function main() {
   const snapshot = generateOwnerSnapshot(computeAiAvailability());
-  fs.writeFileSync(OWNER_SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2));
+  fs.writeFileSync(ownerSnapshotFile(), JSON.stringify(snapshot, null, 2));
   console.log(
     `atlas: owner snapshot written (${snapshot.repos.length} repos, ${snapshot.todos.length} todos, ` +
       `${snapshot.activity.length} events, ${snapshot.roadmap.length} roadmap, ` +

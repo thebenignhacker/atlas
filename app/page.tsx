@@ -1,4 +1,4 @@
-import { getRepos, getStats } from "@/lib/queries";
+import { getArtifactBuiltAt, getFreshness, getRepos, getStats } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { PortfolioView } from "@/components/PortfolioView";
@@ -26,7 +26,8 @@ export default async function PortfolioPage() {
       <PageHeader
         title="Portfolio"
         subtitle="Every project you're building, at a glance."
-        lastScanAt={stats.lastScanAt}
+        freshness={getFreshness(mode, "repos")}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <StatStrip
         stats={[

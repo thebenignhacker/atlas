@@ -1,4 +1,4 @@
-import { getUsage, getUsageScannedAt } from "@/lib/queries";
+import { getArtifactBuiltAt, getFreshness, getUsage } from "@/lib/queries";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { UsageCharts } from "@/components/UsageCharts";
 import { Sparkline } from "@/components/Sparkline";
@@ -119,10 +119,12 @@ function FeatureCard({ f }: { f: FeatureUsage }) {
 export default async function UsagePage() {
   const mode = await getRequestMode();
   let usage;
-  let scannedAt: string | null = null;
+  let freshness = null;
+  let builtAt: string | null = null;
   try {
     usage = getUsage(mode);
-    scannedAt = getUsageScannedAt(mode);
+    freshness = getFreshness(mode, "usage");
+    builtAt = getArtifactBuiltAt(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -152,7 +154,8 @@ export default async function UsagePage() {
       <PageHeader
         title="Usage"
         subtitle="Which Claude Code features this work actually leans on — mined from session transcripts. Metadata only: tool names and timing, never commands or content."
-        lastScanAt={scannedAt}
+        freshness={freshness}
+        artifactBuiltAt={builtAt}
       />
 
       {usage.totals.events === 0 ? (

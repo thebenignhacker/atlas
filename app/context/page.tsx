@@ -1,4 +1,4 @@
-import { getContextCards, getContextMetrics, getStats } from "@/lib/queries";
+import { getArtifactBuiltAt, getContextCards, getContextMetrics, getFreshness } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { ContextMetrics } from "@/components/ContextMetrics";
@@ -11,11 +11,9 @@ export default async function ContextPage() {
   const mode = await getRequestMode();
   let cards;
   let metrics;
-  let stats;
   try {
     cards = getContextCards(mode);
     metrics = getContextMetrics(mode);
-    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -29,7 +27,8 @@ export default async function ContextPage() {
       <PageHeader
         title="Context"
         subtitle="Verified facts about your projects — each pinned to its sources and a re-check command, so stale context flags itself instead of misleading you."
-        lastScanAt={stats.lastScanAt}
+        freshness={getFreshness(mode, "context")}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <ContextMetrics m={metrics} />
       <ContextView cards={cards} />

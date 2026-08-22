@@ -1,4 +1,4 @@
-import { getRepos, getStats, getTodos } from "@/lib/queries";
+import { getArtifactBuiltAt, getFreshness, getRepos, getTodos } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { TodoView } from "@/components/TodoView";
@@ -12,11 +12,9 @@ export default async function TodosPage() {
   if (mode === "public") return <OwnerOnly feature="Todos" />;
   let todos;
   let repos;
-  let stats;
   try {
     todos = getTodos(mode);
     repos = getRepos(mode);
-    stats = getStats(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -35,7 +33,8 @@ export default async function TodosPage() {
       <PageHeader
         title="Todos"
         subtitle="Every scattered note, unified and triageable."
-        lastScanAt={stats.lastScanAt}
+        freshness={getFreshness(mode, "todos")}
+        artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
       <StatStrip
         stats={[

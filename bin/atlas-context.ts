@@ -22,22 +22,26 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatDistanceToNow } from "date-fns";
-import { getDb, initSchema } from "@/lib/db";
+import { getDb, getMeta, initSchema } from "@/lib/db";
+import { legacySessionStateFile, sessionStateFile } from "@/lib/paths";
 import * as store from "@/lib/context/store";
+import * as train from "@/lib/context/train";
 import { getMetrics } from "@/lib/context/metrics";
 import type { ContextCard, Freshness } from "@/lib/types";
 
 // Route the DB to the Atlas repo regardless of where this is invoked from, but
-// keep the real cwd for resolving --source paths and verify commands. db.ts
-// reads ATLAS_DATA_DIR lazily (at getDb() call time), so setting it in the
+// keep the real cwd for resolving --source paths and verify commands.
+// lib/paths.ts resolves lazily (at call time), so setting the root in the
 // module body — before any command handler runs — is sufficient.
+//
+// Anchor the repo root to this file's own location, not the caller's cwd, then
+// let lib/paths.ts derive everything from it. Previously this set
+// ATLAS_DATA_DIR directly while `.current-session` was resolved against the
+// repo regardless — so pointing the database elsewhere detached session
+// attribution from the cards it labels, with nothing failing to show it.
 const ATLAS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-process.env.ATLAS_DATA_DIR ||= path.join(ATLAS_ROOT, "data");
+process.env.ATLAS_ROOT ||= ATLAS_ROOT;
 const INVOKE_CWD = process.cwd();
-
-/** Gitignored file the SessionStart hook writes the current harness session id
- *  into (the hook runs in a child process and can't set a parent env var). */
-const SESSION_STATE_FILE = path.join(ATLAS_ROOT, "data", ".current-session");
 
 /**
  * Resolve the originating Claude session id for an `add`:
@@ -47,12 +51,37 @@ const SESSION_STATE_FILE = path.join(ATLAS_ROOT, "data", ".current-session");
 function resolveSessionId(flag: string | undefined): string | undefined {
   if (flag) return flag;
   if (process.env.ATLAS_SESSION_ID) return process.env.ATLAS_SESSION_ID;
+  assertNoLegacySessionState();
   try {
-    const fromFile = fs.readFileSync(SESSION_STATE_FILE, "utf8").trim();
+    const fromFile = fs.readFileSync(sessionStateFile(), "utf8").trim();
     return fromFile || undefined;
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Refuse to run while a session-state file sits at the pre-unification
+ * location AND we are now reading a different one.
+ *
+ * Failing loudly is the point. Both files look valid, so any silent policy —
+ * prefer the new one, prefer the newer mtime, merge — stamps some session id
+ * onto every card written from here on, and a wrong origin is worse than none
+ * because it reads as evidence. The condition is also self-clearing: delete the
+ * stale file and the message goes away.
+ */
+function assertNoLegacySessionState(): void {
+  const legacy = legacySessionStateFile();
+  if (!legacy) return;
+  console.error(
+    `atlas: found a session-state file at the old location:\n` +
+      `  ${legacy}\n` +
+      `but session state is now read from:\n` +
+      `  ${sessionStateFile()}\n` +
+      `Refusing to guess which is current — a wrong originSessionId is worse ` +
+      `than none. Delete the old file to continue.`
+  );
+  process.exit(1);
 }
 
 // --- tiny arg parser -------------------------------------------------------
@@ -314,6 +343,27 @@ function cmdSession(a: Args): void {
       console.log(`registered session ${bold(s.id)} (${ago(s.startedAt)})`);
       break;
     }
+    // `begin` = write the state file + register, in one call.
+    //
+    // Exists so the SessionStart hook never computes a path. The hook used to
+    // `mkdir -p "$ATLAS/data"` itself, which recreated that directory inside
+    // the repo on EVERY session — reopening the "no data directory in the
+    // public tree" property by itself, the morning after any migration, with
+    // no failure to notice. A shell script cannot be kept in sync with
+    // lib/paths.ts; not letting it try is the fix.
+    case "begin": {
+      const id = str(a.flags.id);
+      if (!id) {
+        console.error("session begin requires --id <session-id>");
+        process.exit(2);
+      }
+      const stateFile = sessionStateFile();
+      fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+      fs.writeFileSync(stateFile, `${id}\n`);
+      const s = store.registerSession(db, { id, startedAt: str(a.flags.started) });
+      console.log(`began session ${bold(s.id)} (state: ${stateFile})`);
+      break;
+    }
     case "update": {
       const id = str(a.flags.id);
       if (!id) {
@@ -353,6 +403,255 @@ function cmdSession(a: Args): void {
   }
 }
 
+// --- release trains --------------------------------------------------------
+
+function deadlineNote(item: train.TrainItem, now: Date): string | null {
+  const state = train.deadlineState(item, now);
+  if (state === "none") return null;
+  const action = item.deadlineAction ? ` — ${item.deadlineAction}` : "";
+  if (state === "overdue") return paint(31, `deadline ${item.deadline} OVERDUE${action}`);
+  if (state === "due") return paint(33, `deadline ${item.deadline} is TODAY${action}`);
+  return dim(`deadline ${item.deadline}${action}`);
+}
+
+function printTrain(status: train.TrainStatus, now: Date): void {
+  console.log(`${bold(status.repo)} ${dim("— release train")}`);
+  const lease = status.lease;
+  if (lease.state === "none") {
+    console.log(
+      dim(`  lease: none — take with: atlas-context train lease ${status.repo}`)
+    );
+  } else {
+    const l = lease.lease;
+    const line = `  lease: ${l.sessionId.slice(0, 8)} until ${l.expiresAt}`;
+    console.log(
+      lease.state === "active"
+        ? paint(32, line)
+        : paint(31, `${line} — EXPIRED, held past its TTL; take it over explicitly`)
+    );
+  }
+  console.log(
+    `  ${status.pending.length} pending · ${status.doneCount} done`
+  );
+  for (const item of status.pending) {
+    console.log(`   #${item.id} ${dim(`[${item.kind}]`)} ${item.item}`);
+    const note = deadlineNote(item, now);
+    if (note) console.log(`       ${note}`);
+  }
+  console.log();
+}
+
+/**
+ * Advisory only: if the session board (written by `npm run scan`) shows another
+ * session holding this repo's primary checkout, say so before the lease is
+ * taken. Preference, not enforcement — the gates stay the wall.
+ */
+function warnIfCheckoutHeldElsewhere(
+  db: ReturnType<typeof getDb>,
+  repo: string,
+  mySessionId: string
+): void {
+  try {
+    const raw = getMeta(db, "sessionBoard");
+    if (!raw) return;
+    const board = JSON.parse(raw) as {
+      trees?: { repos?: { repo: string; holder: { sessionId: string | null; file: string } | null }[] }[];
+    };
+    for (const tree of board.trees ?? []) {
+      for (const r of tree.repos ?? []) {
+        if (r.repo !== repo || !r.holder?.sessionId) continue;
+        if (r.holder.sessionId !== mySessionId) {
+          console.log(
+            paint(
+              33,
+              `note: the session board shows ${r.holder.sessionId.slice(0, 8)} holding the ${repo} checkout (${r.holder.file}) — preference for cutting goes to that session`
+            )
+          );
+        }
+      }
+    }
+  } catch {
+    // The board is a convenience input here; its absence must not block a lease.
+  }
+}
+
+function cmdTrain(a: Args): void {
+  const db = getDb();
+  initSchema(db);
+  const sub = a._[1];
+  const repo = a._[2];
+  const now = new Date();
+  // Explicit annotation on the CONST, not just the arrow: control-flow analysis
+  // only treats a call as terminating when the callee's declared type says never.
+  const need: (what: string) => never = (what) => {
+    console.error(`train ${sub} requires ${what}`);
+    process.exit(2);
+  };
+  switch (sub) {
+    case "enqueue": {
+      if (!repo) need("<repo>");
+      const itemText = str(a.flags.item);
+      if (!itemText) need("--item <text>");
+      try {
+        const item = train.enqueueItem(db, {
+          repo,
+          item: itemText,
+          kind: a.flags["closing-step"] === true ? "closing-step" : "obligation",
+          deadline: str(a.flags.deadline) ?? null,
+          deadlineAction: str(a.flags["deadline-action"]) ?? null,
+          sessionId: resolveSessionId(str(a.flags.session)) ?? null,
+        }, now);
+        console.log(
+          `queued #${item.id} ${dim(`[${item.kind}]`)} on ${bold(repo)} — the merge is the handoff; move on`
+        );
+      } catch (err) {
+        console.error(`enqueue failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
+      break;
+    }
+    case "status": {
+      if (repo) {
+        const status = train.trainStatus(db, repo, now);
+        if (!status) {
+          console.error(`no release train for "${repo}"`);
+          process.exit(1);
+        }
+        if (a.flags.json === true) {
+          console.log(JSON.stringify({
+            ...status,
+            pending: status.pending.map((i) => ({
+              ...i,
+              deadlineState: train.deadlineState(i, now),
+            })),
+          }, null, 2));
+          return;
+        }
+        printTrain(status, now);
+        return;
+      }
+      const all = train.allStatuses(db, now);
+      if (a.flags.json === true) {
+        console.log(JSON.stringify(all, null, 2));
+        return;
+      }
+      if (!all.length) {
+        console.log(dim("no release trains."));
+        return;
+      }
+      for (const s of all) printTrain(s, now);
+      break;
+    }
+    case "lease": {
+      if (!repo) need("<repo>");
+      const sessionId = resolveSessionId(str(a.flags.session));
+      if (!sessionId) {
+        console.error(
+          "train lease requires a session identity (run inside a Claude session, set ATLAS_SESSION_ID, or pass --session <id>) — an anonymous lease cannot be compared against anyone"
+        );
+        process.exit(2);
+      }
+      const ttl = a.flags["ttl-hours"] !== undefined ? Number(str(a.flags["ttl-hours"])) : 24;
+      if (!Number.isFinite(ttl) || ttl <= 0) {
+        console.error(`--ttl-hours must be a positive number`);
+        process.exit(2);
+      }
+      try {
+        warnIfCheckoutHeldElsewhere(db, repo, sessionId);
+        const result = train.takeLease(db, repo, sessionId, ttl, now);
+        if (!result.ok) {
+          console.error(
+            paint(
+              31,
+              `refused: ${result.holder.sessionId.slice(0, 8)} holds the ${repo} conductor lease until ${result.holder.expiresAt} — coordinate with that session or wait for expiry`
+            )
+          );
+          process.exit(1);
+        }
+        if (result.displaced) {
+          console.log(
+            paint(
+              33,
+              `took over an EXPIRED lease from ${result.displaced.sessionId.slice(0, 8)} (expired ${result.displaced.expiresAt})`
+            )
+          );
+        }
+        console.log(
+          `${result.renewed ? "renewed" : "took"} the ${bold(repo)} conductor lease until ${result.lease.expiresAt}`
+        );
+      } catch (err) {
+        console.error(`lease failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
+      break;
+    }
+    case "release": {
+      if (!repo) need("<repo>");
+      const sessionId = resolveSessionId(str(a.flags.session)) ?? null;
+      const result = train.releaseLease(db, repo, sessionId, now);
+      if (!result.released) {
+        console.log(dim(`no lease to release on ${repo}.`));
+        return;
+      }
+      if (result.foreign) {
+        console.log(
+          paint(
+            33,
+            `released a lease held by ${result.wasHeldBy.slice(0, 8)} — if that session is still cutting, you have just un-coordinated it`
+          )
+        );
+      } else {
+        console.log(`released the ${bold(repo)} conductor lease`);
+      }
+      break;
+    }
+    case "done": {
+      if (!repo) need("<repo>");
+      const id = Number(str(a.flags.id));
+      if (!Number.isInteger(id)) need("--id <item-number>");
+      const item = train.markDone(db, repo, id, resolveSessionId(str(a.flags.session)) ?? null, now);
+      if (!item) {
+        console.error(`no item #${id} on the ${repo} train`);
+        process.exit(1);
+      }
+      console.log(`done #${item.id} ${dim(`[${item.kind}]`)} ${item.item}`);
+      break;
+    }
+    // For the SessionStart hook: one compact line per train with pending items,
+    // silent when there is nothing pending — quiet mornings stay quiet.
+    case "surface": {
+      const all = train.allStatuses(db, now);
+      const withPending = all.filter((s) => s.pending.length > 0);
+      if (!withPending.length) return;
+      console.log(
+        "[release-train] trains with pending items (details: atlas-context train status <repo>):"
+      );
+      for (const s of withPending) {
+        const overdue = s.pending.filter((i) => train.deadlineState(i, now) === "overdue");
+        const due = s.pending.filter((i) => train.deadlineState(i, now) === "due");
+        const bits = [`${s.pending.length} pending`];
+        if (overdue.length) {
+          bits.push(
+            `${overdue.length} OVERDUE (${overdue
+              .map((i) => `${i.deadline}: ${i.deadlineAction ?? i.item}`)
+              .join("; ")})`
+          );
+        }
+        if (due.length) bits.push(`${due.length} due today`);
+        if (s.lease.state === "active") bits.push(`lease ${s.lease.lease.sessionId.slice(0, 8)}`);
+        if (s.lease.state === "expired") bits.push("lease EXPIRED");
+        console.log(`  ${s.repo}: ${bits.join(" — ")}`);
+      }
+      break;
+    }
+    default:
+      console.error(
+        `unknown train subcommand: ${sub ?? "(none)"} — expected enqueue|status|lease|release|done|surface`
+      );
+      process.exit(2);
+  }
+}
+
 function cmdMetrics(a: Args): void {
   const db = getDb();
   initSchema(db);
@@ -387,9 +686,23 @@ usage:
   atlas-context supersede <id> --by <newId>
   atlas-context retire <id>
   atlas-context session [list] [--json]
+  atlas-context session begin    --id <id> [--started <iso>]
   atlas-context session register --id <id> [--started <iso>] [--summary S]
   atlas-context session update --id <id> [--summary S] [--branches a,b]
   atlas-context metrics [--json]
+
+  atlas-context train enqueue <repo> --item "text" [--closing-step]
+                    [--deadline YYYY-MM-DD] [--deadline-action "what to cut"]
+  atlas-context train status [<repo>] [--json]
+  atlas-context train lease <repo> [--ttl-hours N] [--session <id>]
+  atlas-context train release <repo>
+  atlas-context train done <repo> --id N
+  atlas-context train surface
+
+Release trains make a repo's release queue DATA: enqueue obligations at merge
+time and move on (the merge is the handoff); exactly one session at a time holds
+the advisory conductor lease to cut. Deadlines surface loudly once due. The
+publish gates remain the enforcement of last resort.
 
 A card needs at least one --source or a --verify command (or --confidence unverified).
 --sensitive marks a card never-publishable (dropped from every public surface, even
@@ -402,22 +715,33 @@ the SessionStart hook). Read at session start; re-verify anything flagged before
 
 const args = parseArgs(process.argv.slice(2));
 const cmd = args._[0];
-switch (cmd) {
-  case "add": cmdAdd(args); break;
-  case "get": cmdGet(args); break;
-  case "verify": cmdVerify(args); break;
-  case "list": cmdList(args); break;
-  case "search": cmdSearch(args); break;
-  case "supersede": cmdSupersede(args); break;
-  case "retire": cmdRetire(args); break;
-  case "session": cmdSession(args); break;
-  case "metrics": cmdMetrics(args); break;
-  case undefined:
-  case "help":
-  case "--help":
-  case "-h": help(); break;
-  default:
-    console.error(`unknown command: ${cmd}\n`);
-    help();
-    process.exit(2);
+try {
+  switch (cmd) {
+    case "add": cmdAdd(args); break;
+    case "get": cmdGet(args); break;
+    case "verify": cmdVerify(args); break;
+    case "list": cmdList(args); break;
+    case "search": cmdSearch(args); break;
+    case "supersede": cmdSupersede(args); break;
+    case "retire": cmdRetire(args); break;
+    case "session": cmdSession(args); break;
+    case "train": cmdTrain(args); break;
+    case "metrics": cmdMetrics(args); break;
+    case undefined:
+    case "help":
+    case "--help":
+    case "-h": help(); break;
+    default:
+      console.error(`unknown command: ${cmd}\n`);
+      help();
+      process.exit(2);
+  }
+} catch (err) {
+  // Print the MESSAGE, not the Error object. getDb() refusing to create a
+  // database is the ordinary first-run failure and its message already says
+  // what to run; a stack trace buries that one actionable line. Same policy
+  // as scripts/scan.ts; the stack stays available behind ATLAS_DEBUG.
+  console.error(`atlas-context: ${err instanceof Error ? err.message : String(err)}`);
+  if (process.env.ATLAS_DEBUG && err instanceof Error) console.error(err.stack);
+  process.exit(1);
 }

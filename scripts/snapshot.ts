@@ -5,11 +5,18 @@ import path from "node:path";
 import {
   generatePublicSnapshot,
   distinctiveTokens,
-  SNAPSHOT_PATH,
+  hiddenNameLeak,
+  snapshotPath,
 } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
+import { dbPath } from "@/lib/paths";
 import { slug } from "@/lib/context/store";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS, publicFeatureKey } from "@/lib/usage/catalog-meta";
+
+/** Anything that looks like an absolute or home-relative filesystem path. One
+ *  definition, used by every per-field check below, so a path shape can never
+ *  be caught in one section and missed in another. */
+const pathish = /(?:\/(?:Users|home|root|var|tmp|private|opt|mnt)\/|~\/|\\\\)/;
 
 /**
  * Generate the public snapshot, then ADVERSARIALLY verify it leaks nothing:
@@ -33,28 +40,53 @@ function main() {
 
   // 2) No private/fork repo names anywhere (incl. bare references in commit
   //    messages, descriptions, AI summaries). FAIL CLOSED if the DB is absent.
-  const dbPath = path.join(process.cwd(), "data", "atlas.db");
-  if (!fs.existsSync(dbPath)) {
+  // Was path.join(process.cwd(), "data", "atlas.db"): the gate opened a
+  // DIFFERENT database from the one lib/snapshot just read whenever
+  // ATLAS_DATA_DIR was set, so it could verify the wrong data and pass.
+  const gateDbPath = dbPath();
+  if (!fs.existsSync(gateDbPath)) {
     violations.push(
       "source database not found — cannot verify private repo names are absent (fail-closed)"
     );
   } else {
-    const db = new Database(dbPath, { readonly: true });
+    const db = new Database(gateDbPath, { readonly: true });
     const hidden = db
       .prepare("SELECT name FROM repos WHERE visibility != 'public' OR isFork = 1")
       .all() as { name: string }[];
     db.close();
-    const publicNames = new Set(snapshot.repos.map((r) => r.name));
+    // Every identifier this snapshot publishes on purpose. Compared against the
+    // WHOLE token a hidden name is found inside, below.
+    const publicIdentifiers = new Set(
+      snapshot.repos
+        .flatMap((r) => [r.name, r.slug, r.repoName])
+        .filter((s): s is string => !!s)
+        .map((s) => s.toLowerCase())
+    );
+    // Published repo NAMES only — deliberately not slugs or repoNames. A hidden
+    // repo whose name is literally a published repo's name (a fork, or two repos
+    // of the same name in different orgs) is already disclosed by that published
+    // name, so tokens extending it reveal nothing further, and checking it would
+    // deadlock the publish with no configuration remedy.
+    //
+    // Widening THIS set is what created a gate bypass: with slugs and repoNames
+    // in it, a private `secretless-ai` was exempted wholesale merely because an
+    // unrelated public repo carried `repoName: "secretless-ai"`, and every token
+    // containing that private name published freely. The wider set is still used
+    // below for per-TOKEN clearing, which is safe because each of its members is
+    // serialized into the artifact verbatim anyway.
+    const publishedNames = new Set(snapshot.repos.map((r) => r.name.toLowerCase()));
     for (const h of hidden) {
-      if (publicNames.has(h.name)) continue; // name also belongs to a public repo
+      if (publishedNames.has(h.name.toLowerCase())) continue;
       // Only flag DISTINCTIVE names. Generic single words ("test", "registry")
       // collide with normal commit-message English and reveal no private repo;
       // compound/namespaced or long names ("aim-roadmap") are the real signal.
       const distinctive = h.name.length >= 5 && (h.name.length >= 12 || /[-_]/.test(h.name));
       if (!distinctive) continue;
-      const esc = h.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      if (new RegExp(`\\b${esc}\\b`, "i").test(json))
-        violations.push(`hidden repo name "${h.name}" referenced in snapshot text`);
+      const leaked = hiddenNameLeak(h.name, json, publicIdentifiers);
+      if (leaked !== null)
+        violations.push(
+          `hidden repo name "${h.name}" referenced in snapshot text (as "${leaked}")`
+        );
     }
   }
 
@@ -118,12 +150,12 @@ function main() {
   const sensitiveSlugs = loadConfig().sensitiveRepos;
   const sensitiveSlugSet = new Set(sensitiveSlugs);
   if (sensitiveSlugs.length > 0) {
-    if (!fs.existsSync(dbPath)) {
+    if (!fs.existsSync(gateDbPath)) {
       violations.push(
         "source database not found — cannot verify sensitive content is absent (fail-closed)"
       );
     } else {
-      const db = new Database(dbPath, { readonly: true });
+      const db = new Database(gateDbPath, { readonly: true });
       // Fail closed (don't crash) if the DB predates the sensitive column: the
       // flag-based exclusion can't be trusted, so abort the snapshot.
       const hasSensitiveCol = (
@@ -250,7 +282,6 @@ function main() {
       }
       // A leaked filesystem path — NOT the legitimate "/" in a slash-command key
       // like "command:/clear". Genuine path markers only (home/system roots, "~/").
-      const pathish = /(?:\/(?:Users|home|root|var|tmp|private|opt|mnt)\/|~\/|\\\\)/;
       for (const f of usage.features) {
         if (pathish.test(f.feature) || pathish.test(f.displayName))
           violations.push(`usage feature "${f.feature}" contains a filesystem path`);
@@ -281,15 +312,55 @@ function main() {
     }
   }
 
+  // 9) Freshness block. Two separate failures are checked here, and the FIRST is
+  //    a fail-closed publish gate rather than a leak check: an artifact without
+  //    per-section ages cannot be read honestly (the reader has nothing to show
+  //    but the build time, which is the defect this block exists to remove), so
+  //    it must not be publishable at all.
+  const freshness = snapshot.freshness;
+  if (!freshness || typeof freshness !== "object") {
+    violations.push("freshness block missing from snapshot (fail-closed)");
+  } else {
+    for (const required of ["repos", "activity", "usage", "context"]) {
+      if (!freshness[required])
+        violations.push(`freshness section "${required}" missing`);
+    }
+    // Owner-only sections must not appear even as an empty shell: their mere
+    // presence would disclose that private todos/sessions exist and when they
+    // were last touched.
+    for (const ownerOnly of ["todos", "sessions", "sessionBoard", "roadmap", "strategy"]) {
+      if (freshness[ownerOnly])
+        violations.push(`freshness leaked owner-only section "${ownerOnly}"`);
+    }
+    for (const [name, f] of Object.entries(freshness)) {
+      if (f.builtAt !== snapshot.generatedAt)
+        violations.push(
+          `freshness section "${name}" builtAt disagrees with snapshot generatedAt`
+        );
+      // Collector notes quote what they were reading; the sanitizer strips paths
+      // and check 3 greps the whole document, but assert per-field so a failure
+      // names the section instead of the whole file.
+      if (f.note && pathish.test(f.note))
+        violations.push(`freshness note for "${name}" contains a filesystem path`);
+    }
+  }
+
   if (violations.length > 0) {
     console.error("atlas: SNAPSHOT ABORTED — sanitization failed:");
     for (const v of violations) console.error(`  - ${v}`);
     process.exit(1);
   }
 
-  fs.writeFileSync(SNAPSHOT_PATH, json);
+  fs.writeFileSync(snapshotPath(), json);
+  const usageFresh = snapshot.freshness?.usage;
   console.log(
     `atlas: public snapshot written (${snapshot.repos.length} public repos, ${snapshot.activity.length} events, ${Object.keys(snapshot.summaries).length} summaries, ${snapshot.contextCards.length} public context cards). Sanitization checks passed.`
+  );
+  // Print the age of what was just published. A build that silently republishes
+  // week-old mining output should say so at the moment it happens, not only on
+  // the page nobody reloads.
+  console.log(
+    `atlas: usage data collected ${usageFresh?.collectedAt ?? "never"}, newest event ${usageFresh?.dataAt ?? "none"} (status: ${usageFresh?.status ?? "unknown"})`
   );
 }
 
