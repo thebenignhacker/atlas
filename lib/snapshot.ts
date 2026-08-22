@@ -32,6 +32,7 @@ import { loadRoadmap } from "@/lib/roadmap";
 import type { RoadmapItem } from "@/lib/roadmap-shared";
 import { loadStrategyDocs } from "@/lib/strategy";
 import type { StrategyDoc } from "@/lib/strategy-shared";
+import type { SessionBoard } from "@/lib/session-board-shared";
 
 // Were module-load constants off process.cwd(): frozen at import time, so any
 // entry point that resolved its cwd differently read one file and wrote
@@ -204,6 +205,13 @@ export interface OwnerSnapshot {
   contextMetrics: ContextMetrics;
   /** Claude session registry — owner-only, never in the public snapshot. */
   sessions: Session[];
+  /**
+   * Session board: who holds what across the configured trees, from
+   * .claude-sessions/ files. Owner-only — session files name unpublished work
+   * and internal defects, the same boundary as todos. Null when a scan has
+   * never derived one.
+   */
+  sessionBoard: SessionBoard | null;
   /** Feature-usage rollup, full detail (real project names, recent raw events). */
   usage: UsageRollup;
   /** Per-section data age — see PublicSnapshot.freshness and lib/freshness.ts. */
@@ -641,6 +649,19 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
     const contextMetrics = getMetrics(db);
     const sessions = getSessions(db);
 
+    // Session board, as the last scan derived it. A parse failure surfaces as
+    // null here AND as an error section in the freshness block below — absent
+    // data must never render as a quiet empty board.
+    let sessionBoard: SessionBoard | null = null;
+    const boardRaw = getMeta(db, "sessionBoard");
+    if (boardRaw) {
+      try {
+        sessionBoard = JSON.parse(boardRaw) as SessionBoard;
+      } catch {
+        sessionBoard = null;
+      }
+    }
+
     // Feature usage: OWNER rollup. Full detail — real project names, full-
     // precision timestamps, and the last 80 raw events (with cwd/branch) for the
     // drill-down timeline. Gitignored owner snapshot only; never committed.
@@ -670,6 +691,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       contextCards,
       contextMetrics,
       sessions,
+      sessionBoard,
       usage,
       roadmap,
       strategy,

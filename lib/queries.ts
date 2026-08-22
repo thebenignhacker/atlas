@@ -11,6 +11,7 @@ import { computeFreshness } from "@/lib/freshness";
 import type { SectionFreshness } from "@/lib/freshness-shared";
 import { getToolEvents } from "@/lib/usage/store";
 import { rollupEvents } from "@/lib/usage/rollup";
+import type { SessionBoard } from "@/lib/session-board-shared";
 import { EMPTY_USAGE, type UsageRollup } from "@/lib/usage/types";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
 import { loadConfig } from "@/lib/config";
@@ -232,6 +233,28 @@ export function getSessions(mode: ResolvedMode): Session[] {
   const db = getReadDb();
   try {
     return getSessionsFromDb(db);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Session board — who holds what across the configured trees. Owner-only:
+ * session files name unpublished work, so public requests get null (the page
+ * shows the OwnerOnly gate before ever calling this).
+ */
+export function getSessionBoard(mode: ResolvedMode): SessionBoard | null {
+  if (mode === "public") return null;
+  if (mode === "owner") return loadOwnerSnapshot().sessionBoard ?? null;
+  const db = getReadDb();
+  try {
+    const raw = getMeta(db, "sessionBoard");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as SessionBoard;
+    } catch {
+      return null;
+    }
   } finally {
     db.close();
   }

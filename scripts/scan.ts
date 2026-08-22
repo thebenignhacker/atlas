@@ -6,6 +6,8 @@ import { loadConfig } from "@/lib/config";
 import { scanRepos } from "@/lib/scanners/repos";
 import { scanTodos } from "@/lib/scanners/todos";
 import { scanActivity } from "@/lib/scanners/activity";
+import { boardCounts, scanSessionBoard } from "@/lib/session-board";
+import type { SessionBoard } from "@/lib/session-board-shared";
 import type { ActivityEvent, Repo, Todo } from "@/lib/types";
 
 const REPO_COLS = `slug,name,path,groupName,remoteUrl,owner,repoName,branch,lastCommitAt,lastCommitSha,lastCommitMsg,commitCount30d,dirty,ahead,behind,visibility,isFork,isArchived,language,stars,openIssues,openPrs,defaultBranch,pushedAt,description,scannedAt`;
@@ -123,6 +125,60 @@ async function main() {
   if (repos.length < priorRepoCount) {
     notes.push(`repo count fell ${priorRepoCount} → ${repos.length}`);
   }
+
+  // Session board: who holds what across the configured trees, parsed through
+  // the claim guard's OWN parser (scripts/session-board.py). If that bridge is
+  // unavailable the board is recorded as unavailable — loudly, never re-derived
+  // by a second parser that could drift from the guard. A board failure never
+  // fails the scan: the board is a view; the repos and todos above are good.
+  let board: SessionBoard;
+  try {
+    board = scanSessionBoard(config);
+    const counts = boardCounts(board);
+    setMeta("sessionBoardScannedAt", now);
+    setMeta("sessionBoardActiveCount", String(counts.active));
+    console.log(
+      `atlas: session board — ${board.trees.length} tree(s), ${counts.active} active session(s), ${counts.staleActive} stale-active`
+    );
+    for (const tree of board.trees) {
+      const label = tree.tree.split("/").pop() ?? tree.tree;
+      for (const repo of tree.repos) {
+        if (repo.holder) {
+          const others = repo.sessions.length - 1;
+          console.log(
+            `  ${label}/${repo.repo} — held by ${repo.holder.file}` +
+              (repo.holder.sessionId ? ` (${repo.holder.sessionId.slice(0, 8)})` : "") +
+              (others > 0 ? ` +${others} more claimant(s)` : "")
+          );
+        }
+        for (const w of repo.worktrees) {
+          console.log(
+            `  ${label}/${repo.repo} worktree ${w.path}` +
+              (w.branch ? ` [${w.branch}]` : "") +
+              (w.matchedFiles.length ? ` — named by ${w.matchedFiles.join(", ")}` : "")
+          );
+        }
+      }
+      if (tree.staleActives.length) {
+        console.log(
+          `  ${label}: ${tree.staleActives.length} stale-active session file(s) — archive these:`
+        );
+        for (const s of tree.staleActives) {
+          console.log(`    ${s.file} (${Math.round(s.ageDays)}d)`);
+        }
+      }
+      for (const n of tree.notes) console.warn(`  ${label}: ${n}`);
+    }
+    if (counts.staleActive > 0) {
+      notes.push(`${counts.staleActive} stale-active session file(s)`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    board = { generatedAt: now, guardPath: null, trees: [], error: msg };
+    console.warn(`atlas: session board UNAVAILABLE — ${msg}`);
+    notes.push("session board unavailable");
+  }
+  setMeta("sessionBoard", JSON.stringify(board));
 
   finish(repos.length === 0 ? "empty" : "ok", {
     rowsIn: config.scanRoots.length,

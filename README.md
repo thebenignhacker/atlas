@@ -128,7 +128,7 @@ To enable: set `ai.enabled` to `true` and provide a key
 | Command | What it does |
 |---|---|
 | `npm run setup-db` | Create the local SQLite schema |
-| `npm run scan` | Scan your repos and todos into the database |
+| `npm run scan` | Scan your repos, todos, and session board into the database |
 | `npm run scan:usage` | Mine Claude Code feature usage from local session transcripts |
 | `npm run snapshot` | Generate the sanitized public snapshot (for a public demo) |
 | `npm run snapshot:owner` | Generate the full owner snapshot (for a private remote view) |

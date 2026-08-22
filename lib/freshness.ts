@@ -159,6 +159,27 @@ export function computeFreshness(
       collectedAt: sessionsAt,
       count: count(db, "sessions"),
     });
+    // Session board: stored as one generated document in meta, not a table.
+    // A board recorded with an `error` field is a collector failure and must
+    // read as one — "unavailable" would tone as never-collected and quiet.
+    out.sessionBoard = (() => {
+      const raw = getMeta(db, "sessionBoard");
+      // The board is generated at scan time, so the collection instant IS the
+      // data instant (same reasoning as context cards above).
+      const base = section(db, builtAt, {
+        dataAt: getMeta(db, "sessionBoardScannedAt"),
+        collectedAt: getMeta(db, "sessionBoardScannedAt"),
+        count: raw == null ? null : Number(getMeta(db, "sessionBoardActiveCount") ?? "0"),
+        stage: "scan",
+      });
+      if (!raw) return base;
+      try {
+        const board = JSON.parse(raw) as { error?: string };
+        return board.error ? { ...base, status: "error" as const, note: board.error } : base;
+      } catch {
+        return { ...base, status: "error" as const, note: "session board is unparseable" };
+      }
+    })();
   }
 
   return out;
