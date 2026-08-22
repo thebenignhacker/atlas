@@ -165,17 +165,48 @@ session with the repos/branches it touched, the cards it established, and a
 copyable `claude --resume <id>` command to jump back into it. Each context card
 links to its originating session.
 
+## Release trains — the release queue as data
+
+A repo's release is a serial resource: one version line, a capped publish
+budget, ordered post-publish obligations. Trains keep that state as data
+instead of prose handoff files that go stale within a day.
+
+```
+atlas-context train enqueue <repo> --item "…" [--closing-step]
+                    [--deadline YYYY-MM-DD] [--deadline-action "what to cut"]
+atlas-context train status [<repo>] [--json]   # queue, lease, due/overdue triggers
+atlas-context train lease <repo> [--ttl-hours N]
+atlas-context train release <repo>
+atlas-context train done <repo> --id N
+atlas-context train surface                    # one line per pending train; silent when none
+```
+
+The model: any session **enqueues** obligations at merge time and moves on —
+the merge is the handoff, and nobody waits for the release. Exactly one session
+at a time holds the **conductor lease** for a repo; taking it is explicit,
+another session's unexpired lease refuses loudly, and expiry shows as EXPIRED
+rather than being silently reassigned. An item may carry a **deadline** with an
+action ("no publish by this date → cut a patch with this item alone"), surfaced
+loudly once due. The SessionStart hook prints pending trains via
+`train surface`.
+
+Trains are advisory and visible, never enforcing: the existing release gates
+remain the enforcement of last resort, and Atlas being unreachable degrades to
+files + gates — it can never block a publish.
+
 ## Where things live
 
 | Path | What |
 |------|------|
 | `bin/atlas-context.ts` | the CLI |
 | `lib/context/store.ts` | add / get / verify / freshness engine |
+| `lib/context/train.ts` | release trains: queue / lease / deadline logic |
 | `lib/context/provenance.ts` | source hashing + drift detection |
 | `lib/context/metrics.ts` | metrics + honesty constants |
 | `data/atlas.db` (table `context_cards`) | the cards (gitignored) |
 | `data/atlas.db` (table `context_events`) | the event log behind the metrics |
 | `data/atlas.db` (table `sessions`) | the Claude session registry (gitignored) |
+| `data/atlas.db` (tables `release_trains`, `train_items`) | the release trains (gitignored) |
 | `data/.current-session` | the harness session id the hook records (gitignored) |
 | `lib/paths.ts` | the ONLY module that computes a data or artifact path |
 

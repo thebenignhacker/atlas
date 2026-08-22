@@ -247,6 +247,34 @@ CREATE TABLE IF NOT EXISTS scan_runs (
   note TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_scan_runs_stage ON scan_runs(stage, id);
+
+-- Release trains: per-repo release coordination as DATA (queue of obligations,
+-- one advisory conductor lease, deadline triggers). See lib/context/train.ts.
+-- Reporting-only: the publish gates stay the enforcement of last resort, so
+-- nothing here is a runtime dependency of a release.
+CREATE TABLE IF NOT EXISTS release_trains (
+  repo TEXT PRIMARY KEY,
+  leaseSessionId TEXT,
+  leaseTakenAt TEXT,
+  leaseExpiresAt TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS train_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  repo TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'obligation',   -- 'obligation' | 'closing-step'
+  item TEXT NOT NULL,
+  deadline TEXT,            -- YYYY-MM-DD; due/overdue is derived at read time
+  deadlineAction TEXT,      -- what to cut when the deadline passes unmet
+  status TEXT NOT NULL DEFAULT 'pending',    -- 'pending' | 'done'
+  addedBySessionId TEXT,
+  addedAt TEXT NOT NULL,
+  doneAt TEXT,
+  doneBySessionId TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_train_items_repo ON train_items(repo, status);
 `;
 
 let writeDb: Database.Database | null = null;
