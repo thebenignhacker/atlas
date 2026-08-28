@@ -46,6 +46,71 @@ function parseEnum<T extends string>(raw: string | null, allowed: T[]): T | null
   return allowed.includes(v) ? v : null;
 }
 
+/**
+ * Parse ONE card file. The single parser both the full scan and the incremental
+ * hook ingest go through — a second parser that could drift is the session-board
+ * failure class, refused at build time. Returns null (with a warned reason) for
+ * a non-card: README, unreadable, no Decision line, unrecognised Class/Status.
+ */
+export function parseDecisionFile(filePath: string, scannedAt?: string): Decision | null {
+  const name = path.basename(filePath);
+  if (!name.toLowerCase().endsWith(".md") || name.toLowerCase() === "readme.md") return null;
+  let content: string;
+  let mtime: string;
+  try {
+    content = fs.readFileSync(filePath, "utf8");
+    mtime = fs.statSync(filePath).mtime.toISOString();
+  } catch {
+    return null;
+  }
+  const decision = field(content, "Decision");
+  if (!decision) {
+    console.warn(`atlas: decisions — skipping ${name}: no **Decision:** line`);
+    return null;
+  }
+  const dateFromName = name.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
+  const klass = parseEnum(field(content, "Class"), CLASSES);
+  const status = parseEnum(field(content, "Status"), STATUSES);
+  if (!klass || !status) {
+    console.warn(
+      `atlas: decisions — skipping ${name}: unrecognised Class/Status (append-only log; fix the card, not the parser)`
+    );
+    return null;
+  }
+  const body = content
+    .split(/^## Log$/m)[0]
+    .replace(/^#\s.+$/m, "")
+    .replace(/^\*\*[A-Za-z ]+:\*\*.*$/gm, "")
+    .trim();
+
+  return {
+    id: name.replace(/\.md$/i, ""),
+    path: filePath,
+    filename: name,
+    title: firstHeading(content, name.replace(/\.md$/i, "")),
+    date: field(content, "Date") ?? dateFromName,
+    sessionId: field(content, "Session"),
+    chief: field(content, "Chief"),
+    klass,
+    status,
+    tree: field(content, "Tree"),
+    decision,
+    why: field(content, "Why"),
+    alternatives: field(content, "Alternatives"),
+    reversibility: field(content, "Reversibility"),
+    reviewTrigger: field(content, "Review trigger"),
+    supersedes: (() => {
+      const s = field(content, "Supersedes");
+      return s && s.toLowerCase() !== "none" ? s : null;
+    })(),
+    links: field(content, "Links"),
+    body: body.slice(0, 4000),
+    modifiedAt: mtime,
+    checksum: md5(content),
+    scannedAt: scannedAt ?? new Date().toISOString(),
+  };
+}
+
 export function scanDecisions(config: AtlasConfig): Decision[] {
   const scannedAt = new Date().toISOString();
   const decisions: Decision[] = [];
@@ -60,63 +125,8 @@ export function scanDecisions(config: AtlasConfig): Decision[] {
       continue;
     }
     for (const name of entries) {
-      if (!name.toLowerCase().endsWith(".md")) continue;
-      if (name.toLowerCase() === "readme.md") continue;
-      const filePath = path.join(dir, name);
-      let content: string;
-      let mtime: string;
-      try {
-        content = fs.readFileSync(filePath, "utf8");
-        mtime = fs.statSync(filePath).mtime.toISOString();
-      } catch {
-        continue;
-      }
-      const decision = field(content, "Decision");
-      if (!decision) {
-        console.warn(`atlas: decisions — skipping ${name}: no **Decision:** line`);
-        continue;
-      }
-      const dateFromName = name.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
-      const klass = parseEnum(field(content, "Class"), CLASSES);
-      const status = parseEnum(field(content, "Status"), STATUSES);
-      if (!klass || !status) {
-        console.warn(
-          `atlas: decisions — skipping ${name}: unrecognised Class/Status (append-only log; fix the card, not the parser)`
-        );
-        continue;
-      }
-      const body = content
-        .split(/^## Log$/m)[0]
-        .replace(/^#\s.+$/m, "")
-        .replace(/^\*\*[A-Za-z ]+:\*\*.*$/gm, "")
-        .trim();
-
-      decisions.push({
-        id: name.replace(/\.md$/i, ""),
-        path: filePath,
-        filename: name,
-        title: firstHeading(content, name.replace(/\.md$/i, "")),
-        date: field(content, "Date") ?? dateFromName,
-        sessionId: field(content, "Session"),
-        chief: field(content, "Chief"),
-        klass,
-        status,
-        tree: field(content, "Tree"),
-        decision,
-        why: field(content, "Why"),
-        alternatives: field(content, "Alternatives"),
-        reversibility: field(content, "Reversibility"),
-        reviewTrigger: field(content, "Review trigger"),
-        supersedes: (() => {
-          const s = field(content, "Supersedes");
-          return s && s.toLowerCase() !== "none" ? s : null;
-        })(),
-        links: field(content, "Links"),
-        body: body.slice(0, 4000),
-        modifiedAt: mtime,
-        checksum: md5(content),
-        scannedAt,
-      });
+      const parsed = parseDecisionFile(path.join(dir, name), scannedAt);
+      if (parsed) decisions.push(parsed);
     }
   }
   decisions.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
