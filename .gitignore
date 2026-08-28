@@ -67,3 +67,6 @@ AGENTS.md
 # local quality-gate markers
 .pre-push-review-passed
 .release-test-passed
+
+# nightly refresh log (local machinery)
+.nightly-refresh.log*
