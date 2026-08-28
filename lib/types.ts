@@ -64,6 +64,44 @@ export interface Todo {
   scannedAt: string;
 }
 
+/** Decision-log card classes. */
+export type DecisionClass =
+  | "adopted"
+  | "queued-for-owner"
+  | "conflict"
+  | "superseding"
+  | "reversal";
+export type DecisionStatus = "executed" | "pending" | "superseded" | "reversed";
+
+/**
+ * One decision card from `<todoDir>/decisions/` — an auto-adopted recommendation
+ * or an action queued for the owner, with its why/alternatives/revert path. Owner-only
+ * everywhere: never in the public snapshot (its verifier asserts absence).
+ */
+export interface Decision {
+  id: string;
+  path: string;
+  filename: string;
+  title: string;
+  date: string | null;
+  sessionId: string | null;
+  chief: string | null;
+  klass: DecisionClass;
+  status: DecisionStatus;
+  tree: string | null;
+  decision: string;
+  why: string | null;
+  alternatives: string | null;
+  reversibility: string | null;
+  reviewTrigger: string | null;
+  supersedes: string | null;
+  links: string | null;
+  body: string;
+  modifiedAt: string;
+  checksum: string;
+  scannedAt: string;
+}
+
 export interface ActivityEvent {
   id: string;
   repoSlug: string | null;

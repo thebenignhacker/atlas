@@ -141,6 +141,9 @@ function listMarkdown(dir: string): { path: string; archived: boolean }[] {
       const full = path.join(d, e.name);
       if (e.isDirectory()) {
         if (e.name.startsWith(".")) continue;
+        // Decision cards have their own scanner and table; ingesting them here
+        // too would render every card as a todo on the board.
+        if (e.name === "decisions") continue;
         walk(full, archived || /archive|done/i.test(e.name));
       } else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) {
         out.push({ path: full, archived });

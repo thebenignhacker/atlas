@@ -61,6 +61,31 @@ CREATE TABLE IF NOT EXISTS todos (
 CREATE INDEX IF NOT EXISTS idx_todos_repo ON todos(repoSlug);
 CREATE INDEX IF NOT EXISTS idx_todos_priority ON todos(priority);
 CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
+CREATE TABLE IF NOT EXISTS decisions (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL,
+  filename TEXT,
+  title TEXT,
+  date TEXT,
+  sessionId TEXT,
+  chief TEXT,
+  klass TEXT,
+  status TEXT,
+  tree TEXT,
+  decision TEXT,
+  why TEXT,
+  alternatives TEXT,
+  reversibility TEXT,
+  reviewTrigger TEXT,
+  supersedes TEXT,
+  links TEXT,
+  body TEXT,
+  modifiedAt TEXT,
+  checksum TEXT,
+  scannedAt TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
+CREATE INDEX IF NOT EXISTS idx_decisions_klass ON decisions(klass);
 CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(createdAt);
 
 CREATE TABLE IF NOT EXISTS activity (

@@ -153,6 +153,12 @@ export function computeFreshness(
       count: count(db, "todos"),
       stage: "scan",
     });
+    out.decisions = section(db, builtAt, {
+      dataAt: scalar(db, "SELECT max(modifiedAt) AS v FROM decisions"),
+      collectedAt: lastScanAt,
+      count: count(db, "decisions"),
+      stage: "scan",
+    });
     const sessionsAt = scalar(db, "SELECT max(updatedAt) AS v FROM sessions");
     out.sessions = section(db, builtAt, {
       dataAt: sessionsAt,
