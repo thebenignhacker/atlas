@@ -9,6 +9,7 @@ import type {
   ActivityEvent,
   ContextCard,
   ContextMetrics,
+  Decision,
   Repo,
   Session,
   Todo,
@@ -194,6 +195,13 @@ export interface OwnerSnapshot {
   activity: ActivityEvent[];
   summaries: Record<string, string>;
   todos: Todo[];
+  /**
+   * Decision-log cards from `<todoDir>/decisions/` (Autonomy Doctrine
+   * Amendment 1): auto-adopted recommendations and queued-for-Abdel actions.
+   * Owner-only — the same boundary as todos; the public snapshot's verifier
+   * asserts this section's absence.
+   */
+  decisions: Decision[];
   /** Latest cached portfolio digest, or null if none was ever generated. */
   digest: DigestResult | null;
   cost: AICostSummary;
@@ -576,6 +584,10 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       .prepare("SELECT * FROM todos ORDER BY createdAt DESC")
       .all() as Todo[];
 
+    const decisions = db
+      .prepare("SELECT * FROM decisions ORDER BY date DESC")
+      .all() as Decision[];
+
     const activity = db
       .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000")
       .all() as ActivityEvent[];
@@ -684,6 +696,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       activity,
       summaries,
       todos,
+      decisions,
       digest,
       cost,
       feedback,

@@ -5,13 +5,15 @@ import { finishRun, pruneRuns, startRun } from "@/lib/scan-runs";
 import { loadConfig } from "@/lib/config";
 import { scanRepos } from "@/lib/scanners/repos";
 import { scanTodos } from "@/lib/scanners/todos";
+import { scanDecisions } from "@/lib/scanners/decisions";
 import { scanActivity } from "@/lib/scanners/activity";
 import { boardCounts, scanSessionBoard } from "@/lib/session-board";
 import type { SessionBoard } from "@/lib/session-board-shared";
-import type { ActivityEvent, Repo, Todo } from "@/lib/types";
+import type { ActivityEvent, Decision, Repo, Todo } from "@/lib/types";
 
 const REPO_COLS = `slug,name,path,groupName,remoteUrl,owner,repoName,branch,lastCommitAt,lastCommitSha,lastCommitMsg,commitCount30d,dirty,ahead,behind,visibility,isFork,isArchived,language,stars,openIssues,openPrs,defaultBranch,pushedAt,description,scannedAt`;
 const TODO_COLS = `id,path,filename,title,createdAt,modifiedAt,priority,status,repoSlug,repoGuess,triggerPhrase,kind,excerpt,source,checksum,scannedAt`;
+const DECISION_COLS = `id,path,filename,title,date,sessionId,chief,klass,status,tree,decision,why,alternatives,reversibility,reviewTrigger,supersedes,links,body,modifiedAt,checksum,scannedAt`;
 const ACT_COLS = `id,repoSlug,type,title,ts,meta,scannedAt`;
 
 function placeholders(cols: string): string {
@@ -76,19 +78,24 @@ async function main() {
   const todos = scanTodos(config, repos);
   console.log(`atlas: parsed ${todos.length} todos`);
 
+  const decisions = scanDecisions(config);
+  console.log(`atlas: parsed ${decisions.length} decision cards`);
+
   const activity = scanActivity(repos);
   console.log(`atlas: collected ${activity.length} activity events`);
 
   // Full-snapshot replace of derived tables; AI/feedback/prefs persist.
   const repoInsert = db.prepare(`INSERT INTO repos (${REPO_COLS}) VALUES (${placeholders(REPO_COLS)})`);
   const todoInsert = db.prepare(`INSERT INTO todos (${TODO_COLS}) VALUES (${placeholders(TODO_COLS)})`);
+  const decisionInsert = db.prepare(`INSERT INTO decisions (${DECISION_COLS}) VALUES (${placeholders(DECISION_COLS)})`);
   const actInsert = db.prepare(`INSERT INTO activity (${ACT_COLS}) VALUES (${placeholders(ACT_COLS)})`);
 
   const write = db.transaction(
-    (rs: Repo[], ts: Todo[], as: ActivityEvent[]) => {
-      db.exec("DELETE FROM repos; DELETE FROM todos; DELETE FROM activity;");
+    (rs: Repo[], ts: Todo[], ds: Decision[], as: ActivityEvent[]) => {
+      db.exec("DELETE FROM repos; DELETE FROM todos; DELETE FROM decisions; DELETE FROM activity;");
       for (const r of rs) repoInsert.run(r);
       for (const t of ts) todoInsert.run(t);
+      for (const d of ds) decisionInsert.run(d);
       for (const a of as) actInsert.run(a);
     }
   );
@@ -103,12 +110,13 @@ async function main() {
     });
   }
 
-  write(repos, todos, activity);
+  write(repos, todos, decisions, activity);
 
   const now = new Date().toISOString();
   setMeta("lastScanAt", now);
   setMeta("repoCount", String(repos.length));
   setMeta("todoCount", String(todos.length));
+  setMeta("decisionCount", String(decisions.length));
   setMeta("activityCount", String(activity.length));
   setMeta("githubEnriched", String(githubEnriched));
 

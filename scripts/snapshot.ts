@@ -328,7 +328,7 @@ function main() {
     // Owner-only sections must not appear even as an empty shell: their mere
     // presence would disclose that private todos/sessions exist and when they
     // were last touched.
-    for (const ownerOnly of ["todos", "sessions", "sessionBoard", "roadmap", "strategy"]) {
+    for (const ownerOnly of ["todos", "decisions", "sessions", "sessionBoard", "roadmap", "strategy"]) {
       if (freshness[ownerOnly])
         violations.push(`freshness leaked owner-only section "${ownerOnly}"`);
     }

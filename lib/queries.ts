@@ -19,6 +19,7 @@ import type {
   ActivityEvent,
   ContextCard,
   ContextMetrics,
+  Decision,
   Repo,
   RepoSignals,
   Session,
@@ -118,6 +119,20 @@ export function getRepoSummary(mode: ResolvedMode, slug: string): string | null 
   if (mode === "public") return loadPublicSnapshot().summaries[slug] ?? null;
   if (mode === "owner") return loadOwnerSnapshot().summaries[slug] ?? null;
   return getLatestOutput("repo", slug, "summary")?.output ?? null;
+}
+
+/** Decision-log cards. Owner-only: the public mode always sees an empty list. */
+export function getDecisions(mode: ResolvedMode): Decision[] {
+  if (mode === "public") return []; // decisions are never exposed publicly
+  if (mode === "owner") return loadOwnerSnapshot().decisions ?? [];
+  const db = getReadDb();
+  try {
+    return db
+      .prepare("SELECT * FROM decisions ORDER BY date DESC")
+      .all() as Decision[];
+  } catch {
+    return [];
+  }
 }
 
 export interface TodoFilters {
