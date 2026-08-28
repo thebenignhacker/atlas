@@ -9,15 +9,15 @@ export const dynamic = "force-dynamic";
 
 const CLASS_LABEL: Record<Decision["klass"], string> = {
   adopted: "adopted",
-  "queued-for-abdel": "queued for you",
-  conflict: "cross-chief conflict",
+  "queued-for-owner": "queued for you",
+  conflict: "conflict",
   superseding: "superseding",
   reversal: "reversal",
 };
 
 const CLASS_ACCENT: Record<Decision["klass"], string> = {
   adopted: "border-teal/40 text-teal",
-  "queued-for-abdel": "border-amber/50 text-amber",
+  "queued-for-owner": "border-amber/50 text-amber",
   conflict: "border-rose/50 text-rose",
   superseding: "border-line text-dim",
   reversal: "border-rose/50 text-rose",
@@ -99,7 +99,7 @@ export default async function DecisionsPage() {
   }
 
   const queued = decisions.filter(
-    (d) => d.klass === "queued-for-abdel" && d.status === "pending"
+    (d) => d.klass === "queued-for-owner" && d.status === "pending"
   );
   const conflicts = decisions.filter((d) => d.klass === "conflict" && d.status === "pending");
   const rest = decisions.filter((d) => !queued.includes(d) && !conflicts.includes(d));
@@ -108,7 +108,7 @@ export default async function DecisionsPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Decisions"
-        subtitle="Every auto-adopted recommendation and queued action — what was chosen, why, and how to revert. Autonomy Doctrine Amendment 1."
+        subtitle="Every auto-adopted recommendation and queued action — what was chosen, why, and how to revert."
         freshness={getFreshness(mode, "decisions")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
@@ -146,7 +146,7 @@ export default async function DecisionsPage() {
       {conflicts.length > 0 && (
         <section className="mt-6">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose">
-            Unresolved cross-chief conflicts — both positions carried intact
+            Unresolved conflicts — both positions carried intact
           </h2>
           <div className="space-y-3">
             {conflicts.map((d) => (

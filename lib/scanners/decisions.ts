@@ -5,10 +5,10 @@ import type { AtlasConfig } from "@/lib/config";
 import type { Decision, DecisionClass, DecisionStatus } from "@/lib/types";
 
 /**
- * Decision-log scanner (Autonomy Doctrine Amendment 1, 2026-08-28).
+ * Decision-log scanner.
  *
  * Reads `<todoDir>/decisions/*.md` — one card per auto-adopted recommendation or
- * queued-for-Abdel action, house `**Field:**` format, spec in the directory's
+ * owner-queued action, house `**Field:**` format, spec in the directory's
  * README. Owner-only end to end: the table feeds the owner snapshot and the
  * /decisions page; the public snapshot's verifier asserts the section's ABSENCE.
  *
@@ -33,7 +33,7 @@ function firstHeading(content: string, fallback: string): string {
 
 const CLASSES: DecisionClass[] = [
   "adopted",
-  "queued-for-abdel",
+  "queued-for-owner",
   "conflict",
   "superseding",
   "reversal",

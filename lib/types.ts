@@ -64,10 +64,10 @@ export interface Todo {
   scannedAt: string;
 }
 
-/** Decision-log card classes (Autonomy Doctrine Amendment 1). */
+/** Decision-log card classes. */
 export type DecisionClass =
   | "adopted"
-  | "queued-for-abdel"
+  | "queued-for-owner"
   | "conflict"
   | "superseding"
   | "reversal";
@@ -75,7 +75,7 @@ export type DecisionStatus = "executed" | "pending" | "superseded" | "reversed";
 
 /**
  * One decision card from `<todoDir>/decisions/` — an auto-adopted recommendation
- * or an action queued for Abdel, with its why/alternatives/revert path. Owner-only
+ * or an action queued for the owner, with its why/alternatives/revert path. Owner-only
  * everywhere: never in the public snapshot (its verifier asserts absence).
  */
 export interface Decision {
