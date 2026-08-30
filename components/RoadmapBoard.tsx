@@ -23,12 +23,28 @@ const STATUS_META: Record<
   RoadmapStatus,
   { label: string; dot: string; text: string; chip: string }
 > = {
+  todo: { label: "Seeded", dot: "bg-muted", text: "text-muted", chip: "bg-muted/15 text-muted" },
   blocked: { label: "Blocked", dot: "bg-dormant", text: "text-dormant", chip: "bg-dormant/15 text-dormant" },
   ready: { label: "Ready", dot: "bg-teal", text: "text-teal", chip: "bg-teal/15 text-teal" },
   "in-progress": { label: "In progress", dot: "bg-marigold", text: "text-amber", chip: "bg-amber/15 text-amber" },
   "in-review": { label: "In review", dot: "bg-purple", text: "text-purple", chip: "bg-purple/15 text-purple" },
   done: { label: "Done", dot: "bg-fresh", text: "text-fresh", chip: "bg-fresh/15 text-fresh" },
+  retired: { label: "Retired", dot: "bg-clay", text: "text-clay", chip: "bg-clay/15 text-clay" },
 };
+
+/**
+ * Column layout for the by-status view: the five active-lifecycle statuses,
+ * with "todo" (seeded — not yet vetted) as a distinct sub-band below Ready and
+ * "retired" (terminal-negative) as a distinct sub-band below Done. Seeded work
+ * is never merged into Ready and retired work never reads as Done.
+ */
+const BOARD_COLUMNS: { status: RoadmapStatus; sub?: RoadmapStatus }[] = [
+  { status: "blocked" },
+  { status: "ready", sub: "todo" },
+  { status: "in-progress" },
+  { status: "in-review" },
+  { status: "done", sub: "retired" },
+];
 
 export function RoadmapBoard({
   items,
@@ -69,6 +85,9 @@ export function RoadmapBoard({
     if (statusFilter === "active") {
       if (i.status !== "in-progress" && i.status !== "in-review") return false;
     } else if (statusFilter === "ready-to-start") {
+      // Seeded (todo) items are unvetted and retired items are closed — neither
+      // is ready to start, even with every dependency done.
+      if (i.status === "todo" || i.status === "retired") return false;
       if (i.status !== "ready" && !depsClear(i)) return false;
     } else if (statusFilter !== "all" && i.status !== statusFilter) {
       return false;
@@ -244,9 +263,11 @@ export function RoadmapBoard({
         </div>
       ) : group === "status" ? (
         <div className="grid gap-4 lg:grid-cols-5">
-          {ROADMAP_STATUSES.map((s) => {
+          {BOARD_COLUMNS.map(({ status: s, sub }) => {
             const col = visible.filter((i) => i.status === s);
+            const subCol = sub ? visible.filter((i) => i.status === sub) : [];
             const meta = STATUS_META[s];
+            const subMeta = sub ? STATUS_META[sub] : null;
             return (
               <div key={s} className="min-w-0">
                 <div className="mb-2 flex items-center gap-2 px-0.5">
@@ -264,6 +285,18 @@ export function RoadmapBoard({
                   )}
                   {col.map(card)}
                 </div>
+                {subMeta && subCol.length > 0 && (
+                  <div className="mt-4 rounded-[var(--radius-card)] border border-dashed border-line-strong bg-surface-2/40 p-2.5">
+                    <div className="mb-2 flex items-center gap-2 px-0.5">
+                      <span className={`h-2 w-2 rounded-full ${subMeta.dot}`} />
+                      <span className={`text-xs font-semibold uppercase tracking-wide ${subMeta.text}`}>
+                        {subMeta.label}
+                      </span>
+                      <span className="text-xs text-faint">{subCol.length}</span>
+                    </div>
+                    <div className="space-y-3">{subCol.map(card)}</div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -316,6 +349,9 @@ function RoadmapCard({
   const unmet = deps.filter((d) => d.status !== "done");
   const canStart = item.status === "blocked" && deps.length > 0 && unmet.length === 0;
   const done = item.status === "done";
+  // Retired is closed like done, but never shows the done check or strikethrough:
+  // the work was not completed, it was superseded / wontfixed / abandoned.
+  const retired = item.status === "retired";
 
   function submitComment() {
     const text = comment.trim();
@@ -329,7 +365,7 @@ function RoadmapCard({
       className={[
         "rounded-[var(--radius-card)] border bg-surface-1 p-3.5 transition-colors",
         canStart ? "border-teal/40" : "border-line",
-        done ? "opacity-75" : "",
+        done || retired ? "opacity-75" : "",
       ].join(" ")}
     >
       <div className="flex items-start gap-2">

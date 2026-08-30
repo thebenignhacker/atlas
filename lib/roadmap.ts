@@ -16,7 +16,7 @@ import {
 // A roadmap item is a single markdown file under `<todoDir>/roadmap/`. The file
 // is the ONE source of truth: human-editable, git-tracked, and ingested by the
 // existing todos scanner too. This module parses the richer roadmap fields the
-// todos scanner drops (5-state status, area, dependencies, comment log) and can
+// todos scanner drops (seven-state status, area, dependencies, comment log) and can
 // write status/comments back to the file so the board is interactive.
 //
 // Client-safe types and the status list live in lib/roadmap-shared.ts (no node
@@ -55,17 +55,21 @@ function firstHeading(content: string, fallback: string): string {
   return m ? m[1].trim() : fallback;
 }
 
-function normalizeStatus(raw: string | null): RoadmapStatus {
+export function normalizeStatus(raw: string | null): RoadmapStatus {
   const s = (raw ?? "").toLowerCase().trim();
+  // Terminal-negative values come first: "closed as wontfix" is retired, not done.
+  if (/\b(superseded|wont[-\s]?fix|won'?t[-\s]?fix|abandoned|retired)\b/.test(s))
+    return "retired";
   if (/(^|\b)(done|shipped|complete|merged|published|resolved|closed)\b/.test(s))
     return "done";
   if (/in[-\s]?review|reviewing|review\b/.test(s)) return "in-review";
   if (/in[-\s]?progress|wip|started|working/.test(s)) return "in-progress";
   if (/blocked|waiting|gated/.test(s)) return "blocked";
-  if (/ready|todo|open|pending/.test(s)) return "ready";
-  // Unknown → ready is the safe default: never falsely show progress, but also
-  // don't bury an item as blocked when no blocker was declared.
-  return "ready";
+  if (/\bready\b/.test(s)) return "ready";
+  if (/todo|open|pending/.test(s)) return "todo";
+  // Unknown → todo, never ready: an unparsed status is unvetted by definition,
+  // and defaulting it to ready would fabricate readiness the file never claimed.
+  return "todo";
 }
 
 function parseList(raw: string | null): string[] {

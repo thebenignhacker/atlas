@@ -70,6 +70,7 @@ export default async function RoadmapPage() {
       <StatStrip
         stats={[
           { label: "Items", value: items.length },
+          { label: "Seeded", value: count("todo"), accent: "text-muted" },
           { label: "Blocked", value: count("blocked"), accent: "text-dormant" },
           { label: "Ready", value: count("ready"), accent: "text-teal" },
           {
@@ -79,6 +80,7 @@ export default async function RoadmapPage() {
           },
           { label: "In review", value: count("in-review"), accent: "text-purple" },
           { label: "Done", value: count("done"), accent: "text-fresh" },
+          { label: "Retired", value: count("retired"), accent: "text-clay" },
         ]}
       />
       <RoadmapBoard items={items} readOnly={readOnly} />
