@@ -31,7 +31,7 @@
     "snapshot:owner": "tsx scripts/snapshot-owner.ts",
     "context": "tsx bin/atlas-context.ts",
     "hash-password": "tsx scripts/hash-password.ts",
-    "test": "node --import tsx --test test/db/*.test.ts test/mode/*.test.ts test/context/*.test.ts test/usage/*.test.ts test/auth/*.test.ts test/github/*.test.ts test/strategy/*.test.ts test/session-board/*.test.ts test/decisions/*.test.ts",
+    "test": "node --import tsx --test test/db/*.test.ts test/mode/*.test.ts test/context/*.test.ts test/usage/*.test.ts test/auth/*.test.ts test/github/*.test.ts test/strategy/*.test.ts test/session-board/*.test.ts test/roadmap/*.test.ts test/decisions/*.test.ts",
     "ingest:decision": "tsx scripts/ingest-decision.ts"
   },
   "bin": {

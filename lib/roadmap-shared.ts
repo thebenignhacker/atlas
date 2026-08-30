@@ -5,18 +5,27 @@
 import type { Priority } from "@/lib/types";
 
 export type RoadmapStatus =
+  | "todo"
   | "blocked"
   | "ready"
   | "in-progress"
   | "in-review"
-  | "done";
+  | "done"
+  | "retired";
 
+/**
+ * Canonical status vocabulary, in lifecycle order.
+ *   todo    — seeded: filed, readiness not yet vetted (NOT ready)
+ *   retired — terminal-negative: superseded / wontfix / abandoned (NOT done)
+ */
 export const ROADMAP_STATUSES: RoadmapStatus[] = [
+  "todo",
   "blocked",
   "ready",
   "in-progress",
   "in-review",
   "done",
+  "retired",
 ];
 
 export interface RoadmapComment {
