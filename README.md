@@ -206,3 +206,14 @@ metadata) and, if you enable it, your chosen LLM provider for eligible repos onl
 ## License
 
 MIT
+
+## Roadmap census
+
+Count every roadmap unit Atlas tracks, by status, across all `todoDirs`:
+
+```
+python3 scripts/roadmap-census.py --md --list in-progress
+```
+
+Buckets are completed, in-progress, in-review, queued, blocked, parked and unknown; a unit with
+no readable `Status:` field lands in unknown, which is reported rather than dropped.

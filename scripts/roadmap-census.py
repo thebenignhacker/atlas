@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Count roadmap units by status across every todoDir in atlas.config.json.
 
-Usage: python3 scripts/roadmap-census.py [--md] [--list STATUS,...]
+Usage: python3 scripts/roadmap-census.py [--md] [--list BUCKET,...]   (--help for details)
 Statuses are read from the **Status:** field and folded into five buckets:
 completed, in-progress, in-review, queued, blocked, parked, unknown.
+Exit status 2 on a bad argument, 0 otherwise.
 """
 import collections, glob, json, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,12 +34,19 @@ for d in cfg.get('todoDirs', []):
         units.append(dict(tree=tree, file=os.path.basename(f), raw=raw, bucket=BUCKET.get(raw, 'unknown'),
                           repos=field(t, 'Repos') or field(t, 'Repo') or '-', prio=field(t, 'Priority') or '-',
                           title=(title.group(1).strip() if title else os.path.basename(f))))
-md = '--md' in sys.argv
-want = None
-for a in sys.argv[1:]:
-    if a.startswith('--list'):
-        want = (a.split('=', 1)[1] if '=' in a else sys.argv[sys.argv.index(a) + 1]).split(',')
 order = ['completed', 'in-progress', 'in-review', 'queued', 'blocked', 'parked', 'unknown']
+import argparse
+ap = argparse.ArgumentParser(description='Count roadmap units by status across every todoDir in atlas.config.json.')
+ap.add_argument('--md', action='store_true', help='markdown tables instead of plain columns')
+ap.add_argument('--list', metavar='BUCKET[,BUCKET]', help='also list the units in these buckets: ' + ', '.join(order))
+args = ap.parse_args()
+md = args.md
+want = None
+if args.list:
+    want = [b.strip() for b in args.list.split(',') if b.strip()]
+    bad = [b for b in want if b not in order]
+    if bad:
+        ap.error(f"unknown bucket(s) {', '.join(bad)}; choose from {', '.join(order)}")
 tot = collections.Counter(u['bucket'] for u in units)
 per = collections.defaultdict(collections.Counter)
 for u in units: per[u['tree']][u['bucket']] += 1
