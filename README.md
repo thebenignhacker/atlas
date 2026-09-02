@@ -136,6 +136,15 @@ To enable: set `ai.enabled` to `true` and provide a key
 | `npm run dev` | Start the dashboard (full local view) |
 | `npm run build` / `npm start` | Production build and serve |
 
+**Roadmap census** counts every unit Atlas tracks, by status, across all `todoDirs`:
+
+```
+python3 scripts/roadmap-census.py --md --list in-progress
+```
+
+Buckets: completed, in-progress, in-review, queued, blocked, parked, unknown. A unit with no
+readable `Status:` field lands in unknown and is reported, not dropped.
+
 ## Deployment modes
 
 Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`:
