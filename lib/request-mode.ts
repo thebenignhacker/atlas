@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { atlasMode, type ResolvedMode } from "@/lib/mode";
+import { atlasMode, resolveRequestMode, type ResolvedMode } from "@/lib/mode";
 import { SESSION_COOKIE, verifySession } from "@/lib/owner-auth/session";
 
 /**
@@ -21,7 +21,7 @@ export const getRequestMode = cache(async (): Promise<ResolvedMode> => {
   const env = atlasMode();
   if (env !== "unified") return env; // "local" | "public" | "owner"
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  return (await verifySession(token)) ? "owner" : "public";
+  return resolveRequestMode(env, await verifySession(token));
 });
 
 /** Convenience: is the current request an authenticated owner? */

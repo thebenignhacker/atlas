@@ -1,6 +1,6 @@
 /**
  * Owner-session signing/verification. Edge-runtime-safe: uses ONLY Web Crypto
- * (crypto.subtle) and btoa/atob, so it can run in middleware (edge) as well as in
+ * (crypto.subtle) and btoa/atob, so it can run in the proxy (edge) as well as in
  * Node route handlers. The password hash (scrypt) lives in a SEPARATE module
  * (./password) that is never imported here, so no Node-only crypto leaks into the
  * edge bundle.

@@ -86,6 +86,14 @@ CREATE TABLE IF NOT EXISTS decisions (
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_klass ON decisions(klass);
+CREATE TABLE IF NOT EXISTS decision_skips (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL,
+  filename TEXT,
+  reason TEXT NOT NULL,
+  modifiedAt TEXT,
+  scannedAt TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(createdAt);
 
 CREATE TABLE IF NOT EXISTS activity (
@@ -303,11 +311,25 @@ CREATE INDEX IF NOT EXISTS idx_train_items_repo ON train_items(repo, status);
 `;
 
 let writeDb: Database.Database | null = null;
+/** The file `writeDb` was opened on. A cached connection is only reused while
+ *  it is still open AND still points at the path the resolver returns now —
+ *  otherwise a closed handle, or a handle to a different store after
+ *  ATLAS_DATA_DIR changed, would be served as if it were current. */
+let writeDbPath: string | null = null;
+
+function cachedWriteDb(): Database.Database | null {
+  if (writeDb && writeDb.open && writeDbPath === dbPath()) return writeDb;
+  writeDb = null;
+  writeDbPath = null;
+  return null;
+}
 
 function open(): Database.Database {
-  const db = new Database(dbPath());
+  const file = dbPath();
+  const db = new Database(file);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  writeDbPath = file;
   return db;
 }
 
@@ -327,16 +349,16 @@ function open(): Database.Database {
  * `scripts/setup-db.ts`.
  */
 export function getDb(): Database.Database {
-  if (!writeDb) {
-    if (!fs.existsSync(dbPath())) {
-      throw new Error(
-        `atlas: no database at ${dbPath()} — refusing to create one here, ` +
-          `because a mistyped or unset ATLAS_DATA_DIR would silently start a ` +
-          `second empty store. Run \`npm run setup-db\` if this path is right.`
-      );
-    }
-    writeDb = open();
+  const cached = cachedWriteDb();
+  if (cached) return cached;
+  if (!fs.existsSync(dbPath())) {
+    throw new Error(
+      `atlas: no database at ${dbPath()} — refusing to create one here, ` +
+        `because a mistyped or unset ATLAS_DATA_DIR would silently start a ` +
+        `second empty store. Run \`npm run setup-db\` if this path is right.`
+    );
   }
+  writeDb = open();
   return writeDb;
 }
 
@@ -348,8 +370,8 @@ export function getDb(): Database.Database {
 export function createDb(): Database.Database {
   const dir = dataDir();
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!writeDb) writeDb = open();
-  return writeDb;
+  if (!cachedWriteDb()) writeDb = open();
+  return writeDb!;
 }
 
 /** Open a fresh read-only connection. Used by the UI/API read layer. */

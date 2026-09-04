@@ -165,6 +165,12 @@ test("public snapshot drops sensitive repos and their cards", async () => {
     "sensitive token quoted in a public card must be redacted"
   );
   assert.equal(cardIds.length, 1, "the publishable card still ships");
+
+  // The decision log and its refused-card list are owner-only end to end: not
+  // even an empty shell may appear in the public artifact.
+  for (const ownerOnly of ["decisions", "decisionSkips", "todos", "sessionBoard"]) {
+    assert.ok(!(ownerOnly in snap), `owner-only section "${ownerOnly}" must be absent`);
+  }
 });
 
 test("owner snapshot retains sensitive cards and the session registry", async () => {

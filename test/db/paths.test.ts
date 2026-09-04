@@ -180,3 +180,26 @@ test("a database created elsewhere is opened, not shadowed by a new one", async 
     | undefined;
   assert.equal(row?.value, "seeded", "must open the existing store, not replace it");
 });
+
+test("a cached connection is dropped when the data directory changes", async () => {
+  const a = tmp();
+  const b = tmp();
+  for (const [dir, marker] of [[a, "store-a"], [b, "store-b"]] as const) {
+    const seeded = new Database(path.join(dir, "atlas.db"));
+    seeded.exec("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)");
+    seeded.prepare("INSERT INTO meta VALUES (?,?)").run("marker", marker);
+    seeded.close();
+  }
+  const { getDb } = await import(`@/lib/db?fresh=${a}${b}`);
+  const read = () =>
+    (getDb().prepare("SELECT value FROM meta WHERE key='marker'").get() as { value: string })
+      .value;
+
+  process.env.ATLAS_DATA_DIR = a;
+  assert.equal(read(), "store-a");
+  process.env.ATLAS_DATA_DIR = b;
+  assert.equal(read(), "store-b", "a redirected data dir must not be served the old handle");
+  // Closing the handle must not poison the cache either.
+  getDb().close();
+  assert.equal(read(), "store-b", "a closed cached handle must be reopened, not returned");
+});

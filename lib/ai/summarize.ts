@@ -14,9 +14,12 @@ If the facts are thin, say so plainly. No marketing language, no superlatives.`;
 
 function readReadme(repoPath: string): string {
   for (const name of ["README.md", "readme.md", "README.MD", "Readme.md"]) {
-    const p = path.join(repoPath, name);
+    // repoPath is a scanned repo on disk, never part of the bundle: tell the
+    // tracer so it does not try to trace the whole filesystem from here.
+    const p = path.join(/*turbopackIgnore: true*/ repoPath, name);
     try {
-      if (fs.existsSync(p)) return fs.readFileSync(p, "utf8").slice(0, 3500);
+      if (fs.existsSync(/*turbopackIgnore: true*/ p))
+        return fs.readFileSync(/*turbopackIgnore: true*/ p, "utf8").slice(0, 3500);
     } catch {
       /* ignore */
     }

@@ -20,6 +20,7 @@ import type {
   ContextCard,
   ContextMetrics,
   Decision,
+  DecisionSkip,
   Repo,
   RepoSignals,
   Session,
@@ -130,6 +131,23 @@ export function getDecisions(mode: ResolvedMode): Decision[] {
     return db
       .prepare("SELECT * FROM decisions ORDER BY date DESC")
       .all() as Decision[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Decision-card files the parser refused, with reasons. Owner-only, same
+ * boundary as `getDecisions`: the public mode always sees an empty list.
+ */
+export function getDecisionSkips(mode: ResolvedMode): DecisionSkip[] {
+  if (mode === "public") return [];
+  if (mode === "owner") return loadOwnerSnapshot().decisionSkips ?? [];
+  const db = getReadDb();
+  try {
+    return db
+      .prepare("SELECT * FROM decision_skips ORDER BY filename DESC")
+      .all() as DecisionSkip[];
   } catch {
     return [];
   }

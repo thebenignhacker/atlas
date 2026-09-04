@@ -1,5 +1,6 @@
 import "server-only";
 import { loadConfig } from "@/lib/config";
+import { repoAIEligible } from "@/lib/ai/policy-shared";
 import type { Repo } from "@/lib/types";
 
 /**
@@ -9,12 +10,7 @@ import type { Repo } from "@/lib/types";
  * repo/README/todo text.
  */
 export function isRepoAIEligible(repo: Pick<Repo, "slug" | "visibility">): boolean {
-  const { ai } = loadConfig();
-  if (ai.optInRepos.includes(repo.slug)) return true;
-  if (repo.visibility === "public") return true;
-  if (repo.visibility === "private") return ai.allowPrivate;
-  // unknown visibility (no GitHub remote) → treat as private (conservative).
-  return ai.allowPrivate;
+  return repoAIEligible(loadConfig().ai, repo);
 }
 
 export function eligibilityReason(

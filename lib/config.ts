@@ -80,6 +80,23 @@ export function expandHome(p: string): string {
   return p;
 }
 
+/**
+ * Merge a user config over the defaults. Nested objects are merged one level
+ * down where the defaults carry required siblings: a user who sets only
+ * `ai.models.fast` must not lose `ai.models.deep`, or the provider is handed
+ * `undefined` as a model name.
+ */
+export function mergeConfig(userConfig: Partial<AtlasConfig>): AtlasConfig {
+  const ai = { ...DEFAULT_CONFIG.ai, ...userConfig.ai };
+  ai.models = { ...DEFAULT_CONFIG.ai.models, ...userConfig.ai?.models };
+  return {
+    ...DEFAULT_CONFIG,
+    ...userConfig,
+    github: { ...DEFAULT_CONFIG.github, ...userConfig.github },
+    ai,
+  };
+}
+
 let cached: AtlasConfig | null = null;
 
 export function loadConfig(): AtlasConfig {
@@ -93,12 +110,7 @@ export function loadConfig(): AtlasConfig {
       console.warn(`atlas: failed to parse atlas.config.json, using defaults:`, err);
     }
   }
-  cached = {
-    ...DEFAULT_CONFIG,
-    ...userConfig,
-    github: { ...DEFAULT_CONFIG.github, ...userConfig.github },
-    ai: { ...DEFAULT_CONFIG.ai, ...userConfig.ai },
-  };
+  cached = mergeConfig(userConfig);
   // Normalize paths up-front so the rest of the code never sees a `~`.
   cached.scanRoots = cached.scanRoots.map(expandHome);
   cached.todoDirs = cached.todoDirs.map(expandHome);

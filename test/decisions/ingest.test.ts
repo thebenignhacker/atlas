@@ -60,6 +60,22 @@ function rows(dataDir: string): { id: string; status: string; checksum: string }
   return JSON.parse(line);
 }
 
+function skipRows(dataDir: string): { id: string; reason: string }[] {
+  const out = execFileSync(
+    "npx",
+    [
+      "tsx",
+      "-e",
+      `import { getDb, initSchema } from "@/lib/db";
+       const db = getDb(); initSchema(db);
+       console.log(JSON.stringify(db.prepare("SELECT id,reason FROM decision_skips ORDER BY id").all()));`,
+    ],
+    { env: { ...process.env, ATLAS_DATA_DIR: dataDir }, cwd: REPO, encoding: "utf8" }
+  );
+  const line = out.trim().split("\n").pop() ?? "[]";
+  return JSON.parse(line);
+}
+
 function freshSandbox(): { dataDir: string; cardsDir: string } {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-ingest-"));
   const dataDir = path.join(root, "data");
@@ -97,15 +113,56 @@ test("a written card is ingested, an edit upserts in place, a deletion removes t
   assert.equal(rows(dataDir).length, 0, "a deleted card's row is removed");
 });
 
-test("a malformed card is skipped with no row, and README is never ingested", () => {
+test("a malformed card is recorded as a skip with its reason, and README is never ingested", () => {
   const { dataDir, cardsDir } = freshSandbox();
   const bad = path.join(cardsDir, "2026-08-28-no-decision-line.md");
   fs.writeFileSync(bad, "# Not a card\n\n**Why:** missing the Decision line\n");
   const readme = path.join(cardsDir, "README.md");
   fs.writeFileSync(readme, CARD); // even a README that LOOKS like a card stays out
   const out = run(dataDir, [bad, readme]);
-  assert.match(out, /0 upserted/);
   assert.equal(rows(dataDir).length, 0);
+  const skips = skipRows(dataDir);
+  assert.equal(skips.length, 1, "the refused card is recorded, the README is not");
+  assert.equal(skips[0].id, "2026-08-28-no-decision-line");
+  assert.match(skips[0].reason, /no \*\*Decision:\*\* line/);
+  // Exactly one line on a skip, carrying file and reason; nothing else.
+  const lines = out.trim().split("\n").filter(Boolean);
+  assert.equal(lines.length, 1, `expected one line, got: ${out}`);
+  assert.match(lines[0], /skipped 2026-08-28-no-decision-line\.md: no \*\*Decision:\*\* line/);
+});
+
+test("ingest is silent on success", () => {
+  const { dataDir, cardsDir } = freshSandbox();
+  const card = path.join(cardsDir, "2026-08-28-quiet.md");
+  fs.writeFileSync(card, CARD);
+  assert.equal(run(dataDir, [card]).trim(), "", "a successful ingest prints nothing");
+  assert.match(run(dataDir, ["--verbose", card]), /1 upserted/);
+});
+
+test("a card that breaks becomes a skip, and a repaired card clears it", () => {
+  const { dataDir, cardsDir } = freshSandbox();
+  const card = path.join(cardsDir, "2026-08-28-flip.md");
+  fs.writeFileSync(card, CARD);
+  run(dataDir, [card]);
+  assert.equal(rows(dataDir).length, 1);
+
+  // An edit that leaves a non-canonical Status must drop the old row: the row
+  // would otherwise assert a status the file no longer states.
+  fs.writeFileSync(card, CARD.replace("**Status:** executed", "**Status:** queued"));
+  const out = run(dataDir, [card]);
+  assert.equal(rows(dataDir).length, 0, "stale row removed");
+  assert.equal(skipRows(dataDir).length, 1);
+  assert.match(skipRows(dataDir)[0].reason, /Status "queued" is not one of/);
+  assert.match(out, /skipped 2026-08-28-flip\.md: Status "queued"/);
+
+  fs.writeFileSync(card, CARD);
+  run(dataDir, [card]);
+  assert.equal(rows(dataDir).length, 1, "repaired card is back");
+  assert.equal(skipRows(dataDir).length, 0, "its skip row is cleared");
+
+  fs.unlinkSync(card);
+  run(dataDir, [card]);
+  assert.equal(skipRows(dataDir).length, 0, "deletion clears any skip row too");
 });
 
 test("ingest and full-scan parse identically (one parser, no drift)", async () => {

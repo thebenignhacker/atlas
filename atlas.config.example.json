@@ -2,6 +2,7 @@
   "scanRoots": ["~/workspace", "~/code", "~/projects"],
   "scanDepth": 2,
   "todoDirs": ["~/workspace/todos"],
+  "strategyDocs": [],
   "github": {
     "user": "your-github-username",
     "orgs": []
@@ -9,6 +10,7 @@
   "exclude": ["node_modules", ".next", ".git", "dist", "build", "archive-"],
   "publicOwners": [],
   "sensitiveRepos": [],
+  "publicUsageProjects": [],
   "ai": {
     "enabled": false,
     "provider": "anthropic",

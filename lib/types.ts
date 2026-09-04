@@ -102,6 +102,21 @@ export interface Decision {
   scannedAt: string;
 }
 
+/**
+ * A card file in `<todoDir>/decisions/` the strict parser refused, with the
+ * reason. Recorded rather than dropped: a card that is silently missing from
+ * the owner view is the quiet lie the log exists to prevent. The fix is always
+ * to the card (the spec is append-only), so the row names what to fix.
+ */
+export interface DecisionSkip {
+  id: string;
+  path: string;
+  filename: string;
+  reason: string;
+  modifiedAt: string;
+  scannedAt: string;
+}
+
 export interface ActivityEvent {
   id: string;
   repoSlug: string | null;

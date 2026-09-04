@@ -332,6 +332,15 @@ function main() {
       if (freshness[ownerOnly])
         violations.push(`freshness leaked owner-only section "${ownerOnly}"`);
     }
+  }
+  // Owner-only top-level sections must be absent from the public artifact
+  // outright — including the refused-card list, which names files in a
+  // private todo tree.
+  for (const ownerOnly of ["todos", "decisions", "decisionSkips", "sessions", "sessionBoard", "roadmap", "strategy"]) {
+    if (ownerOnly in (snapshot as unknown as Record<string, unknown>))
+      violations.push(`owner-only section "${ownerOnly}" present in public snapshot`);
+  }
+  {
     for (const [name, f] of Object.entries(freshness)) {
       if (f.builtAt !== snapshot.generatedAt)
         violations.push(
