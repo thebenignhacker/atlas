@@ -13,10 +13,14 @@ export default async function SessionBoardPage() {
   let board;
   try {
     board = getSessionBoard(mode);
-  } catch {
+  } catch (err) {
+    // Say why, not just "no data": the usual cause is a missing database or
+    // a scan that never ran, and the message names the command to run.
+    const reason = err instanceof Error ? err.message : String(err);
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
         <EmptyState />
+        <p className="mt-3 text-sm text-muted">Session board unavailable: {reason}</p>
       </div>
     );
   }

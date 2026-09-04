@@ -167,8 +167,10 @@ To enable: set `ai.enabled` to `true` and provide a key
 python3 scripts/roadmap-census.py --md --list in-progress
 ```
 
-Buckets: completed, in-progress, in-review, queued, blocked, parked, unknown. A unit with no
-readable `Status:` field lands in unknown and is reported, not dropped.
+Statuses are the seven the board uses (todo, blocked, ready, in-progress, in-review, done,
+retired), normalized by the same rules as the board, so the two never disagree on a file. A
+unit with no readable `Status:` field is `todo` (seeded, unvetted) and its spelling is
+reported. `--json` prints one line per unit for tooling; `--config PATH` reads another config.
 
 ## Deployment modes
 

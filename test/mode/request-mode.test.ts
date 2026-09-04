@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolveRequestMode } from "@/lib/mode";
+import { authControlsEnabled, resolveRequestMode } from "@/lib/mode";
 
 /**
  * The per-request owner/public decision. Owner data is served only in unified
@@ -24,4 +24,13 @@ test("only a literal true verifies — a truthy non-boolean never becomes owner"
   // Defensive: verifySession returns a boolean, but the gate must not widen.
   assert.equal(resolveRequestMode("unified", "yes" as unknown as boolean), "public");
   assert.equal(resolveRequestMode("unified", 1 as unknown as boolean), "public");
+});
+
+test("auth controls show in unified and standalone owner mode, never in local or public", () => {
+  // The standalone owner case is the one that was missing: an owner could log
+  // in and never sign out from the UI.
+  assert.equal(authControlsEnabled("unified"), true);
+  assert.equal(authControlsEnabled("owner"), true);
+  assert.equal(authControlsEnabled("local"), false);
+  assert.equal(authControlsEnabled("public"), false);
 });

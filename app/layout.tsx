@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
-import { atlasMode } from "@/lib/mode";
+import { atlasMode, authControlsEnabled } from "@/lib/mode";
 import { getRequestMode } from "@/lib/request-mode";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -28,11 +28,7 @@ export default async function RootLayout({
   // request, else "public". The Sidebar shows the owner nav + a sign-out only when
   // genuinely authenticated; otherwise an owner-login link (when auth is enabled).
   const mode = await getRequestMode();
-  // Sign-in/sign-out controls exist wherever a session cookie is in play: the
-  // unified deployment (public + owner behind one login) and the standalone
-  // owner deployment (every route behind the proxy gate). Without the second
-  // case an owner-mode user could log in but never sign out from the UI.
-  const authEnabled = atlasMode() === "unified" || atlasMode() === "owner";
+  const authEnabled = authControlsEnabled(atlasMode());
   return (
     <html
       lang="en"

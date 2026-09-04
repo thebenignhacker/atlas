@@ -67,7 +67,38 @@ owner-only gate, not data; `grep -c '"decisions"' public-snapshot.json` prints 0
 For a unified or owner deployment, additionally: log in with a wrong password (refused),
 the right password (owner data appears), sign out (public data again).
 
-## 4. Record
+## 4. Error paths
+
+```bash
+npm run context -- frobnicate; echo "exit=$?"            # unknown command: usage, exit 2
+npm run context -- add --project x; echo "exit=$?"       # missing args: one-line error, non-zero
+ATLAS_DATA_DIR=/tmp/nowhere npm run context -- list; echo "exit=$?"
+```
+
+Expected: the last one refuses to create a database and prints the setup-db hint, exit 1,
+and `/tmp/nowhere/atlas.db` does not exist afterwards.
+
+## 5. Real input, not synthetic events
+
+For the two interactive flows (roadmap status change, owner login and sign-out) use a real
+browser with real clicks and keystrokes. A `dispatchEvent` or scripted form submit passes
+through code paths a person never hits; both flows have shipped regressions that only real
+input reproduced.
+
+## 6. Why each item exists
+
+| Item | The bug it catches |
+|---|---|
+| typecheck + test on a fresh clone | A failing DB-path test reached main with no CI to stop it (2026-09-03) |
+| Decisions "Not ingested" count | 101 of 242 decision cards were dropped silently; the owner queue under-counted |
+| Session board reason sentence | The board depends on an external parser; without the reason the page reads as "no data" |
+| Strategy empty state names the key | `strategyDocs` was missing from the example config, so the page was empty with no hint |
+| CLI hints are pasteable | Hints printed `atlas-context …`, a command not on PATH without `npm link` |
+| Public build hides owner sections | The public snapshot must never carry todos, decisions or session files |
+| Sign-out in owner mode | Standalone owner deployments rendered no sign-out control |
+| Error paths exit non-zero | A silent zero from a refused database open is how a second empty store appears |
+
+## 7. Record
 
 Note the date, commit, and any check that did not match in the pull request or the tag
 message. A mismatch is a release blocker until it is explained or fixed.

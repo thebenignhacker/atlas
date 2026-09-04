@@ -84,3 +84,13 @@ export function resolveRequestMode(env: AtlasMode, sessionVerified: boolean): Re
   if (env !== "unified") return env;
   return sessionVerified === true ? "owner" : "public";
 }
+
+/**
+ * Whether the sidebar shows sign-in / sign-out controls. True wherever a session
+ * cookie is in play: the unified deployment (public and owner behind one login)
+ * and the standalone owner deployment (every route behind the proxy gate). In
+ * local and public modes there is nothing to sign in to.
+ */
+export function authControlsEnabled(env: AtlasMode): boolean {
+  return env === "unified" || env === "owner";
+}
