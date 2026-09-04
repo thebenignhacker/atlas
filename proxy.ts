@@ -3,8 +3,10 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/owner-auth/session";
 
 /**
- * Owner-deployment gate. ONLY active when ATLAS_MODE=owner — public and local
- * deployments short-circuit immediately and never process session cookies.
+ * Owner-deployment gate (Next 16 `proxy` convention; this file was
+ * `middleware.ts` before Next deprecated that name). ONLY active when
+ * ATLAS_MODE=owner — public and local deployments short-circuit immediately
+ * and never process session cookies.
  *
  * In owner mode every route requires a valid signed session cookie, except the
  * login surfaces (/login, /api/login, /api/logout). Verification uses Web Crypto
@@ -12,7 +14,7 @@ import { SESSION_COOKIE, verifySession } from "@/lib/owner-auth/session";
  * route. Fails closed: without AUTH_SECRET or OWNER_PASSWORD_HASH, nothing is
  * served (a missing secret must never read as "authenticated").
  */
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   if (process.env.ATLAS_MODE !== "owner") return NextResponse.next();
 
   const { pathname, search } = req.nextUrl;

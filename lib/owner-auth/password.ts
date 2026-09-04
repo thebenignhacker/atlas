@@ -3,7 +3,7 @@ import { scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
 /**
  * Password hashing for the owner gate. NODE-ONLY (scrypt) — imported only by the
  * login route (runtime = "nodejs") and the hash-generation script, never by edge
- * middleware. scrypt is a deliberately slow, memory-hard KDF, so even if the
+ * proxy. scrypt is a deliberately slow, memory-hard KDF, so even if the
  * OWNER_PASSWORD_HASH env value leaks, brute-forcing the password is expensive.
  *
  * Stored format: `scrypt:<saltB64url>:<hashB64url>`. The salt is per-password and
