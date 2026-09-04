@@ -10,6 +10,7 @@ import type {
   ContextCard,
   ContextMetrics,
   Decision,
+  DecisionSkip,
   Repo,
   Session,
   Todo,
@@ -202,6 +203,11 @@ export interface OwnerSnapshot {
    * asserts this section's absence.
    */
   decisions: Decision[];
+  /**
+   * Card files the strict decisions parser refused, with the reason. Owner-only
+   * like `decisions`; the public verifier asserts this section's absence too.
+   */
+  decisionSkips: DecisionSkip[];
   /** Latest cached portfolio digest, or null if none was ever generated. */
   digest: DigestResult | null;
   cost: AICostSummary;
@@ -588,6 +594,10 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       .prepare("SELECT * FROM decisions ORDER BY date DESC")
       .all() as Decision[];
 
+    const decisionSkips = db
+      .prepare("SELECT * FROM decision_skips ORDER BY filename DESC")
+      .all() as DecisionSkip[];
+
     const activity = db
       .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000")
       .all() as ActivityEvent[];
@@ -697,6 +707,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       summaries,
       todos,
       decisions,
+      decisionSkips,
       digest,
       cost,
       feedback,

@@ -86,6 +86,14 @@ CREATE TABLE IF NOT EXISTS decisions (
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
 CREATE INDEX IF NOT EXISTS idx_decisions_klass ON decisions(klass);
+CREATE TABLE IF NOT EXISTS decision_skips (
+  id TEXT PRIMARY KEY,
+  path TEXT NOT NULL,
+  filename TEXT,
+  reason TEXT NOT NULL,
+  modifiedAt TEXT,
+  scannedAt TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(createdAt);
 
 CREATE TABLE IF NOT EXISTS activity (

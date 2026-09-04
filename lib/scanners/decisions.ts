@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { AtlasConfig } from "@/lib/config";
-import type { Decision, DecisionClass, DecisionStatus } from "@/lib/types";
+import type { Decision, DecisionClass, DecisionSkip, DecisionStatus } from "@/lib/types";
 
 /**
  * Decision-log scanner.
@@ -47,35 +47,77 @@ function parseEnum<T extends string>(raw: string | null, allowed: T[]): T | null
 }
 
 /**
+ * Outcome of parsing one file in a decisions directory.
+ *   - `card`:    a spec-compliant card.
+ *   - `skip`:    a `.md` that is not a valid card — recorded with the reason so
+ *                the owner view can show what needs fixing (the spec is
+ *                append-only: fix the card, not the parser).
+ *   - `ignore`:  not a card at all (README, non-markdown, unreadable). Nothing
+ *                to surface.
+ */
+export type DecisionParse =
+  | { kind: "card"; card: Decision }
+  | { kind: "skip"; skip: DecisionSkip }
+  | { kind: "ignore" };
+
+/**
  * Parse ONE card file. The single parser both the full scan and the incremental
  * hook ingest go through — a second parser that could drift is the session-board
- * failure class, refused at build time. Returns null (with a warned reason) for
- * a non-card: README, unreadable, no Decision line, unrecognised Class/Status.
+ * failure class, refused at build time.
  */
-export function parseDecisionFile(filePath: string, scannedAt?: string): Decision | null {
+export function parseDecisionEntry(
+  filePath: string,
+  scannedAt?: string,
+  opts: { quiet?: boolean } = {}
+): DecisionParse {
   const name = path.basename(filePath);
-  if (!name.toLowerCase().endsWith(".md") || name.toLowerCase() === "readme.md") return null;
+  if (!name.toLowerCase().endsWith(".md") || name.toLowerCase() === "readme.md")
+    return { kind: "ignore" };
   let content: string;
   let mtime: string;
   try {
     content = fs.readFileSync(filePath, "utf8");
     mtime = fs.statSync(filePath).mtime.toISOString();
   } catch {
-    return null;
+    return { kind: "ignore" };
   }
+  const skip = (reason: string): DecisionParse => {
+    if (!opts.quiet) console.warn(`atlas: decisions — skipping ${name}: ${reason}`);
+    return {
+      kind: "skip",
+      skip: {
+        id: name.replace(/\.md$/i, ""),
+        path: filePath,
+        filename: name,
+        reason,
+        modifiedAt: mtime,
+        scannedAt: scannedAt ?? new Date().toISOString(),
+      },
+    };
+  };
+
   const decision = field(content, "Decision");
-  if (!decision) {
-    console.warn(`atlas: decisions — skipping ${name}: no **Decision:** line`);
-    return null;
-  }
+  if (!decision) return skip("no **Decision:** line");
   const dateFromName = name.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
-  const klass = parseEnum(field(content, "Class"), CLASSES);
-  const status = parseEnum(field(content, "Status"), STATUSES);
+  const rawClass = field(content, "Class");
+  const rawStatus = field(content, "Status");
+  const klass = parseEnum(rawClass, CLASSES);
+  const status = parseEnum(rawStatus, STATUSES);
   if (!klass || !status) {
-    console.warn(
-      `atlas: decisions — skipping ${name}: unrecognised Class/Status (append-only log; fix the card, not the parser)`
-    );
-    return null;
+    const problems: string[] = [];
+    if (!klass)
+      problems.push(
+        rawClass
+          ? `Class "${rawClass.split(/\s|\|/)[0]}" is not one of ${CLASSES.join(" | ")}`
+          : "no **Class:** line"
+      );
+    if (!status)
+      problems.push(
+        rawStatus
+          ? `Status "${rawStatus.split(/\s|\|/)[0]}" is not one of ${STATUSES.join(" | ")}`
+          : "no **Status:** line"
+      );
+    return skip(problems.join("; "));
   }
   const body = content
     .split(/^## Log$/m)[0]
@@ -83,7 +125,7 @@ export function parseDecisionFile(filePath: string, scannedAt?: string): Decisio
     .replace(/^\*\*[A-Za-z ]+:\*\*.*$/gm, "")
     .trim();
 
-  return {
+  const card: Decision = {
     id: name.replace(/\.md$/i, ""),
     path: filePath,
     filename: name,
@@ -109,11 +151,25 @@ export function parseDecisionFile(filePath: string, scannedAt?: string): Decisio
     checksum: md5(content),
     scannedAt: scannedAt ?? new Date().toISOString(),
   };
+  return { kind: "card", card };
 }
 
-export function scanDecisions(config: AtlasConfig): Decision[] {
+/** Card-or-null view of `parseDecisionEntry`, for callers that only want cards. */
+export function parseDecisionFile(filePath: string, scannedAt?: string): Decision | null {
+  const r = parseDecisionEntry(filePath, scannedAt);
+  return r.kind === "card" ? r.card : null;
+}
+
+export interface DecisionLog {
+  decisions: Decision[];
+  skips: DecisionSkip[];
+}
+
+/** Every card and every refused file across all configured decision dirs. */
+export function scanDecisionLog(config: AtlasConfig): DecisionLog {
   const scannedAt = new Date().toISOString();
   const decisions: Decision[] = [];
+  const skips: DecisionSkip[] = [];
 
   for (const todoDir of config.todoDirs) {
     const dir = path.join(todoDir, "decisions");
@@ -125,10 +181,16 @@ export function scanDecisions(config: AtlasConfig): Decision[] {
       continue;
     }
     for (const name of entries) {
-      const parsed = parseDecisionFile(path.join(dir, name), scannedAt);
-      if (parsed) decisions.push(parsed);
+      const r = parseDecisionEntry(path.join(dir, name), scannedAt);
+      if (r.kind === "card") decisions.push(r.card);
+      else if (r.kind === "skip") skips.push(r.skip);
     }
   }
   decisions.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
-  return decisions;
+  skips.sort((a, b) => b.filename.localeCompare(a.filename));
+  return { decisions, skips };
+}
+
+export function scanDecisions(config: AtlasConfig): Decision[] {
+  return scanDecisionLog(config).decisions;
 }

@@ -1,9 +1,9 @@
-import { getArtifactBuiltAt, getDecisions, getFreshness } from "@/lib/queries";
+import { getArtifactBuiltAt, getDecisions, getDecisionSkips, getFreshness } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
-import type { Decision } from "@/lib/types";
+import type { Decision, DecisionSkip } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -84,12 +84,32 @@ function DecisionCard({ d }: { d: Decision }) {
   );
 }
 
+/**
+ * A card file the strict parser refused. The parser is closed by spec (fix the
+ * card, not the parser), so the useful thing to show is the file and the
+ * reason — never a blank card that would read as a decision with no content.
+ */
+function SkippedCard({ k }: { k: DecisionSkip }) {
+  return (
+    <article className="rounded-lg border border-rose/40 bg-surface-1 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge label="not ingested" className="border-rose/50 text-rose" />
+        <code className="text-xs text-text">{k.filename}</code>
+        <span className="ml-auto text-xs text-faint">{k.modifiedAt.slice(0, 10)}</span>
+      </div>
+      <p className="mt-1 text-sm text-dim">{k.reason}</p>
+    </article>
+  );
+}
+
 export default async function DecisionsPage() {
   const mode = await getRequestMode();
   if (mode === "public") return <OwnerOnly feature="Decisions" />;
   let decisions: Decision[];
+  let skips: DecisionSkip[];
   try {
     decisions = getDecisions(mode);
+    skips = getDecisionSkips(mode);
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -129,8 +149,31 @@ export default async function DecisionsPage() {
             value: conflicts.length,
             accent: conflicts.length ? "text-rose" : "text-text",
           },
+          {
+            label: "Not ingested",
+            value: skips.length,
+            accent: skips.length ? "text-rose" : "text-text",
+          },
         ]}
       />
+
+      {skips.length > 0 && (
+        <section className="mt-6">
+          <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-rose">
+            Not ingested — {skips.length} card file{skips.length === 1 ? "" : "s"} the parser refused
+          </h2>
+          <p className="mb-2 text-xs text-faint">
+            The card format is append-only and the parser is closed by spec: fix the card, not the
+            parser. Queued-for-owner cards in this list are waiting on you and do not appear above
+            until they parse.
+          </p>
+          <div className="space-y-2">
+            {skips.map((k) => (
+              <SkippedCard key={k.id} k={k} />
+            ))}
+          </div>
+        </section>
+      )}
       {queued.length > 0 && (
         <section className="mt-6">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber">
