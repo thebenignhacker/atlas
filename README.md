@@ -28,8 +28,8 @@ instantly and works offline.
   Filter by priority (P0-P3), status, repo, or staleness. One click opens the source
   file in VS Code.
 - **Roadmap board** — one card per unit file in `<todoDir>/roadmap/*.md` (fields: Area,
-  Kind, Status, Priority, Order, Depends), grouped by status. In local mode the board
-  writes back: changing a status or logging a note edits the unit file in place.
+  Kind, Status, Priority, Order, Depends, Repos, Links), grouped by status. In local mode
+  the board writes back: changing a status or adding a comment edits the unit file in place.
 - **Decision log** (owner view) — one card per file in `<todoDir>/decisions/*.md`, with
   queued actions and unresolved conflicts first. Files the strict parser refuses are
   listed as "not ingested" with the reason, so a missing card is visible, never silent.
@@ -39,6 +39,11 @@ instantly and works offline.
   without them the scan records the board as unavailable and continues).
 - **Strategy** (owner view) — checkbox lines tagged `#strategy` from the markdown files in
   `strategyDocs`, kept apart from coding todos and never written to the public snapshot.
+- **Sessions** (owner view) — the coding sessions that registered or set context cards
+  (`atlas-context session ...`), so a fact can be traced back to the session that
+  established it.
+- **Settings** (owner view) — the AI layer's state, what would be sent to a provider and
+  for which repos, and the corrections Atlas has recorded.
 - **Activity feed** — a cross-repo commit timeline and contribution heatmap, so you can
   see where your energy actually went.
 - **AI digest** (optional) — a grounded briefing on what moved, what is stalling, and a
@@ -116,10 +121,10 @@ Edit `atlas.config.json` (copied from the example):
 | `todoDirs` | Directories holding your todo markdown files |
 | `strategyDocs` | Markdown files whose `#strategy` checkbox lines feed the Strategy page (owner view) |
 | `github.user` / `github.orgs` | Your GitHub identity, used for enrichment |
-| `exclude` | Directory name fragments skipped while walking `scanRoots` |
+| `exclude` | Directory names, or name prefixes such as `archive-`, skipped while walking `scanRoots` |
 | `publicOwners` | GitHub owners allowed in the public snapshot; empty means every public repo |
 | `sensitiveRepos` | Repo slugs that never enter the public snapshot, whatever their GitHub visibility |
-| `publicUsageProjects` | Project names that may be named in the public usage view; the rest are bucketed as "other" |
+| `publicUsageProjects` | Project names that may be named in the public usage view; the rest are bucketed as "other". Empty uses the built-in list `DEFAULT_PUBLIC_USAGE_PROJECTS` in `lib/usage/catalog-meta.ts` |
 | `ai.enabled` | Turn the AI layer on or off (default: off) |
 | `ai.provider` | `anthropic`, `openai`, or `ollama` |
 | `ai.models.fast` / `ai.models.deep` | Model ids for short and long generations |
@@ -143,7 +148,7 @@ Atlas is fully usable with no API key. When you enable AI:
 
 To enable: set `ai.enabled` to `true` and provide a key
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`) in your environment or a `.env` file
-(`cp .env.example .env` lists every variable Atlas reads, with no values).
+(`.env.example` lists every variable Atlas reads, names only; copy it to `.env`).
 
 ## Scripts
 
@@ -156,10 +161,10 @@ To enable: set `ai.enabled` to `true` and provide a key
 | `npm run snapshot:owner` | Generate the full owner snapshot (for a private remote view) |
 | `npm run hash-password` | Hash the owner password for `OWNER_PASSWORD_HASH` (reads stdin) |
 | `npm run context -- <cmd>` | The `atlas-context` CLI without `npm link` (see Context Store) |
-| `npm run ingest:decision <card.md>` | Ingest one decision card incrementally (what the write hook calls) |
+| `npm run ingest:decision <card.md>` | Ingest one decision card incrementally, for a file-write hook to call; `npm run scan` reconciles anything it missed |
 | `npm run dev` | Start the dashboard (full local view) |
 | `npm run build` / `npm start` | Production build and serve |
-| `npm test` / `npm run lint` / `npm run typecheck` | The checks CI runs on every push and pull request |
+| `npm test` / `npm run lint` / `npm run typecheck` | The checks CI runs, with `npm run build`, on every pull request and every push to `main` |
 
 **Roadmap census** counts every unit Atlas tracks, by status, across all `todoDirs`:
 
@@ -232,10 +237,11 @@ HMAC-signed (`AUTH_SECRET`), `HttpOnly; Secure; SameSite=Strict` cookies that ex
 resets on a cold start, so it slows guessing rather than capping it globally). The gate
 **fails closed**: in unified mode a request without a verified session is served the
 public data, never the owner data; in a standalone `ATLAS_MODE=owner` deployment every
-route requires a session, unauthenticated visitors are redirected to `/login`, and the
-server serves nothing (503) if `AUTH_SECRET` or `OWNER_PASSWORD_HASH` is missing. Both
-deployed modes are read-only (the host has no database), so re-run
-`npm run snapshot:owner` and redeploy to refresh.
+route except the login surfaces requires a session, unauthenticated visitors are
+redirected to `/login`, and the server serves nothing (503) if `AUTH_SECRET` or
+`OWNER_PASSWORD_HASH` is missing. Unified and standalone owner deployments are both
+read-only (the host has no database), so re-run `npm run snapshot:owner` and redeploy
+to refresh.
 
 ## Privacy
 

@@ -13,7 +13,7 @@ cp atlas.config.example.json atlas.config.json   # then point scanRoots/todoDirs
 npm run typecheck && npm run lint && npm test
 ```
 
-Expected: typecheck and lint print nothing; the test summary ends in `fail 0`.
+Expected: typecheck and lint print nothing; the test summary reports `# fail 0`.
 
 ## 2. Index and dashboard
 
@@ -47,7 +47,7 @@ npm run context -- --help
 npm run context -- list --stale
 npm run context -- add --project smoke --subject "smoke" --claim "smoke card" --source README.md
 npm run context -- get --project smoke
-npm run context -- retire <id-from-the-previous-line>
+npm run context -- retire smoke:smoke   # the id "add" printed as "saved smoke:smoke"
 ```
 
 Expected: every hint printed by the tool is a command you can paste back.
@@ -61,8 +61,9 @@ git status --short        # only public-snapshot.json may show as modified
 ATLAS_MODE=public npm run build && ATLAS_MODE=public npm start
 ```
 
-Expected on the public build: `/todos`, `/decisions`, `/session-board`, `/strategy` show the
-owner-only gate, not data; `grep -c '"decisions"' public-snapshot.json` prints 0.
+Expected on the public build: `/todos`, `/roadmap`, `/decisions`, `/sessions`, `/session-board`,
+`/strategy`, `/digest` and `/settings` show the owner-only gate, not data;
+`grep -c '"decisions"' public-snapshot.json` prints 0.
 
 For a unified or owner deployment, additionally: log in with a wrong password (refused),
 the right password (owner data appears), sign out (public data again).
@@ -90,7 +91,7 @@ input reproduced.
 | Item | The bug it catches |
 |---|---|
 | typecheck + test on a fresh clone | A failing DB-path test reached main with no CI to stop it (2026-09-03) |
-| Decisions "Not ingested" count | 101 of 242 decision cards were dropped silently; the owner queue under-counted |
+| Decisions "Not ingested" count | On the maintainer's tree, 2026-09-03, 101 of 242 decision cards were dropped silently and the owner queue under-counted |
 | Session board reason sentence | The board depends on an external parser; without the reason the page reads as "no data" |
 | Strategy empty state names the key | `strategyDocs` was missing from the example config, so the page was empty with no hint |
 | CLI hints are pasteable | Hints printed `atlas-context …`, a command not on PATH without `npm link` |
