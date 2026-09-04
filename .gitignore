@@ -70,3 +70,6 @@ AGENTS.md
 
 # nightly refresh log (local machinery)
 .nightly-refresh.log*
+
+# The template carries names only, no values; it is the documented list of what Atlas reads.
+!.env.example

@@ -130,7 +130,7 @@ a hard exclude that holds even when the underlying GitHub repo is public.
 The public snapshot **fails closed**: `scripts/snapshot.ts` independently
 re-derives the sensitive set and aborts (non-zero, no file written) if any
 sensitive repo name/slug, sensitive card id, or sensitive card text would appear
-in the output. Sensitive content still appears in the OAuth-gated owner view
+in the output. Sensitive content still appears in the password-gated owner view
 (that is not a public surface) and is flagged with a lock badge in the UI.
 
 > Upgrading from a database created before the `sensitive` column existed? Run

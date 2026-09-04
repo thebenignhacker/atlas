@@ -214,7 +214,7 @@ export interface OwnerSnapshot {
   feedback: LearnedItem[];
   /** AI availability captured at generation time (the host has no API key). */
   ai: AIAvailability;
-  /** All context cards, unredacted (owner deployment is OAuth-gated). */
+  /** All context cards, unredacted (owner deployment is password-gated). */
   contextCards: ContextCard[];
   contextMetrics: ContextMetrics;
   /** Claude session registry — owner-only, never in the public snapshot. */
