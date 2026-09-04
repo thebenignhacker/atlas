@@ -1,6 +1,6 @@
 import { test, describe, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { atlasMode, isSnapshotMode, isPublicMode, isOwnerMode } from "../../lib/mode.ts";
+import { atlasMode, isSnapshotMode, isPublicMode, isOwnerMode } from "@/lib/mode";
 
 /**
  * atlasMode() must default to the LEAST privileged mode.
