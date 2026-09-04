@@ -72,3 +72,15 @@ export function isOwnerMode(): boolean {
 export function isSnapshotMode(): boolean {
   return atlasMode() !== "local";
 }
+
+/**
+ * The pure form of the per-request mode decision, so the security property can
+ * be tested without Next's request context. Owner data is served only when the
+ * deployment is "unified" AND the request carries a verified owner session; in
+ * every other env mode the result is the env mode itself. Defaults to "public":
+ * a missing or unverifiable session can never resolve to "owner".
+ */
+export function resolveRequestMode(env: AtlasMode, sessionVerified: boolean): ResolvedMode {
+  if (env !== "unified") return env;
+  return sessionVerified === true ? "owner" : "public";
+}

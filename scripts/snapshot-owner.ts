@@ -1,3 +1,4 @@
+import "dotenv/config";
 import fs from "node:fs";
 import { generateOwnerSnapshot, ownerSnapshotFile } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
