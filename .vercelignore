@@ -3,12 +3,12 @@
 # deployment, so it is intentionally NOT listed here. The local SQLite database,
 # environment files, and build output must never be uploaded -- they are.
 #
-# This file governs EVERY deployment. An earlier version of this comment claimed
-# the public deployment bypassed it via `vercel deploy --prebuilt` from GitHub
-# Actions; there is no .github/ directory in this repo and no CI of any kind, so
-# nothing bypasses these rules. Both channels are hand-run from this tree with
-# the Vercel CLI. If a prebuilt or CI path is ever added, update this comment in
-# the same change -- a stale exemption note here is how an upload rule gets
+# This file governs EVERY deployment. Both deployment channels are hand-run
+# from this tree with the Vercel CLI; nothing bypasses these rules. The GitHub
+# Actions workflow in .github/workflows/ci.yml runs typecheck, lint, tests and
+# a build on pushes and pull requests -- it never deploys and never uploads.
+# If a prebuilt or CI deploy path is ever added, update this comment in the
+# same change -- a stale exemption note here is how an upload rule gets
 # assumed away.
 
 node_modules

@@ -28,7 +28,11 @@ export default async function RootLayout({
   // request, else "public". The Sidebar shows the owner nav + a sign-out only when
   // genuinely authenticated; otherwise an owner-login link (when auth is enabled).
   const mode = await getRequestMode();
-  const authEnabled = atlasMode() === "unified";
+  // Sign-in/sign-out controls exist wherever a session cookie is in play: the
+  // unified deployment (public + owner behind one login) and the standalone
+  // owner deployment (every route behind the proxy gate). Without the second
+  // case an owner-mode user could log in but never sign out from the UI.
+  const authEnabled = atlasMode() === "unified" || atlasMode() === "owner";
   return (
     <html
       lang="en"

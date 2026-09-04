@@ -2,7 +2,7 @@
 """Count roadmap units by status across every todoDir in atlas.config.json.
 
 Usage: python3 scripts/roadmap-census.py [--md] [--list BUCKET,...]   (--help for details)
-Statuses are read from the **Status:** field and folded into five buckets:
+Statuses are read from the **Status:** field and folded into seven buckets:
 completed, in-progress, in-review, queued, blocked, parked, unknown.
 Exit status 2 on a bad argument, 0 otherwise.
 """

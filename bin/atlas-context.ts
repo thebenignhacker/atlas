@@ -29,6 +29,16 @@ import * as train from "@/lib/context/train";
 import { getMetrics } from "@/lib/context/metrics";
 import type { ContextCard, Freshness } from "@/lib/types";
 
+/**
+ * How to invoke THIS tool from the user's shell, for hints that print a
+ * follow-up command. `atlas-context` is only on PATH after `npm link`; when
+ * the tool was started through `npm run context`, a hint that says
+ * `atlas-context …` is a command the reader cannot run. Detected from npm's
+ * own lifecycle variable, so a hand-run linked binary keeps the short form.
+ */
+const CLI =
+  process.env.npm_lifecycle_event === "context" ? "npm run context --" : "atlas-context";
+
 // Route the DB to the Atlas repo regardless of where this is invoked from, but
 // keep the real cwd for resolving --source paths and verify commands.
 // lib/paths.ts resolves lazily (at call time), so setting the root in the
@@ -174,7 +184,7 @@ function printCard(c: ContextCard, verbose = true): void {
     }
     const cmd = c.verifyCommand
       ? `${c.verifyCommand}`
-      : `atlas-context verify ${c.id}`;
+      : `${CLI} verify ${c.id}`;
     console.log(paint(36, `  re-verify: ${cmd}`));
   }
   console.log();
@@ -419,7 +429,7 @@ function printTrain(status: train.TrainStatus, now: Date): void {
   const lease = status.lease;
   if (lease.state === "none") {
     console.log(
-      dim(`  lease: none — take with: atlas-context train lease ${status.repo}`)
+      dim(`  lease: none — take with: ${CLI} train lease ${status.repo}`)
     );
   } else {
     const l = lease.lease;
@@ -624,7 +634,7 @@ function cmdTrain(a: Args): void {
       const withPending = all.filter((s) => s.pending.length > 0);
       if (!withPending.length) return;
       console.log(
-        "[release-train] trains with pending items (details: atlas-context train status <repo>):"
+        `[release-train] trains with pending items (details: ${CLI} train status <repo>):`
       );
       for (const s of withPending) {
         const overdue = s.pending.filter((i) => train.deadlineState(i, now) === "overdue");
@@ -673,6 +683,9 @@ function cmdMetrics(a: Args): void {
 
 function help(): void {
   console.log(`atlas-context — verified, provenance-tagged project context
+
+not on PATH? run \`npm run context -- <command>\` from the atlas directory,
+or \`npm link\` there once to get the \`atlas-context\` command.
 
 usage:
   atlas-context add --project P --subject S --claim C [--source a,b] [--verify '<cmd>']
