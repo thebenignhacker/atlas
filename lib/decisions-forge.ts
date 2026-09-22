@@ -95,6 +95,24 @@ interface ForgeEntry {
 /** Per-request budget of card fetches; beyond it the rest waits for the next read. */
 export const MAX_FETCHES_PER_READ = 40;
 export const DEFAULT_TTL_MS = 60_000;
+/** Card fetches in flight at once. */
+export const FETCH_CONCURRENCY = 8;
+
+/**
+ * Run `fn` for the i-th item so that at most `width` items are in flight:
+ * item i starts after item i-width has settled. A slot-based limiter with no
+ * shared queue, enough for a few dozen requests.
+ */
+const slots = new Map<number, Promise<unknown>>();
+function limitAt<T>(i: number, width: number, fn: () => Promise<T>): Promise<T> {
+  const prior = slots.get(i - width) ?? Promise.resolve();
+  const p = prior.then(fn, fn);
+  slots.set(i, p);
+  p.finally(() => {
+    if (slots.get(i) === p) slots.delete(i);
+  }).catch(() => undefined);
+  return p;
+}
 
 interface CacheEntry {
   key: string;
@@ -200,22 +218,30 @@ async function readForge(opts: Required<Pick<ReadOptions, "snapshot" | "fetch" |
   toFetch.sort((a, b) => b.name.localeCompare(a.name));
   const deferred = toFetch.splice(MAX_FETCHES_PER_READ);
 
+  // Fetch the changed cards a few at a time: one request per card, bounded so
+  // a burst neither serialises into seconds nor floods the API.
+  const fetched = await Promise.all(
+    toFetch.map((e, i) =>
+      limitAt(i, FETCH_CONCURRENCY, async (): Promise<{ e: ForgeEntry; content: string } | { e: ForgeEntry; failure: string }> => {
+        const url = `${source.apiBase}/repos/${source.repo}/contents/${source.path}/${encodeURIComponent(e.name)}?ref=${encodeURIComponent(source.branch)}`;
+        try {
+          const res = await opts.fetch(url, {
+            headers: { ...headers, Accept: "application/vnd.github.raw+json" },
+          });
+          if (!res.ok) return { e, failure: `forge card fetch answered HTTP ${res.status}` };
+          return { e, content: await res.text() };
+        } catch (err) {
+          return { e, failure: `forge unreachable (${(err as Error)?.message ?? "error"})` };
+        }
+      })
+    )
+  );
   let changed = 0;
-  for (const e of toFetch) {
-    const url = `${source.apiBase}/repos/${source.repo}/contents/${source.path}/${encodeURIComponent(e.name)}?ref=${encodeURIComponent(source.branch)}`;
-    let content: string;
-    try {
-      const res = await opts.fetch(url, {
-        headers: { ...headers, Accept: "application/vnd.github.raw+json" },
-      });
-      if (!res.ok) return fromSnapshot(snap, nowIso, `forge card fetch answered HTTP ${res.status}`);
-      content = await res.text();
-    } catch (err) {
-      return fromSnapshot(snap, nowIso, `forge unreachable (${(err as Error)?.message ?? "error"})`);
-    }
+  for (const f of fetched) {
+    if ("failure" in f) return fromSnapshot(snap, nowIso, f.failure);
     changed += 1;
-    const r = parseDecisionContent(e.name, content, {
-      path: `${source.repo}/${source.path}/${e.name}`,
+    const r = parseDecisionContent(f.e.name, f.content, {
+      path: `${source.repo}/${source.path}/${f.e.name}`,
       modifiedAt: nowIso,
       scannedAt: nowIso,
       quiet: true,
