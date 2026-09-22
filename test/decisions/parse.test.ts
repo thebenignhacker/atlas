@@ -116,3 +116,33 @@ test("scanDecisionLog returns cards and skips together, README excluded", () => 
     console.warn = warn;
   }
 });
+
+test("disk and content parsing agree, and the blob sha is git's own", async () => {
+  const { parseDecisionContent, gitBlobSha } = await import("@/lib/scanners/decisions");
+  const { execFileSync } = await import("node:child_process");
+  const d = dir();
+  const p = write(d, "2026-08-28-parity.md", GOOD);
+  const viaDisk = parseDecisionEntry(p, "2026-08-28T15:01:00.000Z", quiet);
+  assert.equal(viaDisk.kind, "card");
+  if (viaDisk.kind !== "card") return;
+  const viaContent = parseDecisionContent("2026-08-28-parity.md", GOOD, {
+    path: p,
+    modifiedAt: viaDisk.card.modifiedAt,
+    scannedAt: "2026-08-28T15:01:00.000Z",
+    quiet: true,
+  });
+  assert.equal(viaContent.kind, "card");
+  if (viaContent.kind !== "card") return;
+  assert.deepEqual(viaContent.card, viaDisk.card, "the forge path and the disk path are one parser");
+  // The sha the forge lists for a file is git's blob id; an independent oracle.
+  const oracle = execFileSync("git", ["hash-object", "--stdin"], { input: GOOD, encoding: "utf8" }).trim();
+  assert.equal(viaDisk.card.blobSha, oracle);
+  assert.equal(gitBlobSha("héllo\n"), execFileSync("git", ["hash-object", "--stdin"], { input: "héllo\n", encoding: "utf8" }).trim(), "byte length, not character length");
+});
+
+test("a refused card still carries its blob sha", () => {
+  const d = dir();
+  const r = parseDecisionEntry(write(d, "2026-09-03-refused.md", "# No decision line\n\n**Class:** adopted\n**Status:** executed\n"), undefined, quiet);
+  assert.equal(r.kind, "skip");
+  if (r.kind === "skip") assert.match(r.skip.blobSha, /^[0-9a-f]{40}$/);
+});
