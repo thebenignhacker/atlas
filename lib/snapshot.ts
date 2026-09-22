@@ -26,7 +26,9 @@ import type { AIAvailability } from "@/lib/ai/provider";
 import { computeFreshness } from "@/lib/freshness";
 import { liveSection } from "@/lib/freshness-shared";
 import type { SectionFreshness, SnapshotFreshness } from "@/lib/freshness-shared";
-import { getToolEvents } from "@/lib/usage/store";
+import { getToolEvents, getUsageCarry, getUsageRequests } from "@/lib/usage/store";
+import { rollupTokens, type TokenRollup } from "@/lib/usage/token-rollup";
+import { HEADROOM_NOTE } from "@/lib/usage/headroom";
 import { rollupEvents } from "@/lib/usage/rollup";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
 import type { UsageRollup } from "@/lib/usage/types";
@@ -228,6 +230,11 @@ export interface OwnerSnapshot {
   sessionBoard: SessionBoard | null;
   /** Feature-usage rollup, full detail (real project names, recent raw events). */
   usage: UsageRollup;
+  /**
+   * Token, cost and carried-context analytics per session and repo. Owner-only:
+   * session ids, repo names and file paths; the public verifier asserts absence.
+   */
+  tokens: TokenRollup;
   /** Per-section data age — see PublicSnapshot.freshness and lib/freshness.ts. */
   freshness: SnapshotFreshness;
   /**
@@ -692,6 +699,10 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       now: new Date(),
       recentLimit: 80,
     });
+    const tokens = rollupTokens(getUsageRequests(db), getUsageCarry(db), {
+      now: new Date(),
+      headroomNote: HEADROOM_NOTE,
+    });
 
     const builtAt = new Date().toISOString();
     // Roadmap and strategy markdown live on the owner machine; read them here
@@ -717,6 +728,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       sessions,
       sessionBoard,
       usage,
+      tokens,
       roadmap,
       strategy,
       freshness: {

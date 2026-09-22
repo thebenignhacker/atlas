@@ -33,6 +33,12 @@ instantly and works offline.
 - **Decision log** (owner view) — one card per file in `<todoDir>/decisions/*.md`, with
   queued actions and unresolved conflicts first. Files the strict parser refuses are
   listed as "not ingested" with the reason, so a missing card is visible, never silent.
+- **Tokens** (owner view) — what the coding sessions cost, mined from the same transcripts
+  as the usage view: tokens per session and per repo (input, cache write, cache read,
+  output, summed once per request), the context each turn re-bills (prefix max and
+  median per session), a cache-hit ratio, and which tool results carry the most context,
+  by tool and by file. Token counts are measured; the dollar figure is an estimate at flat
+  list rates and says so; carry is an estimate and says so.
 - **Session board** (owner view) — who holds which repo and paths across `.claude-sessions/`
   directories, parsed with the claim guard's own parser (`scripts/session-board.py`,
   which needs `python3` and the guard script at `~/.claude/hooks/shared-repo-claim-guard.py`;

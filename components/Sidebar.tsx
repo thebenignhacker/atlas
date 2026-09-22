@@ -16,6 +16,7 @@ import {
   Target,
   Users,
   Zap,
+  Coins,
   LogIn,
   LogOut,
 } from "lucide-react";
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/strategy", label: "Strategy", icon: Target, ownerOnly: true },
   { href: "/context", label: "Context", icon: ShieldCheck, ownerOnly: false },
   { href: "/usage", label: "Usage", icon: Zap, ownerOnly: false },
+  { href: "/tokens", label: "Tokens", icon: Coins, ownerOnly: true },
   { href: "/sessions", label: "Sessions", icon: History, ownerOnly: true },
   { href: "/session-board", label: "Session board", icon: Users, ownerOnly: true },
   { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },

@@ -7,6 +7,7 @@ import type Database from "better-sqlite3";
 import { getDb, initSchema, getMeta, setMeta } from "@/lib/db";
 import { finishRun, pruneRuns, startRun } from "@/lib/scan-runs";
 import { eventsFromLine } from "@/lib/usage/parse";
+import { mineTokens, type CarryRow, type UsageRequest } from "@/lib/usage/tokens";
 import type { ToolEvent } from "@/lib/usage/types";
 
 /**
@@ -41,6 +42,11 @@ const STAGE = "scan:usage";
 const TE_COLS =
   "id,sessionId,ts,feature,category,project,howInvoked,paramKeys,cwd,gitBranch,scannedAt,sourceFile";
 
+const REQ_COLS =
+  "id,sessionId,ts,model,project,input,cacheCreation,cacheRead,output,turnIndex,scannedAt,sourceFile";
+const CARRY_COLS =
+  "id,sessionId,ts,tool,file,project,resultTokensEst,responsesRemaining,carryEst,scannedAt,sourceFile";
+
 /** How many transcripts to mine before committing. Bounds re-work after a crash. */
 const CHUNK = 200;
 
@@ -69,6 +75,8 @@ interface TranscriptFile {
 interface MinedFile {
   file: TranscriptFile;
   rows: Row[];
+  requests: (UsageRequest & { scannedAt: string; sourceFile: string })[];
+  carry: (CarryRow & { scannedAt: string; sourceFile: string })[];
 }
 
 function toRow(e: ToolEvent, scannedAt: string, sourceFile: string): Row {
@@ -88,8 +96,19 @@ function toRow(e: ToolEvent, scannedAt: string, sourceFile: string): Row {
   };
 }
 
-async function eventsFromFile(file: string): Promise<ToolEvent[]> {
+interface FileMining {
+  events: ToolEvent[];
+  requests: UsageRequest[];
+  carry: CarryRow[];
+}
+
+/**
+ * One streamed pass over a transcript yields both the feature events (per line)
+ * and the token rows (per file, since carry needs to know what followed).
+ */
+async function mineFile(file: string): Promise<FileMining> {
   const out: ToolEvent[] = [];
+  const parsed: Record<string, unknown>[] = [];
   const rl = readline.createInterface({
     input: fs.createReadStream(file, { encoding: "utf8" }),
     crlfDelay: Infinity,
@@ -106,8 +125,10 @@ async function eventsFromFile(file: string): Promise<ToolEvent[]> {
       continue; // a partially written / non-JSON line; skip it
     }
     for (const ev of eventsFromLine(obj, index)) out.push(ev);
+    parsed.push(obj);
   }
-  return out;
+  const tokens = mineTokens(parsed);
+  return { events: out, requests: tokens.requests, carry: tokens.carry };
 }
 
 interface Listing {
@@ -290,6 +311,16 @@ async function main() {
     })();
   }
 
+  // Rows mined before token mining existed leave usage_requests empty while
+  // tool_events is full; the ledger would skip every unchanged file and the
+  // token page would read as "no data" forever. Re-mine once, remembered in
+  // meta so a corpus that genuinely carries no usage lines is not re-read on
+  // every run.
+  if (!getMeta(db, "usageTokenMining") && priorCount > 0) {
+    console.log("atlas: transcripts predate token mining — re-mining the corpus once for token rows");
+    db.exec("DELETE FROM usage_files");
+  }
+
   const ledger = loadLedger(db);
 
   // Drop everything not backed by a transcript that exists right now, so a
@@ -318,6 +349,12 @@ async function main() {
       `DELETE FROM tool_events
         WHERE sourceFile IS NOT NULL
           AND sourceFile NOT IN (SELECT path FROM present_files);
+       DELETE FROM usage_requests
+        WHERE sourceFile IS NOT NULL
+          AND sourceFile NOT IN (SELECT path FROM present_files);
+       DELETE FROM usage_carry
+        WHERE sourceFile IS NOT NULL
+          AND sourceFile NOT IN (SELECT path FROM present_files);
        DELETE FROM usage_files
         WHERE path NOT IN (SELECT path FROM present_files);`
     );
@@ -334,7 +371,19 @@ async function main() {
       .map((c) => `@${c}`)
       .join(",")})`
   );
+  const insertRequest = db.prepare(
+    `INSERT OR REPLACE INTO usage_requests (${REQ_COLS}) VALUES (${REQ_COLS.split(",")
+      .map((c) => `@${c}`)
+      .join(",")})`
+  );
+  const insertCarry = db.prepare(
+    `INSERT OR REPLACE INTO usage_carry (${CARRY_COLS}) VALUES (${CARRY_COLS.split(",")
+      .map((c) => `@${c}`)
+      .join(",")})`
+  );
   const clearFile = db.prepare("DELETE FROM tool_events WHERE sourceFile = ?");
+  const clearRequests = db.prepare("DELETE FROM usage_requests WHERE sourceFile = ?");
+  const clearCarry = db.prepare("DELETE FROM usage_carry WHERE sourceFile = ?");
   const upsertLedger = db.prepare(
     `INSERT OR REPLACE INTO usage_files (path, mtimeMs, size, eventCount, scannedAt)
      VALUES (?, ?, ?, ?, ?)`
@@ -348,7 +397,11 @@ async function main() {
   const commitChunk = db.transaction((mined: MinedFile[], scannedAt: string) => {
     for (const m of mined) {
       clearFile.run(m.file.path);
+      clearRequests.run(m.file.path);
+      clearCarry.run(m.file.path);
       for (const r of m.rows) insert.run(r);
+      for (const r of m.requests) insertRequest.run(r);
+      for (const r of m.carry) insertCarry.run(r);
       upsertLedger.run(
         m.file.path,
         m.file.mtimeMs,
@@ -370,9 +423,9 @@ async function main() {
   let unreadable = 0;
   for (const file of changed) {
     const scannedAt = new Date().toISOString();
-    let events: ToolEvent[];
+    let mining: FileMining;
     try {
-      events = await eventsFromFile(file.path);
+      mining = await mineFile(file.path);
     } catch {
       // One unreadable transcript must not abort the run, but it must not be
       // marked as mined either — leaving it out of the ledger re-tries it next
@@ -382,7 +435,9 @@ async function main() {
     }
     mined.push({
       file,
-      rows: events.map((e) => toRow(e, scannedAt, file.path)),
+      rows: mining.events.map((e) => toRow(e, scannedAt, file.path)),
+      requests: mining.requests.map((r) => ({ ...r, scannedAt, sourceFile: file.path })),
+      carry: mining.carry.map((c) => ({ ...c, scannedAt, sourceFile: file.path })),
     });
     filesDone++;
     if (mined.length >= CHUNK) {
@@ -423,6 +478,7 @@ async function main() {
 
   setMeta("usageScannedAt", startedAt);
   setMeta("usageEventCount", String(total));
+  setMeta("usageTokenMining", "1");
 
   finish(total === 0 ? "empty" : "ok", {
     rowsIn: files.length,

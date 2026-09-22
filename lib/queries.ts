@@ -9,7 +9,9 @@ import { getCards, getSessions as getSessionsFromDb } from "@/lib/context/store"
 import { getMetrics } from "@/lib/context/metrics";
 import { computeFreshness } from "@/lib/freshness";
 import type { SectionFreshness } from "@/lib/freshness-shared";
-import { getToolEvents } from "@/lib/usage/store";
+import { getToolEvents, getUsageCarry, getUsageRequests } from "@/lib/usage/store";
+import { EMPTY_TOKENS, rollupTokens, type TokenRollup } from "@/lib/usage/token-rollup";
+import { HEADROOM_NOTE } from "@/lib/usage/headroom";
 import { rollupEvents } from "@/lib/usage/rollup";
 import type { SessionBoard } from "@/lib/session-board-shared";
 import { EMPTY_USAGE, type UsageRollup } from "@/lib/usage/types";
@@ -331,6 +333,25 @@ export function getUsage(mode: ResolvedMode): UsageRollup {
       publicProjects: cfg.length ? cfg : DEFAULT_PUBLIC_USAGE_PROJECTS,
       now: new Date(),
       recentLimit: 80,
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Token, cost and carried-context analytics. Owner-only end to end: the public
+ * mode gets the empty rollup and no table is read; owner reads the owner
+ * snapshot's section; local computes it from the mined rows.
+ */
+export function getTokens(mode: ResolvedMode): TokenRollup {
+  if (mode === "public") return EMPTY_TOKENS;
+  if (mode === "owner") return loadOwnerSnapshot().tokens ?? EMPTY_TOKENS;
+  const db = getReadDb();
+  try {
+    return rollupTokens(getUsageRequests(db), getUsageCarry(db), {
+      now: new Date(),
+      headroomNote: HEADROOM_NOTE,
     });
   } finally {
     db.close();
