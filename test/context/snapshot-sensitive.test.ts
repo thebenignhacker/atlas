@@ -168,7 +168,7 @@ test("public snapshot drops sensitive repos and their cards", async () => {
 
   // The decision log and its refused-card list are owner-only end to end: not
   // even an empty shell may appear in the public artifact.
-  for (const ownerOnly of ["decisions", "decisionSkips", "todos", "sessionBoard"]) {
+  for (const ownerOnly of ["decisions", "decisionSkips", "todos", "sessionBoard", "tokens"]) {
     assert.ok(!(ownerOnly in snap), `owner-only section "${ownerOnly}" must be absent`);
   }
 });
