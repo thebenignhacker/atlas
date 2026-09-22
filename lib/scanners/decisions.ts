@@ -61,9 +61,24 @@ export type DecisionParse =
   | { kind: "ignore" };
 
 /**
+ * git's blob object id for a file's content, the identifier the forge lists for
+ * every file in a directory. Carried on each card so a live read can tell a
+ * changed card from an unchanged one without fetching it.
+ */
+export function gitBlobSha(content: string): string {
+  const bytes = Buffer.from(content, "utf8");
+  return crypto
+    .createHash("sha1")
+    .update(`blob ${bytes.length}\0`)
+    .update(bytes)
+    .digest("hex");
+}
+
+/**
  * Parse ONE card file. The single parser both the full scan and the incremental
  * hook ingest go through — a second parser that could drift is the session-board
- * failure class, refused at build time.
+ * failure class, refused at build time. Reads the file, then hands the bytes to
+ * `parseDecisionContent`, which the forge read shares.
  */
 export function parseDecisionEntry(
   filePath: string,
@@ -81,8 +96,27 @@ export function parseDecisionEntry(
   } catch {
     return { kind: "ignore" };
   }
+  return parseDecisionContent(name, content, { path: filePath, modifiedAt: mtime, scannedAt, ...opts });
+}
+
+/**
+ * Parse ONE card from its bytes. The same function whether the bytes came from
+ * disk (`parseDecisionEntry`) or from the forge at request time: `path` is
+ * whatever the caller knows the card as, `modifiedAt` whatever clock it has.
+ */
+export function parseDecisionContent(
+  name: string,
+  content: string,
+  meta: { path: string; modifiedAt: string; scannedAt?: string; quiet?: boolean }
+): DecisionParse {
+  if (!name.toLowerCase().endsWith(".md") || name.toLowerCase() === "readme.md")
+    return { kind: "ignore" };
+  const filePath = meta.path;
+  const mtime = meta.modifiedAt;
+  const scannedAt = meta.scannedAt;
+  const blobSha = gitBlobSha(content);
   const skip = (reason: string): DecisionParse => {
-    if (!opts.quiet) console.warn(`atlas: decisions — skipping ${name}: ${reason}`);
+    if (!meta.quiet) console.warn(`atlas: decisions — skipping ${name}: ${reason}`);
     return {
       kind: "skip",
       skip: {
@@ -91,6 +125,7 @@ export function parseDecisionEntry(
         filename: name,
         reason,
         modifiedAt: mtime,
+        blobSha,
         scannedAt: scannedAt ?? new Date().toISOString(),
       },
     };
@@ -149,6 +184,7 @@ export function parseDecisionEntry(
     body: body.slice(0, 4000),
     modifiedAt: mtime,
     checksum: md5(content),
+    blobSha,
     scannedAt: scannedAt ?? new Date().toISOString(),
   };
   return { kind: "card", card };
