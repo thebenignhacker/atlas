@@ -23,7 +23,7 @@ import { parseDecisionEntry } from "@/lib/scanners/decisions";
 
 const COLS =
   "id,path,filename,title,date,sessionId,chief,klass,status,tree,decision,why," +
-  "alternatives,reversibility,reviewTrigger,supersedes,links,body,modifiedAt,checksum,scannedAt";
+  "alternatives,reversibility,reviewTrigger,supersedes,links,body,modifiedAt,checksum,blobSha,scannedAt";
 
 function main(rawArgv: string[]): number {
   const verbose = rawArgv.includes("--verbose");
@@ -40,7 +40,7 @@ function main(rawArgv: string[]): number {
       .join(",")})`
   );
   const remove = db.prepare("DELETE FROM decisions WHERE id = ?");
-  const SKIP_COLS = "id,path,filename,reason,modifiedAt,scannedAt";
+  const SKIP_COLS = "id,path,filename,reason,modifiedAt,blobSha,scannedAt";
   const upsertSkip = db.prepare(
     `INSERT OR REPLACE INTO decision_skips (${SKIP_COLS}) VALUES (${SKIP_COLS.split(",")
       .map((c) => `@${c}`)

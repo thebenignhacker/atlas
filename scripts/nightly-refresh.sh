@@ -31,6 +31,9 @@ fi
     echo "ABORT: public snapshot failed (sanitization refusal is a stop, not a skip)"
     exit 1
   fi
+  # The owner snapshot still carries the decision cards, but a deployed owner
+  # view with ATLAS_FORGE_REPO set reads them from the forge at request time;
+  # this leg is the fallback copy for decisions, not their freshness.
   if ! npm run snapshot:owner; then
     echo "ABORT: owner snapshot failed — deploy skipped"
     exit 1

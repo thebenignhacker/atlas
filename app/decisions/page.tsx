@@ -1,4 +1,7 @@
 import { getArtifactBuiltAt, getDecisions, getDecisionSkips, getFreshness } from "@/lib/queries";
+import { getLiveDecisions, type LiveDecisions } from "@/lib/decisions-forge";
+import { loadOwnerSnapshot } from "@/lib/snapshot";
+import type { SectionFreshness } from "@/lib/freshness-shared";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -107,9 +110,34 @@ export default async function DecisionsPage() {
   if (mode === "public") return <OwnerOnly feature="Decisions" />;
   let decisions: Decision[];
   let skips: DecisionSkip[];
+  let freshness: SectionFreshness | null;
+  let artifactBuiltAt: string | null;
+  // The deployed owner view reads the forge at request time (a pushed card
+  // shows within a minute, no deploy); the snapshot is the fallback and is
+  // named as such. Local mode keeps reading its own database.
+  let live: LiveDecisions | null = null;
   try {
-    decisions = getDecisions(mode);
-    skips = getDecisionSkips(mode);
+    if (mode === "owner") {
+      live = await getLiveDecisions(mode, {
+        snapshot: () => {
+          const snap = loadOwnerSnapshot();
+          return {
+            decisions: snap.decisions ?? [],
+            decisionSkips: snap.decisionSkips ?? [],
+            generatedAt: snap.generatedAt ?? null,
+          };
+        },
+      });
+      decisions = live.decisions;
+      skips = live.skips;
+      freshness = live.freshness;
+      artifactBuiltAt = live.source === "forge" ? null : getArtifactBuiltAt(mode);
+    } else {
+      decisions = getDecisions(mode);
+      skips = getDecisionSkips(mode);
+      freshness = getFreshness(mode, "decisions");
+      artifactBuiltAt = getArtifactBuiltAt(mode);
+    }
   } catch {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
@@ -129,9 +157,18 @@ export default async function DecisionsPage() {
       <PageHeader
         title="Decisions"
         subtitle="Every auto-adopted recommendation and queued action — what was chosen, why, and how to revert."
-        freshness={getFreshness(mode, "decisions")}
-        artifactBuiltAt={getArtifactBuiltAt(mode)}
+        freshness={freshness}
+        artifactBuiltAt={artifactBuiltAt}
       />
+      {live && live.source === "snapshot" && (
+        <p
+          role="status"
+          className="mb-6 rounded border border-amber/50 bg-amber/10 px-3 py-2 text-sm text-amber"
+        >
+          Live read from the forge failed: {live.error}. Showing the snapshot built{" "}
+          {artifactBuiltAt ?? "at an unknown time"}; cards pushed since then are not on this page.
+        </p>
+      )}
       <StatStrip
         stats={[
           { label: "Total", value: decisions.length },

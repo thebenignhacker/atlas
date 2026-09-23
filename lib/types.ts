@@ -99,6 +99,8 @@ export interface Decision {
   body: string;
   modifiedAt: string;
   checksum: string;
+  /** git blob sha of the file content (what the forge lists), so a live read can tell a changed card from an unchanged one without fetching it. */
+  blobSha: string;
   scannedAt: string;
 }
 
@@ -114,6 +116,8 @@ export interface DecisionSkip {
   filename: string;
   reason: string;
   modifiedAt: string;
+  /** git blob sha of the refused file's content; see Decision.blobSha. */
+  blobSha: string;
   scannedAt: string;
 }
 

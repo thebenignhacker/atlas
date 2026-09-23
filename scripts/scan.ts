@@ -13,8 +13,8 @@ import type { ActivityEvent, Decision, Repo, Todo, DecisionSkip } from "@/lib/ty
 
 const REPO_COLS = `slug,name,path,groupName,remoteUrl,owner,repoName,branch,lastCommitAt,lastCommitSha,lastCommitMsg,commitCount30d,dirty,ahead,behind,visibility,isFork,isArchived,language,stars,openIssues,openPrs,defaultBranch,pushedAt,description,scannedAt`;
 const TODO_COLS = `id,path,filename,title,createdAt,modifiedAt,priority,status,repoSlug,repoGuess,triggerPhrase,kind,excerpt,source,checksum,scannedAt`;
-const DECISION_COLS = `id,path,filename,title,date,sessionId,chief,klass,status,tree,decision,why,alternatives,reversibility,reviewTrigger,supersedes,links,body,modifiedAt,checksum,scannedAt`;
-const SKIP_COLS = `id,path,filename,reason,modifiedAt,scannedAt`;
+const DECISION_COLS = `id,path,filename,title,date,sessionId,chief,klass,status,tree,decision,why,alternatives,reversibility,reviewTrigger,supersedes,links,body,modifiedAt,checksum,blobSha,scannedAt`;
+const SKIP_COLS = `id,path,filename,reason,modifiedAt,blobSha,scannedAt`;
 const ACT_COLS = `id,repoSlug,type,title,ts,meta,scannedAt`;
 
 function placeholders(cols: string): string {

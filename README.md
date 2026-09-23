@@ -33,6 +33,11 @@ instantly and works offline.
 - **Decision log** (owner view) — one card per file in `<todoDir>/decisions/*.md`, with
   queued actions and unresolved conflicts first. Files the strict parser refuses are
   listed as "not ingested" with the reason, so a missing card is visible, never silent.
+  A deployed owner view reads the cards from the todo repository's GitHub API at request
+  time when `ATLAS_FORGE_REPO` and a read-only `ATLAS_FORGE_TOKEN` are set (one listing
+  call, then only the cards whose content changed since the snapshot; cached for a
+  minute), so a card pushed to the forge shows within a minute with no deploy. When the
+  forge cannot be read the page serves the bundled snapshot and says so.
 - **Session board** (owner view) — who holds which repo and paths across `.claude-sessions/`
   directories, parsed with the claim guard's own parser (`scripts/session-board.py`,
   which needs `python3` and the guard script at `~/.claude/hooks/shared-repo-claim-guard.py`;
