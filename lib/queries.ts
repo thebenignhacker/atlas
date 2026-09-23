@@ -135,6 +135,8 @@ export function getDecisions(mode: ResolvedMode): Decision[] {
       .all() as Decision[];
   } catch {
     return [];
+  } finally {
+    db.close();
   }
 }
 
@@ -152,6 +154,8 @@ export function getDecisionSkips(mode: ResolvedMode): DecisionSkip[] {
       .all() as DecisionSkip[];
   } catch {
     return [];
+  } finally {
+    db.close();
   }
 }
 

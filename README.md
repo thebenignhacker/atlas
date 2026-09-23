@@ -33,6 +33,11 @@ instantly and works offline.
 - **Decision log** (owner view) — one card per file in `<todoDir>/decisions/*.md`, with
   queued actions and unresolved conflicts first. Files the strict parser refuses are
   listed as "not ingested" with the reason, so a missing card is visible, never silent.
+  A deployed owner view reads the cards from the todo repository's GitHub API at request
+  time when `ATLAS_FORGE_REPO` and a read-only `ATLAS_FORGE_TOKEN` are set (one listing
+  call, then only the cards whose content changed since the snapshot; cached for a
+  minute), so a card pushed to the forge shows within a minute with no deploy. When the
+  forge cannot be read the page serves the bundled snapshot and says so.
 - **Tokens** (owner view) — what the coding sessions cost, mined from the same transcripts
   as the usage view: tokens per session and per repo (input, cache write, cache read,
   output, summed once per request), the context each turn re-bills (prefix max and

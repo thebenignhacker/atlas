@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS decisions (
   body TEXT,
   modifiedAt TEXT,
   checksum TEXT,
+  blobSha TEXT,
   scannedAt TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_decisions_status ON decisions(status);
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS decision_skips (
   filename TEXT,
   reason TEXT NOT NULL,
   modifiedAt TEXT,
+  blobSha TEXT,
   scannedAt TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_todos_created ON todos(createdAt);
@@ -451,6 +453,11 @@ export function initSchema(db: Database.Database = getDb()): void {
   // Migrations for DBs created before these columns existed. The column must be
   // added before any index on it, hence after the SCHEMA exec above.
   addColumnIfMissing(db, "context_cards", "sensitive", "sensitive INTEGER DEFAULT 0");
+  // The forge read (lib/decisions-forge.ts) tells a changed card from an
+  // unchanged one by git blob sha; databases scanned before the column existed
+  // carry NULL until the next full scan, which the live read treats as changed.
+  addColumnIfMissing(db, "decisions", "blobSha", "blobSha TEXT");
+  addColumnIfMissing(db, "decision_skips", "blobSha", "blobSha TEXT");
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_context_sensitive ON context_cards(sensitive)"
   );

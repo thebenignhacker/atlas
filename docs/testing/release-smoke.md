@@ -34,6 +34,7 @@ Open every page and read the numbers, not just the status code:
 | `/todos` | Count matches the scan line; filters change the list; the editor link opens a real file |
 | `/roadmap` | Units grouped by status; change one status in the UI and confirm the unit file changed |
 | `/decisions` | Queued and conflict cards first; "Not ingested" count matches the scan line |
+| `/decisions` (deployed owner view, `ATLAS_FORGE_REPO` set) | Freshness reads "data through …" with the note naming how many cards were read live; push a card to the todo repository and reload after a minute: it is on the page with no deploy. With `ATLAS_FORGE_TOKEN` unset or wrong, the page shows the amber "Live read from the forge failed" line and the snapshot's cards, never an error page |
 | `/session-board` | Trees listed, or a plain sentence saying why the board is unavailable |
 | `/context` | Cards with freshness badges; a stale card shows its re-verify command |
 | `/usage` | Feature counts and a 30-day trend after `npm run scan:usage` |
@@ -97,6 +98,7 @@ input reproduced.
 | Strategy empty state names the key | `strategyDocs` was missing from the example config, so the page was empty with no hint |
 | CLI hints are pasteable | Hints printed `atlas-context …`, a command not on PATH without `npm link` |
 | Public build hides owner sections | The public snapshot must never carry todos, decisions or session files |
+| Forge read stays owner-only | The live decisions read must never leave for a public or local request (test/decisions/forge.test.ts, first cell) |
 | Sign-out in owner mode | Standalone owner deployments rendered no sign-out control |
 | Error paths exit non-zero | A silent zero from a refused database open is how a second empty store appears |
 
