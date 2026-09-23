@@ -328,7 +328,7 @@ function main() {
     // Owner-only sections must not appear even as an empty shell: their mere
     // presence would disclose that private todos/sessions exist and when they
     // were last touched.
-    for (const ownerOnly of ["todos", "decisions", "sessions", "sessionBoard", "roadmap", "strategy"]) {
+    for (const ownerOnly of ["todos", "decisions", "sessions", "sessionBoard", "roadmap", "strategy", "tokens"]) {
       if (freshness[ownerOnly])
         violations.push(`freshness leaked owner-only section "${ownerOnly}"`);
     }
@@ -336,7 +336,7 @@ function main() {
   // Owner-only top-level sections must be absent from the public artifact
   // outright — including the refused-card list, which names files in a
   // private todo tree.
-  for (const ownerOnly of ["todos", "decisions", "decisionSkips", "sessions", "sessionBoard", "roadmap", "strategy"]) {
+  for (const ownerOnly of ["todos", "decisions", "decisionSkips", "sessions", "sessionBoard", "roadmap", "strategy", "tokens"]) {
     if (ownerOnly in (snapshot as unknown as Record<string, unknown>))
       violations.push(`owner-only section "${ownerOnly}" present in public snapshot`);
   }

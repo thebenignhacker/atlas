@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type { ToolEvent, UsageCategory } from "@/lib/usage/types";
+import type { CarryRow, UsageRequest } from "@/lib/usage/tokens";
 
 /** Row shape of the tool_events table (paramKeys stored as a JSON string). */
 interface ToolEventRow {
@@ -37,6 +38,16 @@ export function rowToEvent(r: ToolEventRow): ToolEvent {
     cwd: r.cwd,
     gitBranch: r.gitBranch,
   };
+}
+
+/** Load the mined API requests (owner machine only). */
+export function getUsageRequests(db: Database.Database): UsageRequest[] {
+  return db.prepare("SELECT * FROM usage_requests").all() as UsageRequest[];
+}
+
+/** Load the mined tool-result carry rows (owner machine only). */
+export function getUsageCarry(db: Database.Database): CarryRow[] {
+  return db.prepare("SELECT * FROM usage_carry").all() as CarryRow[];
 }
 
 /** Load all mined tool events from the local DB (owner machine only). */

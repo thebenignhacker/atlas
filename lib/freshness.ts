@@ -153,6 +153,12 @@ export function computeFreshness(
       count: count(db, "todos"),
       stage: "scan",
     });
+    out.tokens = section(db, builtAt, {
+      dataAt: scalar(db, "SELECT max(ts) AS v FROM usage_requests"),
+      collectedAt: usageScannedAt,
+      count: count(db, "usage_requests"),
+      stage: "scan:usage",
+    });
     out.decisions = section(db, builtAt, {
       dataAt: scalar(db, "SELECT max(modifiedAt) AS v FROM decisions"),
       collectedAt: lastScanAt,

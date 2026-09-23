@@ -321,3 +321,54 @@ test("REGRESSION: a symlinked project directory is followed, not silently pruned
     fs.rmSync(real, { recursive: true, force: true });
   }
 });
+
+test("token rows are mined beside the events and replaced per file", () => {
+  const usageLine = (session: string, ts: string, requestId: string, out: number) => ({
+    type: "assistant",
+    timestamp: ts,
+    sessionId: session,
+    cwd: "/tmp/workspace/atlas",
+    requestId,
+    message: {
+      role: "assistant",
+      model: "claude-test-1",
+      id: `msg-${requestId}`,
+      content: [{ type: "tool_use", name: "Read", id: `toolu_${requestId}`, input: { file_path: "/tmp/workspace/atlas/README.md" } }],
+      usage: { input_tokens: 100, cache_creation_input_tokens: 200, cache_read_input_tokens: 300, output_tokens: out },
+    },
+  });
+  const resultLine = (session: string, ts: string, requestId: string) => ({
+    type: "user",
+    timestamp: ts,
+    sessionId: session,
+    cwd: "/tmp/workspace/atlas",
+    message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_${requestId}`, content: "x".repeat(360) }] },
+  });
+  const file = transcript("proj-t", "sess-t", [
+    { type: "user", timestamp: "2026-08-03T10:00:00Z", sessionId: "sess-t", cwd: "/tmp/workspace/atlas", message: { role: "user", content: "go" } },
+    usageLine("sess-t", "2026-08-03T10:00:01Z", "req-1", 10),
+    usageLine("sess-t", "2026-08-03T10:00:01Z", "req-1", 999), // streaming duplicate: same request, counted once
+    resultLine("sess-t", "2026-08-03T10:00:02Z", "req-1"),
+    usageLine("sess-t", "2026-08-03T10:00:03Z", "req-2", 20),
+  ]);
+  let r = runScan();
+  assert.equal(r.status, 0, r.stderr);
+  const requests = () =>
+    db((d) => d.prepare("SELECT id, output, turnIndex FROM usage_requests WHERE sessionId = 'sess-t' ORDER BY id").all() as { id: string; output: number; turnIndex: number }[]);
+  assert.deepEqual(requests(), [
+    { id: "req-1", output: 10, turnIndex: 1 },
+    { id: "req-2", output: 20, turnIndex: 1 },
+  ]);
+  const carry = db((d) => d.prepare("SELECT tool, file, resultTokensEst, responsesRemaining, carryEst FROM usage_carry WHERE sessionId = 'sess-t'").all());
+  assert.deepEqual(carry, [{ tool: "Read", file: "/tmp/workspace/atlas/README.md", resultTokensEst: 100, responsesRemaining: 1, carryEst: 100 }]);
+
+  // The file shrinks to one request: its token rows are replaced, not accumulated.
+  fs.writeFileSync(file, [
+    { type: "user", timestamp: "2026-08-03T10:00:00Z", sessionId: "sess-t", cwd: "/tmp/workspace/atlas", message: { role: "user", content: "go" } },
+    usageLine("sess-t", "2026-08-03T10:00:01Z", "req-9", 5),
+  ].map((l) => JSON.stringify(l)).join("\n") + "\n");
+  r = runScan();
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(requests().map((q) => q.id), ["req-9"]);
+  assert.equal(db((d) => (d.prepare("SELECT count(*) c FROM usage_carry WHERE sessionId = 'sess-t'").get() as { c: number }).c), 0);
+});

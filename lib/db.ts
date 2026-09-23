@@ -267,6 +267,47 @@ CREATE TABLE IF NOT EXISTS usage_files (
   scannedAt TEXT
 );
 
+-- Token accounting, OWNER-ONLY end to end (the public rollup never reads these
+-- tables and the public snapshot verifier asserts the section's absence).
+-- One row per API request as the transcript records it, summed once per
+-- requestId; mined per file by scan:usage beside tool_events and replaced per
+-- file the same way. Measured counts only; cost is computed at read time.
+CREATE TABLE IF NOT EXISTS usage_requests (
+  id TEXT PRIMARY KEY,        -- requestId, else message id, else sessionId:lineIndex
+  sessionId TEXT,
+  ts TEXT,
+  model TEXT,
+  project TEXT,               -- derived from cwd; owner-only
+  input INTEGER NOT NULL DEFAULT 0,
+  cacheCreation INTEGER NOT NULL DEFAULT 0,
+  cacheRead INTEGER NOT NULL DEFAULT 0,
+  output INTEGER NOT NULL DEFAULT 0,
+  turnIndex INTEGER NOT NULL DEFAULT 0,
+  scannedAt TEXT,
+  sourceFile TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_usage_requests_session ON usage_requests(sessionId);
+CREATE INDEX IF NOT EXISTS idx_usage_requests_ts ON usage_requests(ts);
+CREATE INDEX IF NOT EXISTS idx_usage_requests_source ON usage_requests(sourceFile);
+-- One row per tool result: the tool, the file the call named (the ONLY input
+-- value kept anywhere, owner-only, so a carry row can say what to act on), the
+-- result's estimated tokens and how many responses re-sent it. Estimated.
+CREATE TABLE IF NOT EXISTS usage_carry (
+  id TEXT PRIMARY KEY,        -- tool_use id, else sessionId:lineIndex
+  sessionId TEXT,
+  ts TEXT,
+  tool TEXT NOT NULL,
+  file TEXT,
+  project TEXT,
+  resultTokensEst INTEGER NOT NULL DEFAULT 0,
+  responsesRemaining INTEGER NOT NULL DEFAULT 0,
+  carryEst INTEGER NOT NULL DEFAULT 0,
+  scannedAt TEXT,
+  sourceFile TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_usage_carry_session ON usage_carry(sessionId);
+CREATE INDEX IF NOT EXISTS idx_usage_carry_source ON usage_carry(sourceFile);
+
 -- Per-stage collector run log. Exists so that "never ran", "ran and found
 -- nothing" and "ran and failed" are three distinguishable outcomes rather than
 -- one empty table. Read by lib/freshness.ts; written by the collectors.

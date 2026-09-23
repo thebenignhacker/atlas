@@ -38,6 +38,12 @@ instantly and works offline.
   call, then only the cards whose content changed since the snapshot; cached for a
   minute), so a card pushed to the forge shows within a minute with no deploy. When the
   forge cannot be read the page serves the bundled snapshot and says so.
+- **Tokens** (owner view) — what the coding sessions cost, mined from the same transcripts
+  as the usage view: tokens per session and per repo (input, cache write, cache read,
+  output, summed once per request), the context each turn re-bills (prefix max and
+  median per session), a cache-hit ratio, and which tool results carry the most context,
+  by tool and by file. Token counts are measured; the dollar figure is an estimate at flat
+  list rates and says so; carry is an estimate and says so.
 - **Session board** (owner view) — who holds which repo and paths across `.claude-sessions/`
   directories, parsed with the claim guard's own parser (`scripts/session-board.py`,
   which needs `python3` and the guard script at `~/.claude/hooks/shared-repo-claim-guard.py`;

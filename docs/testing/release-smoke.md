@@ -38,6 +38,7 @@ Open every page and read the numbers, not just the status code:
 | `/session-board` | Trees listed, or a plain sentence saying why the board is unavailable |
 | `/context` | Cards with freshness badges; a stale card shows its re-verify command |
 | `/usage` | Feature counts and a 30-day trend after `npm run scan:usage` |
+| `/tokens` | Owner-only. Request and session counts match `npm run scan:usage`'s corpus; every cost and carry figure is labeled estimated; the per-file carry rows name a path and a tool; in public mode the page shows the owner-only gate |
 | `/strategy` | Empty state names `strategyDocs` if the config has none |
 | `/sessions`, `/activity`, `/digest`, `/settings` | Render without an error boundary |
 
@@ -64,7 +65,7 @@ ATLAS_MODE=public npm run build && ATLAS_MODE=public npm start
 
 Expected on the public build: `/todos`, `/roadmap`, `/decisions`, `/sessions`, `/session-board`,
 `/strategy`, `/digest` and `/settings` show the owner-only gate, not data;
-`grep -c '"decisions"' public-snapshot.json` prints 0.
+`grep -c '"decisions"' public-snapshot.json` prints 0, and so does `grep -c '"tokens"' public-snapshot.json`.
 
 For a unified or owner deployment, additionally: log in with a wrong password (refused),
 the right password (owner data appears), sign out (public data again).
