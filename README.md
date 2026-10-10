@@ -189,6 +189,14 @@ retired), normalized by the same rules as the board, so the two never disagree o
 unit with no readable `Status:` field is `todo` (seeded, unvetted) and its spelling is
 reported. `--json` prints one line per unit for tooling; `--config PATH` reads another config.
 
+The census counts each tree at its `origin/main`, never at the working tree: it runs
+`git fetch origin main` in every tree (`--no-fetch` reads the last fetched ref instead) and
+reads the roadmap files with `git ls-tree` and `git cat-file`, so a checkout that is behind,
+ahead or carrying drafts does not change the count. Every tree prints the sha it was read at,
+how many commits its checkout is behind and ahead, and how many units on origin are missing
+from the checkout. A tree whose `origin/main` does not resolve prints `unknown`, never 0, and
+is left out of the totals.
+
 ## Deployment modes
 
 Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`:
