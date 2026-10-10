@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { normalizeStatus } from "@/lib/roadmap";
+import { GIT_ENV, bareOrigin, publish } from "./git-fixture";
 
 /**
  * The census script (Python) and the /roadmap board (lib/roadmap.ts) read the
@@ -35,13 +36,16 @@ test("census and board normalize every status spelling identically", () => {
     fs.writeFileSync(path.join(todo, "roadmap", `unit-${i}.md`), body);
   });
   fs.writeFileSync(path.join(todo, "roadmap", "README.md"), "# not a unit\n\n**Status:** done\n");
+  // The census reads origin/main, so the fixture is pushed; the todo dir sits in a
+  // subdirectory of its repo, as it can in a real tree.
+  publish(root, bareOrigin(path.join(os.tmpdir(), `${path.basename(root)}-origin.git`)), ["todo"]);
   const cfg = path.join(root, "atlas.config.json");
   fs.writeFileSync(cfg, JSON.stringify({ todoDirs: [todo] }));
 
   const out = execFileSync(
     "python3",
     [path.join(REPO, "scripts", "roadmap-census.py"), "--json", "--config", cfg],
-    { encoding: "utf8" }
+    { encoding: "utf8", env: GIT_ENV }
   );
   const rows = out.trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) as {
     file: string;
