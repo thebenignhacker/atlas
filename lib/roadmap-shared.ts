@@ -52,6 +52,16 @@ export interface RoadmapItem {
   dependsOn: string[];
   repos: string[];
   links: RoadmapLink[];
+  /**
+   * Who the unit is reserved for (the **Owner:** field), null when absent.
+   * Optional on the type because an owner snapshot baked before the field
+   * existed carries items without it; read it as `item.owner ?? null`.
+   */
+  owner?: string | null;
+  /** How the unit is executed (the **Execution:** field), null when absent. */
+  execution?: string | null;
+  /** Size estimate as written (the **Effort:** field), null when absent. */
+  effort?: string | null;
   /** Description body (everything above the ## Log section, fields stripped). */
   body: string;
   comments: RoadmapComment[];
