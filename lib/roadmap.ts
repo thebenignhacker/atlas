@@ -43,11 +43,18 @@ function roadmapDirs(): string[] {
  * Match a bold field line in any of these styles, colon inside or outside the
  * bold markers, value optional:
  *   **Key:** val   |   **Key**: val   |   **Key:**   |   **Key** val
+ * The match stays on the field's own line: an empty `**Key:**` reads as "",
+ * never as the next line of the file.
  */
 function field(content: string, key: string): string | null {
-  const re = new RegExp(`^\\*\\*${key}[:\\s]*\\*\\*\\s*:?\\s*(.*)$`, "im");
+  const re = new RegExp(`^\\*\\*${key}[: \\t]*\\*\\*[ \\t]*:?[ \\t]*(.*)$`, "im");
   const m = content.match(re);
   return m ? m[1].trim() : null;
+}
+
+/** A free-text field, null when the line is absent or carries no value. */
+function optionalField(content: string, key: string): string | null {
+  return field(content, key) || null;
 }
 
 function firstHeading(content: string, fallback: string): string {
@@ -126,7 +133,7 @@ function parseBody(content: string): string {
   if (logIdx !== -1) b = b.slice(0, logIdx);
   return b
     .replace(/^#\s+.+$/m, "") // title heading
-    .replace(/^\*\*[^*]+\*\*\s*:?.*$/gim, "") // **Field:** lines
+    .replace(/^\*\*[^*]+\*\*[ \t]*:?.*$/gim, "") // **Field:** lines
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -161,6 +168,9 @@ function parseFile(filePath: string): RoadmapItem | null {
     dependsOn: parseList(field(content, "Depends")),
     repos: parseList(field(content, "Repos")),
     links: parseLinks(field(content, "Links")),
+    owner: optionalField(content, "Owner"),
+    execution: optionalField(content, "Execution"),
+    effort: optionalField(content, "Effort"),
     body: parseBody(content),
     comments: parseComments(content),
     path: filePath,

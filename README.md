@@ -28,7 +28,8 @@ instantly and works offline.
   Filter by priority (P0-P3), status, repo, or staleness. One click opens the source
   file in VS Code.
 - **Roadmap board** — one card per unit file in `<todoDir>/roadmap/*.md` (fields: Area,
-  Kind, Status, Priority, Order, Depends, Repos, Links), grouped by status. In local mode
+  Kind, Status, Priority, Order, Depends, Repos, Links, Owner, Execution, Effort), grouped
+  by status and filterable by owner. In local mode
   the board writes back: changing a status or adding a comment edits the unit file in place.
 - **Decision log** (owner view) — one card per file in `<todoDir>/decisions/*.md`, with
   queued actions and unresolved conflicts first. Files the strict parser refuses are

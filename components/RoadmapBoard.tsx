@@ -11,6 +11,7 @@ import {
   Code2,
   FileText,
   Search,
+  UserRound,
 } from "lucide-react";
 import {
   ROADMAP_STATUSES,
@@ -46,6 +47,9 @@ const BOARD_COLUMNS: { status: RoadmapStatus; sub?: RoadmapStatus }[] = [
   { status: "done", sub: "retired" },
 ];
 
+/** Owner-filter value for items whose file carries no **Owner:** field. */
+const NO_OWNER = "__none__";
+
 export function RoadmapBoard({
   items,
   readOnly = false,
@@ -56,6 +60,7 @@ export function RoadmapBoard({
   const [group, setGroup] = useState<"status" | "area">("status");
   const [area, setArea] = useState("all");
   const [priority, setPriority] = useState("all");
+  const [owner, setOwner] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [hideDone, setHideDone] = useState(false);
@@ -70,6 +75,13 @@ export function RoadmapBoard({
     () => Array.from(new Set(items.map((i) => i.area))).sort(),
     [items]
   );
+  const owners = useMemo(
+    () =>
+      Array.from(
+        new Set(items.map((i) => i.owner).filter((o): o is string => !!o))
+      ).sort(),
+    [items]
+  );
 
   // A blocked item is "ready to start" when it has dependencies and they are all
   // done — the same rule the card uses to flag "deps clear".
@@ -82,6 +94,8 @@ export function RoadmapBoard({
   const visible = items.filter((i) => {
     if (area !== "all" && i.area !== area) return false;
     if (priority !== "all" && i.priority !== priority) return false;
+    if (owner === NO_OWNER ? !!i.owner : owner !== "all" && i.owner !== owner)
+      return false;
     if (statusFilter === "active") {
       if (i.status !== "in-progress" && i.status !== "in-review") return false;
     } else if (statusFilter === "ready-to-start") {
@@ -93,7 +107,7 @@ export function RoadmapBoard({
       return false;
     }
     if (hideDone && i.status === "done") return false;
-    if (q && !`${i.title} ${i.area} ${i.id} ${i.body}`.toLowerCase().includes(q))
+    if (q && !`${i.title} ${i.area} ${i.id} ${i.owner ?? ""} ${i.body}`.toLowerCase().includes(q))
       return false;
     return true;
   });
@@ -101,6 +115,7 @@ export function RoadmapBoard({
   const filtersActive =
     area !== "all" ||
     priority !== "all" ||
+    owner !== "all" ||
     statusFilter !== "all" ||
     hideDone ||
     q !== "";
@@ -108,6 +123,7 @@ export function RoadmapBoard({
   function clearFilters() {
     setArea("all");
     setPriority("all");
+    setOwner("all");
     setStatusFilter("all");
     setQuery("");
     setHideDone(false);
@@ -234,6 +250,22 @@ export function RoadmapBoard({
             <option value="P2">P2</option>
             <option value="P3">P3</option>
           </select>
+
+          {owners.length > 0 && (
+            <select
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+              className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
+            >
+              <option value="all">All owners</option>
+              {owners.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+              <option value={NO_OWNER}>No owner</option>
+            </select>
+          )}
 
           <label className="inline-flex items-center gap-1.5 text-sm text-muted">
             <input
@@ -407,6 +439,15 @@ function RoadmapCard({
             <span className="inline-flex items-center gap-1 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
               {item.area}
             </span>
+            {item.owner && (
+              <span
+                title="Owner"
+                className="inline-flex items-center gap-1 rounded bg-purple/15 px-1.5 py-0.5 text-[10px] font-medium text-purple"
+              >
+                <UserRound className="h-3 w-3" />
+                {item.owner}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 text-[10px] text-faint">
               {item.kind === "code" ? <Code2 className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
               {item.kind === "non-code" ? "form / writeup" : item.kind}
@@ -504,6 +545,23 @@ function RoadmapCard({
 
       {open && (
         <div className="mt-2.5 space-y-3 border-t border-line pt-3">
+          {(item.execution || item.effort) && (
+            <dl className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
+              {item.execution && (
+                <div className="flex gap-1.5">
+                  <dt className="text-faint">Execution</dt>
+                  <dd className="text-muted">{item.execution}</dd>
+                </div>
+              )}
+              {item.effort && (
+                <div className="flex gap-1.5">
+                  <dt className="text-faint">Effort</dt>
+                  <dd className="text-muted">{item.effort}</dd>
+                </div>
+              )}
+            </dl>
+          )}
+
           {item.body && (
             <p className="whitespace-pre-wrap text-xs leading-relaxed text-muted">{item.body}</p>
           )}
