@@ -53,11 +53,25 @@ def field(t, k):
     return m.group(1).strip().strip('*`').strip() if m else ''
 
 
+# The variables that tie git to one repository: the list `git rev-parse --local-env-vars` prints,
+# less GIT_CONFIG_PARAMETERS and GIT_CONFIG_COUNT (`-c` settings, which git itself passes on when it
+# runs a command in another repository), plus GIT_NAMESPACE. Git exports GIT_DIR to a hook that
+# runs from a linked worktree, and an inherited one would point every `git -C <tree>` below at that
+# repository instead of the tree, so none of them is passed on. The rest of the environment, which
+# a fetch may need, is.
+REPO_LOCAL_GIT_VARS = frozenset((
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_CONFIG', 'GIT_OBJECT_DIRECTORY', 'GIT_DIR', 'GIT_WORK_TREE',
+    'GIT_IMPLICIT_WORK_TREE', 'GIT_GRAFT_FILE', 'GIT_INDEX_FILE', 'GIT_NO_REPLACE_OBJECTS',
+    'GIT_REPLACE_REF_BASE', 'GIT_PREFIX', 'GIT_SHALLOW_FILE', 'GIT_COMMON_DIR', 'GIT_NAMESPACE'))
+
+
 def git(cwd, *a, data=None, timeout=60):
     """Run git in cwd and return (ok, stdout bytes). Never prompts for credentials."""
+    env = {k: v for k, v in os.environ.items() if k not in REPO_LOCAL_GIT_VARS}
+    env['GIT_TERMINAL_PROMPT'] = '0'
     try:
         r = subprocess.run(['git', '-C', cwd, *a], input=data, capture_output=True, timeout=timeout,
-                           env=dict(os.environ, GIT_TERMINAL_PROMPT='0'))
+                           env=env)
     except (OSError, subprocess.TimeoutExpired):
         return False, b''
     return r.returncode == 0, r.stdout

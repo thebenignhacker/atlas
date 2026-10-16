@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { boardCounts, scanSessionBoard, sessionTrees } from "@/lib/session-board";
 import type { AtlasConfig } from "@/lib/config";
+import { GIT_ENV } from "../git/env";
 
 /**
  * The collector is tested against a STUB guard (written to a tmpdir and routed
@@ -60,10 +61,15 @@ function write(rel: string, content: string, ageDays = 0): void {
 }
 
 function git(cwd: string, ...args: string[]): void {
-  execFileSync("git", args, { cwd, stdio: "ignore" });
+  execFileSync("git", args, { cwd, env: GIT_ENV, stdio: "ignore" });
 }
 
 before(() => {
+  // The collector runs `git worktree list` from this process, so a GIT_DIR
+  // inherited from a hook would point it at that repository instead of the
+  // fixture's; this process keeps no GIT_ variable either.
+  for (const name of Object.keys(process.env)) if (name.startsWith("GIT_")) delete process.env[name];
+
   base = fs.mkdtempSync(path.join(os.tmpdir(), "board-"));
   tree = path.join(base, "tree");
   fs.mkdirSync(path.join(tree, ".claude-sessions"), { recursive: true });
