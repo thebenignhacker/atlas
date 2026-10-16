@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { parseDecisionEntry, scanDecisionLog } from "@/lib/scanners/decisions";
+import { GIT_ENV } from "../git/env";
 
 /**
  * The parser is closed by spec (append-only log: fix the card, not the parser).
@@ -135,9 +136,9 @@ test("disk and content parsing agree, and the blob sha is git's own", async () =
   if (viaContent.kind !== "card") return;
   assert.deepEqual(viaContent.card, viaDisk.card, "the forge path and the disk path are one parser");
   // The sha the forge lists for a file is git's blob id; an independent oracle.
-  const oracle = execFileSync("git", ["hash-object", "--stdin"], { input: GOOD, encoding: "utf8" }).trim();
+  const oracle = execFileSync("git", ["hash-object", "--stdin"], { input: GOOD, encoding: "utf8", env: GIT_ENV }).trim();
   assert.equal(viaDisk.card.blobSha, oracle);
-  assert.equal(gitBlobSha("héllo\n"), execFileSync("git", ["hash-object", "--stdin"], { input: "héllo\n", encoding: "utf8" }).trim(), "byte length, not character length");
+  assert.equal(gitBlobSha("héllo\n"), execFileSync("git", ["hash-object", "--stdin"], { input: "héllo\n", encoding: "utf8", env: GIT_ENV }).trim(), "byte length, not character length");
 });
 
 test("a refused card still carries its blob sha", () => {
