@@ -251,11 +251,13 @@ export function RoadmapBoard({
             <option value="P3">P3</option>
           </select>
 
+          {/* A native select is as wide as its longest option, and an owner can be
+              a whole sentence, so this one is capped to its row. */}
           {owners.length > 0 && (
             <select
               value={owner}
               onChange={(e) => setOwner(e.target.value)}
-              className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
+              className="min-w-0 max-w-full rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none sm:max-w-xs"
             >
               <option value="all">All owners</option>
               {owners.map((o) => (
