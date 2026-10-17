@@ -19,3 +19,22 @@ export function computeSignals(repo: Repo, now = new Date()): RepoSignals {
 
   return { staleness, daysSinceCommit: days, attention };
 }
+
+/**
+ * Re-measures staleness against `now` for repos read from a snapshot. A snapshot
+ * stores the signals of the moment it was built; "Active today" from a build
+ * weeks ago is not true today. Attention is kept as stored: it is not
+ * time-based, and the public snapshot already cleared its local-only inputs.
+ */
+export function refreshSignals<T extends Repo & { signals: RepoSignals }>(
+  repos: T[],
+  now = new Date()
+): T[] {
+  return repos.map((r) => {
+    const fresh = computeSignals(r, now);
+    return {
+      ...r,
+      signals: { ...fresh, attention: r.signals?.attention ?? fresh.attention },
+    };
+  });
+}
