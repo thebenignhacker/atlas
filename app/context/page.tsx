@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getContextCards, getContextMetrics, getFreshness } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
@@ -6,6 +7,7 @@ import { ContextView } from "@/components/ContextView";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Context" };
 
 export default async function ContextPage() {
   const mode = await getRequestMode();
@@ -26,11 +28,11 @@ export default async function ContextPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Context"
-        subtitle="Verified facts about your projects — each pinned to its sources and a re-check command, so stale context flags itself instead of misleading you."
+        subtitle="Verified facts about your projects, each pinned to its sources and a re-check command, so stale context flags itself instead of misleading you."
         freshness={getFreshness(mode, "context")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
-      <ContextMetrics m={metrics} />
+      <ContextMetrics m={metrics} publicView={mode === "public"} />
       <ContextView cards={cards} />
     </div>
   );

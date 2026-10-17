@@ -487,7 +487,7 @@ function RoadmapCard({
         )}
         {canStart && (
           <span className="inline-flex items-center gap-1 rounded bg-teal/10 px-1.5 py-0.5 text-[10px] font-medium text-teal">
-            deps clear — ready to start
+            deps clear, ready to start
           </span>
         )}
       </div>

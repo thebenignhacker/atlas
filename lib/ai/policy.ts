@@ -18,6 +18,6 @@ export function eligibilityReason(
 ): string | null {
   if (isRepoAIEligible(repo)) return null;
   return repo.visibility === "private"
-    ? "Private repo — opt in (Settings) to include in AI."
-    : "Unknown visibility — opt in (Settings) to include in AI.";
+    ? "Private repo. Opt in (Settings) to include in AI."
+    : "Unknown visibility. Opt in (Settings) to include in AI.";
 }

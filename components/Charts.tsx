@@ -1,6 +1,6 @@
 "use client";
 
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
 // Shared chart primitives so every page's "at a glance" section looks the same:
 // a labeled panel, a composition donut (with a centered total + value legend),
@@ -55,6 +55,13 @@ export function ChartEmpty() {
   );
 }
 
+/**
+ * The donut column's fixed size. The chart is drawn at this size directly: a
+ * ResponsiveContainer renders once at recharts' placeholder size of -1 by -1
+ * before it measures, and recharts logs a console warning for that render.
+ */
+const DONUT_SIZE = { width: 136, height: 150 };
+
 /** Composition donut with a centered total and a value legend. */
 export function Donut({ data, unit }: { data: Slice[]; unit: string }) {
   const total = data.reduce((s, d) => s + d.value, 0);
@@ -62,29 +69,31 @@ export function Donut({ data, unit }: { data: Slice[]; unit: string }) {
   return (
     <div className="flex items-center gap-3">
       {/* Fixed-width donut column so the ring's outerRadius always sits inside it
-          with margin — a percentage width can shrink below the diameter and clip. */}
-      <div className="relative h-[150px] w-[136px] shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              innerRadius={40}
-              outerRadius={58}
-              paddingAngle={2}
-              startAngle={90}
-              endAngle={-270}
-              stroke="#fffdf8"
-              strokeWidth={2}
-            >
-              {data.map((d) => (
-                <Cell key={d.name} fill={d.color} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v, n) => [`${v} ${unit}`, n]} />
-          </PieChart>
-        </ResponsiveContainer>
+          with margin; a percentage width can shrink below the diameter and clip. */}
+      <div className="relative shrink-0" style={DONUT_SIZE}>
+        <PieChart
+          width={DONUT_SIZE.width}
+          height={DONUT_SIZE.height}
+          margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
+        >
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={40}
+            outerRadius={58}
+            paddingAngle={2}
+            startAngle={90}
+            endAngle={-270}
+            stroke="#fffdf8"
+            strokeWidth={2}
+          >
+            {data.map((d) => (
+              <Cell key={d.name} fill={d.color} />
+            ))}
+          </Pie>
+          <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v, n) => [`${v} ${unit}`, n]} />
+        </PieChart>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-display text-2xl font-semibold leading-none tnum text-text">
             {total}

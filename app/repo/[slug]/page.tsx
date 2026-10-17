@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -24,6 +25,23 @@ import { RepoSummary } from "@/components/RepoSummary";
 import { AiBadge } from "@/components/AiBadge";
 
 export const dynamic = "force-dynamic";
+
+/** Titled by the repository it shows, from the same lookup the page renders. */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const mode = await getRequestMode();
+  let name: string | null = null;
+  try {
+    name = getRepo(mode, slug)?.name ?? null;
+  } catch {
+    name = null;
+  }
+  return { title: name ?? "Page not found" };
+}
 
 export default async function RepoPage({
   params,

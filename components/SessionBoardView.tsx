@@ -31,7 +31,7 @@ export function SessionBoardView({ board }: { board: SessionBoard }) {
         <p className="mt-1 text-muted">{board.error}</p>
         <p className="mt-2 text-xs text-faint">
           The board parses session files through the shared claim guard and has no
-          fallback parser — fix the guard bridge, then rerun the scan.
+          fallback parser. Fix the guard bridge, then rerun the scan.
         </p>
       </div>
     );
@@ -94,8 +94,7 @@ export function SessionBoardView({ board }: { board: SessionBoard }) {
                             {w.branch && <span className="text-faint"> [{w.branch}]</span>}
                             {w.matchedFiles.length > 0 && (
                               <span className="text-faint">
-                                {" "}
-                                — named by {w.matchedFiles.join(", ")}
+                                , named by {w.matchedFiles.join(", ")}
                               </span>
                             )}
                           </div>
@@ -122,7 +121,7 @@ export function SessionBoardView({ board }: { board: SessionBoard }) {
               <div className="mt-4 rounded-lg border border-amber/40 bg-surface-1 p-3">
                 <p className="text-sm font-medium text-amber">
                   {tree.staleActives.length} stale-active session file
-                  {tree.staleActives.length === 1 ? "" : "s"} — set Status: done and
+                  {tree.staleActives.length === 1 ? "" : "s"}. Set Status: done and
                   move to archive/
                 </p>
                 <div className="mt-2 space-y-0.5">

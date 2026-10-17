@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getFreshness, getRepos, getTodos } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
@@ -6,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Todos" };
 
 export default async function TodosPage() {
   const mode = await getRequestMode();

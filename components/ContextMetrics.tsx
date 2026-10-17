@@ -5,6 +5,10 @@ import type { ContextMetrics, Freshness } from "@/lib/types";
  * The Context Store metrics panel. Hero = stale facts caught (measured, from the
  * event log). Secondaries: tokens saved (a labeled estimate) and a freshness
  * coverage bar. Server-rendered; no client JS.
+ *
+ * The public snapshot never carries reads or tokens saved (they count the
+ * owner's own sessions and are published as 0), so the public view says what
+ * those two tiles show instead of rendering them as measured zeros.
  */
 
 const SEGMENTS: { key: Freshness; label: string; color: string }[] = [
@@ -15,8 +19,17 @@ const SEGMENTS: { key: Freshness; label: string; color: string }[] = [
   { key: "unverified", label: "unverified", color: "var(--color-faint)" },
 ];
 
-export function ContextMetrics({ m }: { m: ContextMetrics }) {
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+export function ContextMetrics({
+  m,
+  publicView = false,
+}: {
+  m: ContextMetrics;
+  publicView?: boolean;
+}) {
   const total = SEGMENTS.reduce((n, s) => n + m.freshness[s.key], 0) || 1;
+  const cardsLabel = plural(m.activeCards, "active card", "active cards");
 
   return (
     <div className="mb-7 grid gap-px overflow-hidden rounded-[var(--radius-card)] border border-line bg-line lg:grid-cols-[1.4fr_1fr]">
@@ -31,37 +44,59 @@ export function ContextMetrics({ m }: { m: ContextMetrics }) {
             {m.staleCaught}
           </span>
           <span className="text-sm leading-snug text-muted">
-            stale {m.staleCaught === 1 ? "fact" : "facts"} flagged
-            <br />before they could mislead a session
+            stale {plural(m.staleCaught, "fact", "facts")} flagged
+            <br />before {plural(m.staleCaught, "it", "they")} could mislead a session
           </span>
         </div>
         <p className="mt-4 max-w-md text-[12px] leading-relaxed text-faint">
           Counted from the event log the moment a card&apos;s sources drift or its
-          check fails — measured, not estimated.
+          check fails. Measured, not estimated.
         </p>
       </div>
 
       {/* Secondary tiles */}
       <div className="grid grid-cols-2 gap-px bg-line">
-        <Tile
-          value={`~${formatK(m.tokensSavedEstimate)}`}
-          label="tokens saved"
-          hint="estimate"
-        />
-        <Tile value={m.activeCards} label="active cards" />
-        <Tile value={m.reads} label="reads served" />
-        <Tile
-          value={m.freshness.fresh}
-          label="verified fresh"
-          accent="text-emerald"
-        />
+        {publicView ? (
+          <>
+            <Tile value={m.activeCards} label={cardsLabel} />
+            <Tile
+              value={m.freshness.fresh}
+              label="verified fresh"
+              accent="text-emerald"
+            />
+            <p className="col-span-2 bg-surface-1 px-5 py-4 text-[12px] leading-relaxed text-muted">
+              The public view shows only the cards the owner has published and their
+              freshness. Reads served and tokens saved count the owner&apos;s own
+              sessions, so they are left out here. In the owner&apos;s view, those two
+              tiles show how many times a session read a card and an estimate of the
+              tokens those reads saved.
+            </p>
+          </>
+        ) : (
+          <>
+            <Tile
+              value={`~${formatK(m.tokensSavedEstimate)}`}
+              label="tokens saved"
+              hint="estimate"
+            />
+            <Tile value={m.activeCards} label={cardsLabel} />
+            <Tile value={m.reads} label={plural(m.reads, "read served", "reads served")} />
+            <Tile
+              value={m.freshness.fresh}
+              label="verified fresh"
+              accent="text-emerald"
+            />
+          </>
+        )}
       </div>
 
       {/* Freshness coverage bar (full width) */}
       <div className="bg-surface-1 px-6 py-5 lg:col-span-2">
         <div className="mb-2 flex items-center justify-between text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint">
           <span>freshness coverage</span>
-          <span>{m.activeCards} cards</span>
+          <span>
+            {m.activeCards} {plural(m.activeCards, "card", "cards")}
+          </span>
         </div>
         <div className="flex h-2.5 overflow-hidden rounded-full bg-surface-3">
           {SEGMENTS.map((s) =>

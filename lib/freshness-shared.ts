@@ -117,8 +117,8 @@ export function freshnessLabel(
   const dated = age !== null && age > INLINE_DATE_AFTER_DAYS;
   const collected = ageText(f.collectedAt, now, dated);
   const through = ageText(f.dataAt, now, dated);
-  if (f.status === "error") return `collection failed — showing data through ${through}`;
-  if (f.status === "empty") return `checked ${collected} — found nothing`;
+  if (f.status === "error") return `collection failed, showing data through ${through}`;
+  if (f.status === "empty") return `checked ${collected}, found nothing`;
 
   // Only mention the lag when it is big enough to matter; below the "recent"
   // bucket the two clocks are effectively the same instant and saying both

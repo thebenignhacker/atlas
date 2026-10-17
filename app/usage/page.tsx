@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getFreshness, getUsage } from "@/lib/queries";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { UsageCharts } from "@/components/UsageCharts";
@@ -10,6 +11,7 @@ import type { FeatureUsage, Routine, RoutineKind } from "@/lib/usage/types";
 import { relativeTime } from "@/lib/util/date";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Usage" };
 
 const KIND_META: Record<RoutineKind, { label: string; color: string }> = {
   skill: { label: "skill", color: "#1f8a7e" },
@@ -154,7 +156,7 @@ export default async function UsagePage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Usage"
-        subtitle="Which Claude Code features this work actually leans on — mined from session transcripts. Metadata only: tool names and timing, never commands or content."
+        subtitle="Which Claude Code features this work actually leans on, mined from session transcripts. Metadata only: tool names and timing, never commands or content."
         freshness={freshness}
         artifactBuiltAt={builtAt}
       />
@@ -182,7 +184,7 @@ export default async function UsagePage() {
                   <li key={f.feature} className="text-[12.5px]">
                     <span className="font-medium text-text">{f.displayName}</span>
                     {f.whenToUse && (
-                      <span className="text-muted"> — {f.whenToUse}</span>
+                      <span className="text-muted">: {f.whenToUse}</span>
                     )}
                   </li>
                 ))}

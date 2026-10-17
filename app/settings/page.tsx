@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Lock, ShieldCheck, Sparkles, Brain, CircleDollarSign } from "lucide-react";
 import { loadConfig } from "@/lib/config";
 import { aiAvailability } from "@/lib/ai/provider";
@@ -12,6 +13,7 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import { relativeTime } from "@/lib/util/date";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const mode = await getRequestMode();
@@ -44,7 +46,7 @@ export default async function SettingsPage() {
             {avail.ok ? (
               <span className="text-fresh">on · {avail.provider}</span>
             ) : (
-              <span className="text-amber">off — {avail.reason}</span>
+              <span className="text-amber">off: {avail.reason}</span>
             )}
           </Row>
           <Row label="Provider">{config.ai.provider}</Row>
@@ -66,12 +68,12 @@ export default async function SettingsPage() {
           <Row label="Prompt tokens">{cost.promptTokens.toLocaleString()}</Row>
           <Row label="Completion tokens">{cost.completionTokens.toLocaleString()}</Row>
           <p className="pt-1 text-xs text-faint">
-            Results are cached by content hash — re-scanning never re-spends tokens
+            Results are cached by content hash, so re-scanning never re-spends tokens
             unless the underlying content changed.
           </p>
         </Section>
 
-        <Section icon={ShieldCheck} title="Privacy — what gets sent">
+        <Section icon={ShieldCheck} title="Privacy: what gets sent">
           <p className="text-sm text-muted">
             When the AI layer runs, Atlas sends repo metadata, README text, and todo
             titles for <strong className="text-text">eligible</strong> repos to your
@@ -124,7 +126,7 @@ export default async function SettingsPage() {
           {feedback.length === 0 ? (
             <p className="text-sm text-faint">
               No corrections yet. When you fix something the AI got wrong, Atlas records
-              it here and feeds it back into future prompts — so it stops repeating the
+              it here and feeds it back into future prompts, so it stops repeating the
               mistake.
             </p>
           ) : (

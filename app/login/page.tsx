@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import { Compass } from "lucide-react";
 import { safeRedirectPath } from "@/lib/owner-auth/redirect";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Owner access" };
 
 const ERRORS: Record<string, string> = {
   bad: "Incorrect password.",

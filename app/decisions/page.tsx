@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getDecisions, getDecisionSkips, getFreshness } from "@/lib/queries";
 import { getLiveDecisions, type LiveDecisions } from "@/lib/decisions-forge";
 import { loadOwnerSnapshot } from "@/lib/snapshot";
@@ -9,6 +10,7 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import type { Decision, DecisionSkip } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Decisions" };
 
 const CLASS_LABEL: Record<Decision["klass"], string> = {
   adopted: "adopted",
@@ -156,7 +158,7 @@ export default async function DecisionsPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Decisions"
-        subtitle="Every auto-adopted recommendation and queued action — what was chosen, why, and how to revert."
+        subtitle="Every auto-adopted recommendation and queued action: what was chosen, why, and how to revert."
         freshness={freshness}
         artifactBuiltAt={artifactBuiltAt}
       />
@@ -197,7 +199,7 @@ export default async function DecisionsPage() {
       {skips.length > 0 && (
         <section className="mt-6">
           <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-rose">
-            Not ingested — {skips.length} card file{skips.length === 1 ? "" : "s"} the parser refused
+            Not ingested: {skips.length} card file{skips.length === 1 ? "" : "s"} the parser refused
           </h2>
           <p className="mb-2 text-xs text-faint">
             The card format is append-only and the parser is closed by spec: fix the card, not the
@@ -214,7 +216,7 @@ export default async function DecisionsPage() {
       {queued.length > 0 && (
         <section className="mt-6">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber">
-            Queued for you — pre-staged, waiting on your hands or authority
+            Queued for you: pre-staged, waiting on your hands or authority
           </h2>
           <div className="space-y-3">
             {queued.map((d) => (
@@ -226,7 +228,7 @@ export default async function DecisionsPage() {
       {conflicts.length > 0 && (
         <section className="mt-6">
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose">
-            Unresolved conflicts — both positions carried intact
+            Unresolved conflicts: both positions carried intact
           </h2>
           <div className="space-y-3">
             {conflicts.map((d) => (

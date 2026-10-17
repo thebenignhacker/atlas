@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getFreshness, getSessionBoard } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
@@ -6,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Session board" };
 
 export default async function SessionBoardPage() {
   const mode = await getRequestMode();
@@ -59,7 +61,7 @@ export default async function SessionBoardPage() {
         <SessionBoardView board={board} />
       ) : (
         <p className="mt-6 text-sm text-muted">
-          No session board yet — run <span className="font-mono">npm run scan</span>.
+          No session board yet. Run <span className="font-mono">npm run scan</span>.
         </p>
       )}
     </div>
