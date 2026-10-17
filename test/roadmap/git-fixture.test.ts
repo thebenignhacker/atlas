@@ -5,7 +5,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { GIT_ENV, git, gitEnv } from "./git-fixture";
 
 /**
@@ -16,7 +15,7 @@ import { GIT_ENV, git, gitEnv } from "./git-fixture";
  */
 
 const REPO = path.resolve(__dirname, "..", "..");
-const FIXTURE = pathToFileURL(path.join(__dirname, "git-fixture.ts")).href;
+const FIXTURE = path.join(__dirname, "git-fixture.ts");
 
 /** Every file under `dirs`, as path -> sha256 of its content. */
 function snapshot(...dirs: string[]): Record<string, string> {
@@ -47,12 +46,14 @@ test("a fixture built under an inherited GIT_DIR leaves that repository unchange
   const before = snapshot(repo, linked);
 
   // The same fixture calls the census tests make, in a process that inherits GIT_DIR.
+  // The process loads the fixture with require: tsx loads it as CommonJS, and on
+  // Node 22 an ES module that imports it sees none of its named exports.
   const work = path.join(root, "fixture");
   fs.mkdirSync(work);
   const build = `
-    import fs from "node:fs";
-    import path from "node:path";
-    import { bareOrigin, git, publish, writeUnit } from ${JSON.stringify(FIXTURE)};
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const { bareOrigin, git, publish, writeUnit } = require(${JSON.stringify(FIXTURE)});
     const work = ${JSON.stringify(work)};
     const origin = bareOrigin(path.join(work, "origin.git"));
     const seed = path.join(work, "seed");
@@ -61,7 +62,7 @@ test("a fixture built under an inherited GIT_DIR leaves that repository unchange
     publish(seed, origin, ["roadmap"]);
     git(work, "clone", "-q", origin, path.join(work, "clone"));
   `;
-  const run = spawnSync(process.execPath, ["--import", "tsx", "--input-type=module", "--eval", build], {
+  const run = spawnSync(process.execPath, ["--import", "tsx", "--input-type=commonjs", "--eval", build], {
     cwd: REPO,
     env: { ...GIT_ENV, GIT_DIR: linkedGitDir },
     encoding: "utf8",
