@@ -185,9 +185,11 @@ python3 scripts/roadmap-census.py --md --list in-progress
 ```
 
 Statuses are the seven the board uses (todo, blocked, ready, in-progress, in-review, done,
-retired), normalized by the same rules as the board, so the two never disagree on a file. A
-unit with no readable `Status:` field is `todo` (seeded, unvetted) and its spelling is
-reported. `--json` prints one line per unit for tooling; `--config PATH` reads another config.
+retired). The census reads the `**Status:**` line and normalizes it with ports of the
+board's field and status rules, and a parity test runs both over shared fixtures. A unit
+with no readable `**Status:**` field is `todo` (seeded, unvetted) and its spelling is
+reported. Each configured todoDir has its own row. `--json` prints one line per unit for
+tooling; `--config PATH` reads another config.
 
 The census counts each tree at its `origin/main`, never at the working tree: it runs
 `git fetch origin main` in every tree (`--no-fetch` reads the last fetched ref instead) and

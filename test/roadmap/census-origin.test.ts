@@ -127,3 +127,35 @@ test("a tree that cannot be read is unknown, never 0, and stays out of the total
   assert.equal(json.stdout.trim().split("\n").length, 1, "only the readable tree's unit is a row");
   assert.match(json.stderr, new RegExp(`${noOrigin}: unknown \\(origin/main does not resolve\\), not counted`));
 });
+
+test("<X>/todo and <X> each get a row, in either order, and the one that cannot be read is unknown", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-census-"));
+  const x = path.join(root, "x");
+  const todo = path.join(x, "todo");
+  fs.mkdirSync(todo, { recursive: true });
+  writeUnit(todo, "a.md", "done");
+  publish(todo, bareOrigin(path.join(root, "x-todo.git")), ["roadmap"]);
+
+  for (const todoDirs of [[todo, x], [x, todo]]) {
+    const cfg = config(root, todoDirs);
+    const run = spawnSync("python3", [CENSUS, "--config", cfg, "--no-fetch"], { encoding: "utf8", env: GIT_ENV });
+    assert.equal(run.status, 0, run.stderr);
+    const out = run.stdout;
+    assert.match(out, /^units=1 trees=1 unknown=1$/m);
+    assert.deepEqual(row(out, todo).slice(1), ["1", "0", "0", "0", "0", "0", "1", "0"]);
+    assert.deepEqual(row(out, x).slice(1), ["unknown", "-", "-", "-", "-", "-", "-", "-"]);
+    assert.match(out, new RegExp(`^  ${x}  unknown \\(not a git checkout\\)`, "m"));
+
+    const json = spawnSync("python3", [CENSUS, "--config", cfg, "--no-fetch", "--json"], {
+      encoding: "utf8",
+      env: GIT_ENV,
+    });
+    assert.equal(json.status, 0, json.stderr);
+    assert.deepEqual(
+      json.stdout.trim().split("\n").map((l) => (JSON.parse(l) as { tree: string }).tree),
+      [todo],
+      "the unit carries the name of the tree it was read from"
+    );
+    assert.match(json.stderr, new RegExp(`${x}: unknown \\(not a git checkout\\), not counted`));
+  }
+});

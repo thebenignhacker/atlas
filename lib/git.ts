@@ -1,10 +1,48 @@
 import { execFileSync } from "node:child_process";
 
+/**
+ * The variables that tie git to one repository: the list
+ * `git rev-parse --local-env-vars` prints, less GIT_CONFIG_PARAMETERS and
+ * GIT_CONFIG_COUNT (`-c` settings, which git itself passes on when it runs a
+ * command in another repository), plus GIT_NAMESPACE. scripts/roadmap-census.py
+ * removes the same names.
+ */
+const REPO_LOCAL_GIT_VARS = new Set([
+  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+  "GIT_CONFIG",
+  "GIT_OBJECT_DIRECTORY",
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_IMPLICIT_WORK_TREE",
+  "GIT_GRAFT_FILE",
+  "GIT_INDEX_FILE",
+  "GIT_NO_REPLACE_OBJECTS",
+  "GIT_REPLACE_REF_BASE",
+  "GIT_PREFIX",
+  "GIT_SHALLOW_FILE",
+  "GIT_COMMON_DIR",
+  "GIT_NAMESPACE",
+]);
+
+/**
+ * The environment to run git with when reading a configured repository. Git
+ * obeys an inherited GIT_DIR over the directory a command runs in (cwd or -C),
+ * and it exports GIT_DIR to a hook that runs from a linked worktree, so a scan
+ * started from such a hook would read that one repository for every configured
+ * one. The rest of the environment is passed on.
+ */
+export function repoGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const out = { ...env };
+  for (const name of REPO_LOCAL_GIT_VARS) delete out[name];
+  return out;
+}
+
 /** Run a git command in `cwd`, returning trimmed stdout or null on failure. */
 function git(cwd: string, args: string[]): string | null {
   try {
     return execFileSync("git", args, {
       cwd,
+      env: repoGitEnv(),
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
       maxBuffer: 1024 * 1024 * 8,

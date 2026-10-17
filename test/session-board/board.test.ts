@@ -185,6 +185,35 @@ test("board: holder, staleness, worktrees and unmatched claims", () => {
   assert.deepEqual(boardCounts(board), { active: 2, staleActive: 1 });
 });
 
+test("worktrees are listed from each repo, not from the repository an inherited GIT_DIR names", () => {
+  // Another checkout with a linked worktree, as a hook in it would see.
+  const other = path.join(base, "other");
+  fs.mkdirSync(other);
+  git(other, "init", "-q");
+  git(other, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "x");
+  const otherLinked = path.join(base, "wt", "other-hook");
+  git(other, "worktree", "add", "-q", otherLinked, "-b", "hook-branch");
+  const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], {
+    cwd: otherLinked,
+    env: GIT_ENV,
+    encoding: "utf8",
+  }).trim();
+
+  process.env.GIT_DIR = gitDir;
+  let board: ReturnType<typeof scanSessionBoard>;
+  try {
+    board = scanSessionBoard(config);
+  } finally {
+    delete process.env.GIT_DIR;
+  }
+  const t = board.trees[0];
+  const repoA = t.repos.find((r) => r.repo === "repoA");
+  assert.deepEqual(repoA?.worktrees.map((w) => w.branch), ["fix-branch"]);
+  // repoB's listing still fails on its own broken .git, and is still a note.
+  assert.ok(t.notes.some((n) => n.includes("repoB")));
+  assert.equal(t.repos.find((r) => r.repo === "repoB"), undefined);
+});
+
 test("a missing guard makes the board unavailable, loudly — no fallback parse", () => {
   const prev = process.env.ATLAS_CLAIM_GUARD_PATH;
   process.env.ATLAS_CLAIM_GUARD_PATH = path.join(base, "no-such-guard.py");

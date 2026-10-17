@@ -29,3 +29,18 @@ export function sameOriginUrl(path: unknown, origin: string): URL {
   const u = new URL(safeRedirectPath(path), origin);
   return u.origin === origin ? u : new URL("/", origin);
 }
+
+const PATH_BASE = "http://atlas.invalid";
+
+/**
+ * The same-origin target as a path, for a relative Location header (see
+ * seeOther in ./see-other.ts). Resolution removes dot segments, so
+ * "/.//evil.com" becomes the path "//evil.com", which a browser reads as a
+ * scheme-relative URL to another host; a path that starts with two slashes
+ * falls back to "/".
+ */
+export function sameOriginPath(path: unknown): string {
+  const u = sameOriginUrl(path, PATH_BASE);
+  const p = `${u.pathname}${u.search}${u.hash}`;
+  return p.startsWith("//") ? "/" : p;
+}

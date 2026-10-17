@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { repoGitEnv } from "@/lib/git";
 import { repoRoot } from "@/lib/paths";
 import type { AtlasConfig } from "@/lib/config";
 import type {
@@ -75,6 +76,7 @@ function repoDirs(tree: string, exclude: string[]): string[] {
  */
 function extraWorktrees(repoPath: string): { path: string; branch: string | null }[] {
   const out = execFileSync("git", ["-C", repoPath, "worktree", "list", "--porcelain"], {
+    env: repoGitEnv(), // an inherited GIT_DIR would list that repository's worktrees instead
     encoding: "utf8",
     timeout: 10_000,
     stdio: ["pipe", "pipe", "pipe"], // a non-repo's `fatal:` goes to the note, not the terminal
