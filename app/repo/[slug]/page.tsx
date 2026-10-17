@@ -41,7 +41,9 @@ export default async function RepoPage({
 
   // Both deployed modes show the AI summary read-only (the host can't generate).
   const readOnly = mode !== "local";
-  const todos = getTodos(mode, { repoSlug: slug });
+  // Todos are never exposed publicly, so the public view has no todos section.
+  const showTodos = mode !== "public";
+  const todos = showTodos ? getTodos(mode, { repoSlug: slug }) : [];
   const activity = getActivityForRepo(mode, slug, 25);
   const stale = STALENESS[repo.signals.staleness];
   const avail = aiAvailability(mode);
@@ -122,8 +124,9 @@ export default async function RepoPage({
           <span className={stale.text}>{relativeTime(repo.lastCommitAt)}</span>
         </Fact>
         <Fact label="Branch">
-          <span className="inline-flex items-center gap-1 font-mono text-sm">
-            <GitBranch className="h-3.5 w-3.5 text-faint" /> {repo.branch ?? "—"}
+          <span className="flex min-w-0 items-start gap-1 font-mono text-sm">
+            <GitBranch className="mt-[3px] h-3.5 w-3.5 shrink-0 text-faint" />
+            <span className="min-w-0 wrap-anywhere">{repo.branch ?? "—"}</span>
           </span>
         </Fact>
         <Fact label="Language">
@@ -169,40 +172,45 @@ export default async function RepoPage({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-text">
-            Linked todos{" "}
-            <span className="font-normal text-faint">({todos.length})</span>
-          </h2>
-          <div className="space-y-2">
-            {todos.length === 0 && (
-              <p className="text-sm text-faint">No todos linked to this repo.</p>
-            )}
-            {todos.slice(0, 12).map((t) => (
-              <div
-                key={t.id}
-                className="flex items-start gap-2 rounded-lg border border-line bg-surface-1 px-3 py-2"
-              >
-                {t.priority && (
-                  <span
-                    className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold ${PRIORITY[t.priority].bg} ${PRIORITY[t.priority].text}`}
-                  >
-                    {t.priority}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-text">{t.title}</div>
-                  <div className="text-[11px] text-faint">
-                    {t.status} · {t.createdAt}
+      {/* min-w-0 lets each grid item shrink to its column, so long titles truncate. */}
+      <div className={showTodos ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"}>
+        {showTodos && (
+          <section className="min-w-0">
+            <h2 className="mb-3 text-sm font-semibold text-text">
+              Linked todos{" "}
+              <span className="font-normal text-faint">({todos.length})</span>
+            </h2>
+            <div className="space-y-2">
+              {todos.length === 0 && (
+                <p className="text-sm text-faint">No todos linked to this repo.</p>
+              )}
+              {todos.slice(0, 12).map((t) => (
+                <div
+                  key={t.id}
+                  className="flex min-w-0 items-start gap-2 rounded-lg border border-line bg-surface-1 px-3 py-2"
+                >
+                  {t.priority && (
+                    <span
+                      className={`mt-0.5 rounded px-1.5 py-0.5 text-[10px] font-semibold ${PRIORITY[t.priority].bg} ${PRIORITY[t.priority].text}`}
+                    >
+                      {t.priority}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-sm text-text" title={t.title}>
+                      {t.title}
+                    </div>
+                    <div className="text-[11px] text-faint">
+                      {t.status} · {t.createdAt}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
 
-        <section>
+        <section className="min-w-0">
           <h2 className="mb-3 text-sm font-semibold text-text">Recent commits</h2>
           <div className="space-y-2">
             {activity.length === 0 && (
@@ -211,9 +219,11 @@ export default async function RepoPage({
             {activity.map((a) => (
               <div
                 key={a.id}
-                className="rounded-lg border border-line bg-surface-1 px-3 py-2"
+                className="min-w-0 rounded-lg border border-line bg-surface-1 px-3 py-2"
               >
-                <div className="truncate text-sm text-text">{a.title}</div>
+                <div className="truncate text-sm text-text" title={a.title}>
+                  {a.title}
+                </div>
                 <div className="text-[11px] text-faint">{relativeTime(a.ts)}</div>
               </div>
             ))}
