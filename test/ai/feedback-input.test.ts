@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseFeedback } from "@/lib/ai/feedback-input";
+import { parseFeedback, readFeedback } from "@/lib/ai/feedback-input";
 
 /**
  * POST /api/feedback refused a missing correctedValue with a 400 but recorded
@@ -83,4 +83,34 @@ test("a correction passes through as sent, and absent optional fields become nul
   // The summary panel sends aiValue: null when no summary was shown.
   const nulls = { ...body, aiValue: null, note: null };
   assert.deepEqual(parseFeedback(nulls), nulls);
+});
+
+/**
+ * The route ran req.json() inside the try whose catch answers with a 500
+ * carrying the error's message, so a body that was not valid JSON, an empty one
+ * included, got a 500 with the parser's text. The route now reads its body
+ * through readFeedback, which refuses such a body, and answers it with its 400
+ * instead.
+ */
+
+/** A POST to the feedback route whose body is `raw`, or that has no body. */
+function post(raw?: string): Request {
+  return new Request("http://127.0.0.1/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: raw,
+  });
+}
+
+test("a body that is not valid JSON is refused, an empty or missing one included", async () => {
+  for (const raw of ["{bad", "", "Corrected summary.", '{"entityType": "repo",']) {
+    assert.equal(await readFeedback(post(raw)), null, JSON.stringify(raw));
+  }
+  assert.equal(await readFeedback(post()), null, "no body");
+});
+
+test("a JSON body is read and checked as parseFeedback checks it", async () => {
+  assert.deepEqual(await readFeedback(post(JSON.stringify(body))), body);
+  assert.equal(await readFeedback(post(JSON.stringify({ ...body, entityType: {} }))), null);
+  assert.equal(await readFeedback(post("null")), null);
 });
