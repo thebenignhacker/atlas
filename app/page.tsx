@@ -6,7 +6,7 @@ import { PortfolioView } from "@/components/PortfolioView";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
-// The root layout's title template does not reach its own folder.
+// The root layout's title template does not reach the page in its own folder.
 export const metadata: Metadata = { title: { absolute: "Portfolio · Atlas" } };
 
 export default async function PortfolioPage({

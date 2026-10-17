@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { join, relative } from "node:path";
 import ts from "typescript";
 import { filesUnder } from "./source-files";
 
@@ -10,9 +10,11 @@ import { filesUnder } from "./source-files";
  * and history entries could not be told apart. The root layout now sets a
  * "%s · Atlas" template and each page names itself.
  *
- * Next.js applies a layout's template to deeper folders only: a page or
- * not-found file in the root layout's own folder gets its title as written, so
- * those two state the whole title as `absolute`.
+ * Next.js applies a layout's title template to the routes below it, the
+ * not-found page included, but not to the page in the layout's own folder: on
+ * the pinned version, `title: "Page not found"` in app/not-found.tsx renders as
+ * "Page not found · Atlas", while app/page.tsx gets its title as written, so
+ * the portfolio alone states the whole title as `absolute`.
  */
 
 const ROOT = process.cwd();
@@ -77,8 +79,8 @@ test("every page and the not-found page has its own tab title", () => {
     assert.ok(t, `${rel} exports metadata with a title, or generateMetadata`);
     if (t.dynamic) continue;
     let resolved: string | undefined;
-    if (dirname(f) === APP) {
-      assert.ok(t.absolute, `${rel} is in the root layout's folder, where the template does not apply: use title.absolute`);
+    if (f === join(APP, "page.tsx")) {
+      assert.ok(t.absolute, `${rel} is the page in the root layout's own folder, which the template does not reach: use title.absolute`);
       resolved = t.absolute;
     } else {
       resolved = t.absolute ?? (t.text !== undefined ? rootTitle?.template?.replace("%s", t.text) : undefined);
@@ -94,6 +96,7 @@ test("every page and the not-found page has its own tab title", () => {
     seen.set(t, rel);
   }
   assert.equal(titles.get("app/page.tsx"), "Portfolio · Atlas");
+  assert.equal(titles.get("app/not-found.tsx"), "Page not found · Atlas");
   assert.equal(titles.get("app/activity/page.tsx"), "Activity · Atlas");
 });
 

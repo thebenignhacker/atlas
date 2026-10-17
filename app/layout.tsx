@@ -17,9 +17,9 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   // Each page names itself ("Activity · Atlas") so tabs and history entries can
-  // be told apart. Next.js applies the template to deeper folders only, so the
-  // portfolio and the not-found page, which share this folder, state the whole
-  // title themselves.
+  // be told apart. Next.js applies the template to the routes below this
+  // layout, the not-found page included, but not to the page in this same
+  // folder: app/page.tsx states its whole title itself.
   title: {
     template: "%s · Atlas",
     default: "Atlas: your build, at a glance",

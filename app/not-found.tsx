@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { SearchX } from "lucide-react";
 
-// Whole title: an unknown route renders this file in the root layout's own
-// folder, where the layout's title template does not apply.
-export const metadata: Metadata = { title: { absolute: "Page not found · Atlas" } };
+// The root layout's title template applies here as it does to a deeper page,
+// for an unknown route and for notFound() inside a route alike.
+export const metadata: Metadata = { title: "Page not found" };
 
 /** Shown inside the app shell for an unknown route or repository slug. */
 export default function NotFound() {
