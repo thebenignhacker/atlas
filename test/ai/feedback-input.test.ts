@@ -39,9 +39,32 @@ test("a correctedValue that is not a string is refused", () => {
   }
 });
 
-test("a missing entityType, entityId or field is refused", () => {
+test("a missing or empty entityType, entityId or field is refused", () => {
   for (const key of ["entityType", "entityId", "field"] as const) {
     assert.equal(parseFeedback(without(key)), null, key);
+    assert.equal(parseFeedback({ ...body, [key]: "" }), null, key);
+  }
+});
+
+/**
+ * The fields other than correctedValue used to pass through unchecked to
+ * recordFeedback, whose SQLite bind throws on a JSON object, array or boolean,
+ * and the route answered that throw with a 500 carrying the driver's message.
+ * Refused here, they get the route's 400 instead.
+ */
+test("an entityType, entityId or field that is not a string is refused", () => {
+  for (const key of ["entityType", "entityId", "field"] as const) {
+    for (const value of [42, true, {}, ["repo"]]) {
+      assert.equal(parseFeedback({ ...body, [key]: value }), null, `${key}: ${JSON.stringify(value)}`);
+    }
+  }
+});
+
+test("an aiValue or note that is neither a string nor null is refused", () => {
+  for (const key of ["aiValue", "note"] as const) {
+    for (const value of [42, false, {}, [], ["Generated summary."]]) {
+      assert.equal(parseFeedback({ ...body, [key]: value }), null, `${key}: ${JSON.stringify(value)}`);
+    }
   }
 });
 
@@ -57,4 +80,7 @@ test("a correction passes through as sent, and absent optional fields become nul
   assert.deepEqual(parseFeedback(padded), padded);
   assert.deepEqual(parseFeedback(without("aiValue")), { ...body, aiValue: null });
   assert.deepEqual(parseFeedback(without("note")), { ...body, note: null });
+  // The summary panel sends aiValue: null when no summary was shown.
+  const nulls = { ...body, aiValue: null, note: null };
+  assert.deepEqual(parseFeedback(nulls), nulls);
 });
