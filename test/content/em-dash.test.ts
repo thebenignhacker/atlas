@@ -28,6 +28,7 @@ const LIB_COPY = [
   "lib/usage/catalog-meta.ts", // feature descriptions and "when to use" on /usage
   "lib/usage/scaffold.ts", // automation scaffolds on /usage
   "lib/ai/policy.ts", // why a repository is left out of AI, on its page
+  "lib/ai/summary-correction.ts", // why a summary correction was not saved, on a repository page
 ];
 
 /** The empty-value marker: a string that is only the dash, or an element whose only text is the dash. */
