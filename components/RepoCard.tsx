@@ -20,35 +20,42 @@ export function RepoCard({ repo, index = 0 }: { repo: RepoWithSignals; index?: n
         aria-hidden
       />
 
-      <div className="flex items-start justify-between gap-2 pl-1">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-mono text-[13.5px] font-semibold text-text">
-              {repo.name}
-            </span>
-            {repo.visibility === "private" && (
-              <Lock className="h-3.5 w-3.5 shrink-0 text-faint" />
-            )}
-            {repo.isFork === 1 && (
-              <GitFork className="h-3.5 w-3.5 shrink-0 text-faint" />
-            )}
-          </div>
+      <div className="min-w-0 pl-1">
+        {/* The name gets the full card width and wraps to two lines, so repos that
+            share a long prefix stay distinguishable. */}
+        <div className="flex items-start gap-2">
+          <span
+            className="line-clamp-2 min-w-0 font-mono text-[13.5px] font-semibold leading-5 text-text [overflow-wrap:anywhere]"
+            title={repo.name}
+          >
+            {repo.name}
+          </span>
+          {repo.visibility === "private" && (
+            <Lock className="mt-[3px] h-3.5 w-3.5 shrink-0 text-faint" />
+          )}
+          {repo.isFork === 1 && (
+            <GitFork className="mt-[3px] h-3.5 w-3.5 shrink-0 text-faint" />
+          )}
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
           {repo.groupName && (
-            <span className="text-[11px] uppercase tracking-wide text-faint">
+            <span className="min-w-0 text-[11px] uppercase tracking-wide text-faint [overflow-wrap:anywhere]">
               {repo.groupName}
             </span>
           )}
-        </div>
-        <div
-          className="mt-0.5 flex shrink-0 items-center gap-1.5 text-[11px]"
-          title={stale.label}
-        >
-          <span className={`h-2 w-2 rounded-full ${stale.dot}`} />
-          <span className={`tnum ${stale.text}`}>{relativeTime(repo.lastCommitAt)}</span>
+          <div
+            className="ml-auto flex shrink-0 items-center gap-1.5 text-[11px]"
+            title={stale.label}
+          >
+            <span className={`h-2 w-2 rounded-full ${stale.dot}`} />
+            <span className={`tnum ${stale.text}`}>{relativeTime(repo.lastCommitAt)}</span>
+          </div>
         </div>
       </div>
 
-      <p className="line-clamp-2 min-h-[2.5rem] pl-1 text-[13px] leading-snug text-muted">
+      {/* leading-5 makes two lines exactly the 2.5rem minimum, so no sliver of a
+          clamped third line shows below the second. */}
+      <p className="line-clamp-2 min-h-[2.5rem] pl-1 text-[13px] leading-5 text-muted">
         {repo.description || repo.lastCommitMsg || "No description."}
       </p>
 
