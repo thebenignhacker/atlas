@@ -28,6 +28,15 @@ export const metadata: Metadata = {
     "A local-first command center for builders shipping many projects with LLM coding tools.",
 };
 
+// Every route below this layout renders per request. The pages declare this
+// themselves, and test/auth/dynamic-pages.test.ts holds them to it; this
+// declaration reaches the /_not-found route, which Next composes from
+// not-found.tsx and this layout with no page.tsx of its own. Without it, that
+// route was prerendered at build time with the sidebar of the build's mode
+// baked in, so in a unified deployment a signed-in owner who opened an unknown
+// URL saw the public navigation and the signed-out footer.
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
