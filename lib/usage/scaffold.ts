@@ -94,11 +94,11 @@ export function generateScaffold(steps: string[], kind: RoutineKind): string {
         "",
         "Automate it with `/loop` (re-run the check on an interval) or a small Workflow that re-runs the verification until it passes:",
         "```js",
-        "// /loop <your verify command>   — simplest option",
+        "// /loop <your verify command>   (simplest option)",
         "// or a Workflow:",
         "while (!passed) { await agent('run the verification, report pass/fail', {schema: VERDICT}); }",
         "```",
-        "_Starting scaffold — adapt before running._",
+        "_Starting scaffold: adapt before running._",
       ].join("\n");
     case "workflow":
       return [
@@ -114,7 +114,7 @@ export function generateScaffold(steps: string[], kind: RoutineKind): string {
         `phase('Run')`,
         ...steps.map((s, i) => `// stage ${i + 1}: ${humanize(s)}  → agent(...) / parallel(...) / pipeline(...)`),
         "```",
-        "_Starting scaffold — turn the stages into real agent()/parallel()/pipeline() calls before running._",
+        "_Starting scaffold: turn the stages into real agent()/parallel()/pipeline() calls before running._",
       ].join("\n");
     default:
       return [

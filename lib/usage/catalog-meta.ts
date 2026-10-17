@@ -37,7 +37,7 @@ const EXACT_META: Record<string, FeatureMeta> = {
     displayName: "Workflow",
     category: "orchestration",
     description:
-      "Dynamic multi-agent orchestration — a script fans work across many subagents with pipeline/parallel topologies, verification stages, and a token budget.",
+      "Dynamic multi-agent orchestration: a script fans work across many subagents with pipeline/parallel topologies, verification stages, and a token budget.",
     whenToUse:
       "Audits, migrations, multi-file reviews, or any fan-out where you want structure and an adversarial verify pass rather than one serial pass.",
     recommended: true,
@@ -48,7 +48,7 @@ const EXACT_META: Record<string, FeatureMeta> = {
     description:
       "Spawns a single subagent with its own context window; can run in the background, in a git worktree, or remotely.",
     whenToUse:
-      "Independent work you can delegate and keep only the conclusion of — broad searches, or parallel tasks that would otherwise blow up the main context.",
+      "Independent work you can delegate and keep only the conclusion of: broad searches, or parallel tasks that would otherwise blow up the main context.",
     recommended: true,
   },
   Task: {
@@ -125,7 +125,7 @@ const FAMILY_META: Record<string, FeatureMeta> = {
     displayName: "Skill",
     category: "skill",
     description:
-      "Invokes a packaged skill / slash-command — a reusable procedure with its own instructions.",
+      "Invokes a packaged skill / slash-command: a reusable procedure with its own instructions.",
     whenToUse: "Whenever a skill matches the task; it beats hand-assembling the steps.",
     recommended: true,
   },

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getActivity, getArtifactBuiltAt, getFreshness, getRepos } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
@@ -5,6 +6,7 @@ import { ActivityView } from "@/components/ActivityView";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Activity" };
 
 export default async function ActivityPage() {
   const mode = await getRequestMode();

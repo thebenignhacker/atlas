@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getFreshness, getTokens } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
@@ -6,6 +7,7 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import type { TokenRollup } from "@/lib/usage/token-rollup";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Tokens" };
 
 const fmt = (n: number) => n.toLocaleString();
 const kfmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n));

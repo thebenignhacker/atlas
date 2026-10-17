@@ -137,7 +137,7 @@ function Card({ card }: { card: ContextCard }) {
         {card.sensitive && (
           <span
             className="inline-flex items-center gap-1 rounded bg-clay/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-clay"
-            title="Never published — excluded from every public surface"
+            title="Never published: excluded from every public surface"
           >
             <Lock className="h-3 w-3" />
             sensitive

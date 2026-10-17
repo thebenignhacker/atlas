@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { aiAvailability } from "@/lib/ai/provider";
 import { getLastDigest } from "@/lib/ai/digest";
 import { getStats } from "@/lib/queries";
@@ -8,6 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "AI Digest" };
 
 export default async function DigestPage() {
   const mode = await getRequestMode();

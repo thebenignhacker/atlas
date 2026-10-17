@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { loadStrategyDocs } from "@/lib/strategy";
 import type { StrategyDoc } from "@/lib/strategy-shared";
 import { loadOwnerSnapshot } from "@/lib/snapshot";
@@ -7,6 +8,7 @@ import { StrategyBoard } from "@/components/StrategyBoard";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Strategy" };
 
 export default async function StrategyPage() {
   const mode = await getRequestMode();

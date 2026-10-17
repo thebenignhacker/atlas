@@ -228,6 +228,10 @@ Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`:
 
 Re-run `npm run snapshot` and redeploy whenever you want to refresh the public view.
 
+The interface has a light theme only, in every mode: `app/globals.css` sets
+`color-scheme: light` and defines no dark palette, so a browser or system set to dark
+shows the same light pages.
+
 ### Private view — log in on the public site (unified mode)
 
 The recommended setup: ONE deployment that shows the public showcase to visitors and your

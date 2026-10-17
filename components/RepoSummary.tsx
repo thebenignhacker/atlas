@@ -74,7 +74,7 @@ export function RepoSummary({
         <div className="flex items-center gap-2 text-sm text-faint">
           <Sparkles className="h-4 w-4 text-purple/60" />
           {!available
-            ? "AI is off — enable it in Settings for a generated summary."
+            ? "AI is off. Enable it in Settings for a generated summary."
             : eligibleReason}
         </div>
       </section>
@@ -95,7 +95,7 @@ export function RepoSummary({
                 setDraft(view.text);
                 setEditing(true);
               }}
-              title="Correct this — Atlas will learn"
+              title="Correct this, and Atlas will learn"
               className="rounded-md border border-line p-1.5 text-faint hover:text-text"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -115,7 +115,7 @@ export function RepoSummary({
       {error && <p className="text-sm text-rose">{error}</p>}
       {saved && (
         <p className="mb-2 flex items-center gap-1 text-xs text-fresh">
-          <Check className="h-3.5 w-3.5" /> Saved — Atlas will respect this next time.
+          <Check className="h-3.5 w-3.5" /> Saved. Atlas will respect this next time.
         </p>
       )}
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getContextCards, getFreshness, getSessions } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
@@ -6,6 +7,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Sessions" };
 
 export default async function SessionsPage() {
   // Sessions carry harness ids and internal repo/branch state — owner-only, never
@@ -29,7 +31,7 @@ export default async function SessionsPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Sessions"
-        subtitle="The Claude sessions that established your context cards — trace a fact back to the session that set it and jump back into it."
+        subtitle="The Claude sessions that established your context cards. Trace a fact back to the session that set it and jump back into it."
         freshness={getFreshness(mode, "sessions")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />

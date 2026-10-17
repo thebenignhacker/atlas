@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { getArtifactBuiltAt, getFreshness, getRepos, getStats } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader, StatStrip } from "@/components/PageHeader";
@@ -5,6 +6,8 @@ import { PortfolioView } from "@/components/PortfolioView";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
+// The root layout's title template does not reach its own folder.
+export const metadata: Metadata = { title: { absolute: "Portfolio · Atlas" } };
 
 export default async function PortfolioPage({
   searchParams,

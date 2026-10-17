@@ -16,7 +16,14 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Atlas — your build, at a glance",
+  // Each page names itself ("Activity · Atlas") so tabs and history entries can
+  // be told apart. Next.js applies the template to deeper folders only, so the
+  // portfolio and the not-found page, which share this folder, state the whole
+  // title themselves.
+  title: {
+    template: "%s · Atlas",
+    default: "Atlas: your build, at a glance",
+  },
   description:
     "A local-first command center for builders shipping many projects with LLM coding tools.",
 };
