@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseFeedback } from "@/lib/ai/feedback-input";
 import { recordFeedback } from "@/lib/ai/learning";
 import { isSnapshotMode } from "@/lib/mode";
 
@@ -13,21 +14,14 @@ export async function POST(req: Request) {
     );
   }
   try {
-    const body = await req.json();
-    if (!body.entityType || !body.entityId || !body.field || !body.correctedValue) {
+    const input = parseFeedback(await req.json());
+    if (!input) {
       return NextResponse.json(
         { error: "entityType, entityId, field, correctedValue are required" },
         { status: 400 }
       );
     }
-    recordFeedback({
-      entityType: body.entityType,
-      entityId: body.entityId,
-      field: body.field,
-      aiValue: body.aiValue ?? null,
-      correctedValue: body.correctedValue,
-      note: body.note ?? null,
-    });
+    recordFeedback(input);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(
