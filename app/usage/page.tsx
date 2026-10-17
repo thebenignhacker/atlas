@@ -3,6 +3,7 @@ import { PageHeader, StatStrip } from "@/components/PageHeader";
 import { UsageCharts } from "@/components/UsageCharts";
 import { Sparkline } from "@/components/Sparkline";
 import { EmptyState } from "@/components/EmptyState";
+import { ShowMoreList } from "@/components/ShowMore";
 import { getRequestMode } from "@/lib/request-mode";
 import { CATEGORY_META } from "@/lib/usage/catalog-meta";
 import type { FeatureUsage, Routine, RoutineKind } from "@/lib/usage/types";
@@ -201,11 +202,15 @@ export default async function UsagePage() {
                 Tool-sequences this work repeats by hand, mined from session history.
                 Each scaffold is a starting point to adapt, not a finished workflow.
               </p>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <ShowMoreList
+                initial={4}
+                noun="routines"
+                className="grid grid-cols-1 gap-3 lg:grid-cols-2"
+              >
                 {routines.map((r, i) => (
                   <RoutineCard key={i} r={r} />
                 ))}
-              </div>
+              </ShowMoreList>
             </section>
           )}
 
@@ -213,11 +218,16 @@ export default async function UsagePage() {
             <h2 className="font-display text-lg font-semibold text-text">Features</h2>
             <span className="text-xs text-faint tnum">{used.length} used</span>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Features arrive most used first, so the first page is the top 12. */}
+          <ShowMoreList
+            initial={12}
+            noun="features"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          >
             {used.map((f) => (
               <FeatureCard key={f.feature} f={f} />
             ))}
-          </div>
+          </ShowMoreList>
         </>
       )}
     </div>
