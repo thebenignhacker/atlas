@@ -3,6 +3,7 @@ import { getReadDb, getMeta } from "@/lib/db";
 import { computeSignals, refreshSignals } from "@/lib/signals";
 import { loadPublicSnapshot, loadOwnerSnapshot } from "@/lib/snapshot";
 import { getLatestOutput } from "@/lib/ai/cache";
+import type { RepoSummaryRecord } from "@/lib/ai/summary-presentation";
 import { isPublicMode, isOwnerMode } from "@/lib/mode";
 import type { ResolvedMode } from "@/lib/mode";
 import { getCards, getSessions as getSessionsFromDb } from "@/lib/context/store";
@@ -118,11 +119,19 @@ export function getRepo(mode: ResolvedMode, slug: string): RepoWithSignals | nul
   return getRepos(mode).find((r) => r.slug === slug) ?? null;
 }
 
-/** Last AI summary for a repo. Reads the snapshot in deployed modes (no DB). */
-export function getRepoSummary(mode: ResolvedMode, slug: string): string | null {
-  if (mode === "public") return loadPublicSnapshot().summaries[slug] ?? null;
-  if (mode === "owner") return loadOwnerSnapshot().summaries[slug] ?? null;
-  return getLatestOutput("repo", slug, "summary")?.output ?? null;
+/**
+ * Last AI summary for a repo with its generation date. Reads the snapshot in
+ * deployed modes (no DB); an artifact built without dates yields `null` there.
+ */
+export function getRepoSummary(mode: ResolvedMode, slug: string): RepoSummaryRecord | null {
+  if (mode !== "local") {
+    const snap = mode === "public" ? loadPublicSnapshot() : loadOwnerSnapshot();
+    const text = snap.summaries[slug];
+    if (text === undefined) return null;
+    return { text, generatedAt: snap.summaryDates?.[slug] ?? null };
+  }
+  const row = getLatestOutput("repo", slug, "summary");
+  return row ? { text: row.output, generatedAt: row.generatedAt ?? null } : null;
 }
 
 /** Decision-log cards. Owner-only: the public mode always sees an empty list. */

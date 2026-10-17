@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { Sparkles, RefreshCw, Pencil, Check } from "lucide-react";
 import { AiBadge } from "@/components/AiBadge";
+import {
+  summaryPresentation,
+  type RepoSummaryRecord,
+} from "@/lib/ai/summary-presentation";
 
 export function RepoSummary({
   slug,
@@ -10,14 +14,16 @@ export function RepoSummary({
   eligible,
   eligibleReason,
   initial,
+  lastCommitAt,
 }: {
   slug: string;
   available: boolean;
   eligible: boolean;
   eligibleReason?: string | null;
-  initial: string | null;
+  initial: RepoSummaryRecord | null;
+  lastCommitAt: string | null;
 }) {
-  const [summary, setSummary] = useState<string | null>(initial);
+  const [summary, setSummary] = useState<RepoSummaryRecord | null>(initial);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -35,7 +41,7 @@ export function RepoSummary({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed");
-      setSummary(data.text);
+      setSummary({ text: data.text, generatedAt: data.generatedAt ?? null });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -51,12 +57,12 @@ export function RepoSummary({
         entityType: "repo",
         entityId: slug,
         field: "summary",
-        aiValue: summary,
+        aiValue: summary?.text ?? null,
         correctedValue: draft,
         note: "user-edited summary",
       }),
     });
-    setSummary(draft);
+    setSummary({ text: draft, generatedAt: summary?.generatedAt ?? null });
     setEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -75,15 +81,18 @@ export function RepoSummary({
     );
   }
 
+  // An undated summary is treated as absent: it can only be regenerated.
+  const view = summaryPresentation(summary, lastCommitAt);
+
   return (
     <section className="rounded-[var(--radius-card)] border border-purple/20 bg-surface-1 p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <AiBadge label="Summary" />
+        <AiBadge label={view.show ? view.badge : undefined} />
         <div className="flex items-center gap-1.5">
-          {summary && !editing && (
+          {view.show && !editing && (
             <button
               onClick={() => {
-                setDraft(summary);
+                setDraft(view.text);
                 setEditing(true);
               }}
               title="Correct this — Atlas will learn"
@@ -98,7 +107,7 @@ export function RepoSummary({
             className="inline-flex items-center gap-1.5 rounded-md border border-purple/40 bg-purple/10 px-2.5 py-1.5 text-xs font-medium text-purple hover:bg-purple/20 disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "…" : summary ? "Regenerate" : "Generate"}
+            {loading ? "…" : view.show ? "Regenerate" : "Generate"}
           </button>
         </div>
       </div>
@@ -133,8 +142,11 @@ export function RepoSummary({
             </button>
           </div>
         </div>
-      ) : summary ? (
-        <p className="text-sm leading-relaxed text-muted">{summary}</p>
+      ) : view.show ? (
+        <>
+          <p className="text-sm leading-relaxed text-muted">{view.text}</p>
+          {view.staleFlag && <p className="mt-2 text-xs text-faint">{view.staleFlag}</p>}
+        </>
       ) : (
         <p className="text-sm text-faint">
           No summary yet. Generate one from the README, recent commits, and linked todos.
