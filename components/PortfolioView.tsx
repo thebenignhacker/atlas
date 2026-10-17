@@ -15,6 +15,7 @@ import type { RepoWithSignals } from "@/lib/queries";
 import type { StalenessBucket } from "@/lib/types";
 import { RepoCard } from "@/components/RepoCard";
 import { OverviewCharts } from "@/components/OverviewCharts";
+import { ShowMore } from "@/components/ShowMore";
 import { STALENESS } from "@/lib/display";
 
 type Sort = "activity" | "stars" | "name" | "attention";
@@ -270,13 +271,20 @@ export function PortfolioView({
   );
 }
 
+const REPO_PAGE = 12;
+
 function RepoGrid({ repos }: { repos: RepoWithSignals[] }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {repos.map((r, i) => (
-        <RepoCard key={r.slug} repo={r} index={i} />
-      ))}
-    </div>
+    <ShowMore total={repos.length} initial={REPO_PAGE} step={REPO_PAGE} noun="repos">
+      {(shown) => (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {repos.slice(0, shown).map((r, i) => (
+            // Restart the entrance stagger for each revealed page.
+            <RepoCard key={r.slug} repo={r} index={i % REPO_PAGE} />
+          ))}
+        </div>
+      )}
+    </ShowMore>
   );
 }
 

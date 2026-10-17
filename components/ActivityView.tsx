@@ -12,8 +12,13 @@ import {
 import type { ActivityEvent } from "@/lib/types";
 import { relativeTime } from "@/lib/util/date";
 import { ChartPanel, Donut, RankBar, type Slice } from "@/components/Charts";
+import { ShowMore } from "@/components/ShowMore";
 
 const WEEKS = 13;
+// The day list opens on 7 days or 60 events, whichever fills first; each "Show more"
+// press adds another page of the same size.
+const PAGE_DAYS = 7;
+const PAGE_EVENTS = 60;
 
 const TYPE_META: Record<string, { label: string; color: string }> = {
   commit: { label: "Commits", color: "#e8a317" },
@@ -55,7 +60,7 @@ export function ActivityView({
     [weeks]
   );
 
-  const byDay = useMemo(() => {
+  const byDay = useMemo<DayGroup[]>(() => {
     const groups = new Map<string, ActivityEvent[]>();
     for (const e of filtered) {
       const key = (e.ts ?? "").slice(0, 10);
@@ -64,6 +69,8 @@ export function ActivityView({
     }
     return Array.from(groups.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered]);
+
+  const pageEnds = useMemo(() => dayPageEnds(byDay), [byDay]);
 
   const topRepos = useMemo(() => {
     const c = new Map<string, number>();
@@ -174,34 +181,83 @@ export function ActivityView({
         </div>
       </div>
 
-      <div className="space-y-5">
-        {byDay.slice(0, 30).map(([date, items]) => (
-          <div key={date} className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
-            <div className="shrink-0 pt-0.5 text-xs text-faint sm:w-24 sm:text-right">
-              {relativeTime(date + "T12:00:00Z")}
-            </div>
-            <div className="min-w-0 flex-1 space-y-1.5 border-l border-line pl-4">
-              {items.slice(0, 20).map((e) => (
-                <div key={e.id} className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
-                  <span title={e.title} className="min-w-0 truncate text-sm text-text">
-                    {e.title}
-                  </span>
-                  {e.repoSlug && (
-                    <span className="shrink-0 font-mono text-[11px] text-faint">
-                      {repoMap[e.repoSlug] ?? e.repoSlug}
-                    </span>
-                  )}
+      <ShowMore
+        key={repo}
+        total={filtered.length}
+        initial={pageEnds[0] ?? 0}
+        step={(shown) => pageEnds.find((end) => end > shown) ?? filtered.length}
+        noun="events"
+      >
+        {(shown) => (
+          <div className="space-y-5">
+            {firstEvents(byDay, shown).map(([date, items]) => (
+              <div key={date} className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
+                <div className="shrink-0 pt-0.5 text-xs text-faint sm:w-24 sm:text-right">
+                  {relativeTime(date + "T12:00:00Z")}
                 </div>
-              ))}
-              {items.length > 20 && (
-                <div className="text-[11px] text-faint">+{items.length - 20} more</div>
-              )}
-            </div>
+                <div className="min-w-0 flex-1 space-y-1.5 border-l border-line pl-4">
+                  {items.map((e) => (
+                    <div key={e.id} className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                      <span title={e.title} className="min-w-0 truncate text-sm text-text">
+                        {e.title}
+                      </span>
+                      {e.repoSlug && (
+                        <span className="shrink-0 font-mono text-[11px] text-faint">
+                          {repoMap[e.repoSlug] ?? e.repoSlug}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
+      </ShowMore>
     </div>
   );
+}
+
+type DayGroup = [date: string, items: ActivityEvent[]];
+
+/**
+ * Event counts at which each page of the day list ends. A page holds PAGE_DAYS days or
+ * PAGE_EVENTS events, whichever fills first; a day that does not fit continues on the next page.
+ */
+function dayPageEnds(days: DayGroup[]): number[] {
+  const ends: number[] = [];
+  let shown = 0;
+  let day = 0;
+  let offset = 0; // events of days[day] already placed on an earlier page
+  while (day < days.length) {
+    let pageDays = 0;
+    let pageEvents = 0;
+    while (day < days.length && pageDays < PAGE_DAYS && pageEvents < PAGE_EVENTS) {
+      const size = days[day][1].length;
+      const take = Math.min(size - offset, PAGE_EVENTS - pageEvents);
+      pageEvents += take;
+      offset += take;
+      if (offset < size) break;
+      day++;
+      offset = 0;
+      pageDays++;
+    }
+    shown += pageEvents;
+    ends.push(shown);
+  }
+  return ends;
+}
+
+/** The leading days of the list, cut so they hold `count` events in total. */
+function firstEvents(days: DayGroup[], count: number): DayGroup[] {
+  const out: DayGroup[] = [];
+  let left = count;
+  for (const [date, items] of days) {
+    if (left <= 0) break;
+    out.push([date, items.slice(0, left)]);
+    left -= items.length;
+  }
+  return out;
 }
 
 interface Day {
