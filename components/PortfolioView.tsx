@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDown,
   GitFork,
@@ -35,17 +36,41 @@ function sortRepos(list: RepoWithSignals[], sort: Sort): RepoWithSignals[] {
   });
 }
 
-export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
+export function PortfolioView({
+  repos,
+  initialAttentionOnly = false,
+}: {
+  repos: RepoWithSignals[];
+  initialAttentionOnly?: boolean;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [q, setQ] = useState("");
   const [group, setGroup] = useState("all");
   const [visibility, setVisibility] = useState("all");
   const [language, setLanguage] = useState("all");
   const [staleness, setStaleness] = useState("all");
   const [sort, setSort] = useState<Sort>("activity");
-  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [attentionOnly, setAttentionOnly] = useState(initialAttentionOnly);
   const [todosOnly, setTodosOnly] = useState(false);
   const [grouped, setGrouped] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  // `?attention=1` (where the "Need attention" stat links) turns the filter on.
+  // This view stays mounted when that link is followed from this page, so the
+  // filter follows the page's value when it changes, and the toggle keeps the
+  // URL in step; otherwise a second visit to the link would leave the filter
+  // off. The toggle goes through the router so the link still scrolls to #repos.
+  const [seenInitial, setSeenInitial] = useState(initialAttentionOnly);
+  if (initialAttentionOnly !== seenInitial) {
+    setSeenInitial(initialAttentionOnly);
+    setAttentionOnly(initialAttentionOnly);
+  }
+  const toggleAttention = () => {
+    const next = !attentionOnly;
+    setAttentionOnly(next);
+    router.replace(next ? `${pathname}?attention=1` : pathname, { scroll: false });
+  };
 
   const groups = useMemo(
     () =>
@@ -126,8 +151,8 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
     <div className="space-y-7">
       <OverviewCharts repos={repos} />
 
-      {/* Filter bar */}
-      <div className="space-y-2.5">
+      {/* Filter bar; the "Need attention" stat links here as #repos */}
+      <div id="repos" className="scroll-mt-6 space-y-2.5">
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
@@ -176,7 +201,7 @@ export function PortfolioView({ repos }: { repos: RepoWithSignals[] }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Toggle on={attentionOnly} onClick={() => setAttentionOnly((v) => !v)} accent="clay">
+          <Toggle on={attentionOnly} onClick={toggleAttention} accent="clay">
             <SlidersHorizontal className="h-3.5 w-3.5" /> Needs attention
           </Toggle>
           <Toggle on={todosOnly} onClick={() => setTodosOnly((v) => !v)} accent="clay">
@@ -348,6 +373,8 @@ function Toggle({
       : "border-teal/40 bg-teal/10 text-teal";
   return (
     <button
+      type="button"
+      aria-pressed={on}
       onClick={onClick}
       className={[
         "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition-colors",

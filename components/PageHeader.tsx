@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { relativeTime } from "@/lib/util/date";
 import { freshnessLabel, freshnessTone } from "@/lib/freshness-shared";
 import type { FreshnessTone, SectionFreshness } from "@/lib/freshness-shared";
@@ -101,26 +102,48 @@ export function PageHeader({
 export function StatStrip({
   stats,
 }: {
-  stats: { label: string; value: string | number; accent?: string }[];
+  stats: {
+    label: string;
+    value: string | number;
+    accent?: string;
+    // A stat that answers "which ones?" links to the list that shows them;
+    // `linkLabel` is the link's accessible name.
+    href?: string;
+    linkLabel?: string;
+  }[];
 }) {
   return (
     <div className="mb-7 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-line bg-line shadow-[0_1px_0_rgba(33,28,21,0.03)] sm:grid-cols-3 lg:grid-cols-6">
-      {stats.map((s, i) => (
-        <div
-          key={s.label}
-          className="atlas-stagger bg-surface-1 px-4 py-4"
-          style={{ ["--i" as string]: i }}
-        >
-          <div
-            className={`font-display text-[2rem] font-semibold leading-none tnum ${s.accent ?? "text-text"}`}
+      {stats.map((s, i) => {
+        const body = (
+          <>
+            <div
+              className={`font-display text-[2rem] font-semibold leading-none tnum ${s.accent ?? "text-text"}`}
+            >
+              {s.value}
+            </div>
+            <div className="mt-1.5 text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint">
+              {s.label}
+            </div>
+          </>
+        );
+        const style = { ["--i" as string]: i };
+        return s.href ? (
+          <Link
+            key={s.label}
+            href={s.href}
+            aria-label={s.linkLabel}
+            className="atlas-stagger bg-surface-1 px-4 py-4 transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal"
+            style={style}
           >
-            {s.value}
+            {body}
+          </Link>
+        ) : (
+          <div key={s.label} className="atlas-stagger bg-surface-1 px-4 py-4" style={style}>
+            {body}
           </div>
-          <div className="mt-1.5 text-[10.5px] font-medium uppercase tracking-[0.12em] text-faint">
-            {s.label}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
