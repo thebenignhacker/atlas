@@ -1,4 +1,4 @@
-import { daysSince, relativeTime, stalenessBucket } from "@/lib/util/date";
+import { daysSince, relativeTime, stalenessBucket, utcDate } from "@/lib/util/date";
 
 /**
  * Per-section freshness. The reason this module exists: a dashboard that renders
@@ -88,6 +88,20 @@ export function freshnessTone(
 }
 
 /**
+ * Past this age a relative clock is too coarse to trust on its own ("7w ago"
+ * spans a whole week), and the tooltip holding the exact time is unreachable on
+ * touch, so the words carry the UTC date as well.
+ */
+const INLINE_DATE_AFTER_DAYS = 30;
+
+/** `relativeTime`, followed by the UTC date when `dated`. */
+function ageText(iso: string | null, now: Date, dated: boolean): string {
+  const relative = relativeTime(iso, now);
+  const day = dated ? utcDate(iso) : null;
+  return day ? `${relative} (${day})` : relative;
+}
+
+/**
  * One line a human can act on. Always states what the data covers AND when we
  * last looked, because either one alone is the bug this module exists to fix.
  */
@@ -97,13 +111,15 @@ export function freshnessLabel(
 ): string {
   if (!f) return "freshness unavailable";
   if (f.status === "never") return "never collected";
-  if (f.status === "error")
-    return `collection failed — showing data through ${relativeTime(f.dataAt, now)}`;
-  if (f.status === "empty")
-    return `checked ${relativeTime(f.collectedAt, now)} — found nothing`;
 
-  const collected = relativeTime(f.collectedAt, now);
-  const through = relativeTime(f.dataAt, now);
+  // Keyed on collectedAt, the same clock the tone reads.
+  const age = daysSince(f.collectedAt, now);
+  const dated = age !== null && age > INLINE_DATE_AFTER_DAYS;
+  const collected = ageText(f.collectedAt, now, dated);
+  const through = ageText(f.dataAt, now, dated);
+  if (f.status === "error") return `collection failed — showing data through ${through}`;
+  if (f.status === "empty") return `checked ${collected} — found nothing`;
+
   // Only mention the lag when it is big enough to matter; below the "recent"
   // bucket the two clocks are effectively the same instant and saying both
   // twice is noise.
@@ -127,6 +143,16 @@ export function artifactAgeDays(
   now = new Date()
 ): number | null {
   return daysSince(generatedAt ?? null, now);
+}
+
+/** "built <age>", dated inline once the artifact is past the same 30 days. */
+export function builtLabel(
+  generatedAt: string | null | undefined,
+  now = new Date()
+): string {
+  const age = artifactAgeDays(generatedAt, now);
+  const dated = age !== null && age > INLINE_DATE_AFTER_DAYS;
+  return `built ${ageText(generatedAt ?? null, now, dated)}`;
 }
 
 /**

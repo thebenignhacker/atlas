@@ -23,9 +23,20 @@ export function relativeTime(iso: string | null, now = new Date()): string {
   if (d === 0) return "today";
   if (d === 1) return "yesterday";
   if (d < 7) return `${d}d ago`;
-  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  // Weeks through 90 days: 30-day months would read 50 and 59 days alike as
+  // "1mo ago", understating age in the range where it decides whether a
+  // picture is still current.
+  if (d <= 90) return `${Math.floor(d / 7)}w ago`;
   if (d < 365) return `${Math.floor(d / 30)}mo ago`;
   return `${Math.floor(d / 365)}y ago`;
+}
+
+/** The UTC calendar day (YYYY-MM-DD) of an ISO time, or null when unparseable. */
+export function utcDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return new Date(t).toISOString().slice(0, 10);
 }
 
 /** Extract a YYYY-MM-DD date prefix from a todo filename, if present. */
