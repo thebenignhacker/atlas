@@ -36,6 +36,23 @@ export function parseFeedback(body: unknown): FeedbackInput | null {
   };
 }
 
+/**
+ * Reads the body of a POST to /api/feedback and runs parseFeedback on it; the
+ * route answers 400 when this returns null. req.json() throws on a body that is
+ * not valid JSON, an empty one included. Refused here like a body that is not
+ * an object, such a body gets the route's 400 instead of a 500 carrying the
+ * parser's message.
+ */
+export async function readFeedback(req: Request): Promise<FeedbackInput | null> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return null;
+  }
+  return parseFeedback(body);
+}
+
 function isFilledString(value: unknown): value is string {
   return typeof value === "string" && value !== "";
 }

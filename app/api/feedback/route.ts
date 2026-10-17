@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseFeedback } from "@/lib/ai/feedback-input";
+import { readFeedback } from "@/lib/ai/feedback-input";
 import { recordFeedback } from "@/lib/ai/learning";
 import { isSnapshotMode } from "@/lib/mode";
 
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     );
   }
   try {
-    const input = parseFeedback(await req.json());
+    const input = await readFeedback(req);
     if (!input) {
       return NextResponse.json(
         { error: "entityType, entityId, field, correctedValue are required" },
