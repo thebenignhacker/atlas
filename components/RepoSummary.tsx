@@ -7,6 +7,10 @@ import {
   summaryPresentation,
   type RepoSummaryRecord,
 } from "@/lib/ai/summary-presentation";
+import {
+  canSaveCorrection,
+  saveSummaryCorrection,
+} from "@/lib/ai/summary-correction";
 
 export function RepoSummary({
   slug,
@@ -29,6 +33,8 @@ export function RepoSummary({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   async function generate() {
     setLoading(true);
@@ -50,18 +56,19 @@ export function RepoSummary({
   }
 
   async function saveCorrection() {
-    await fetch("/api/feedback", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        entityType: "repo",
-        entityId: slug,
-        field: "summary",
-        aiValue: summary?.text ?? null,
-        correctedValue: draft,
-        note: "user-edited summary",
-      }),
+    setSaving(true);
+    setSaveError(null);
+    const result = await saveSummaryCorrection({
+      slug,
+      aiValue: summary?.text ?? null,
+      correctedValue: draft,
     });
+    setSaving(false);
+    if (!result.ok) {
+      // Not a save: keep the editor open on the draft and say why.
+      setSaveError(result.error);
+      return;
+    }
     setSummary({ text: draft, generatedAt: summary?.generatedAt ?? null });
     setEditing(false);
     setSaved(true);
@@ -93,6 +100,7 @@ export function RepoSummary({
             <button
               onClick={() => {
                 setDraft(view.text);
+                setSaveError(null);
                 setEditing(true);
               }}
               title="Correct this, and Atlas will learn"
@@ -127,12 +135,18 @@ export function RepoSummary({
             rows={3}
             className="w-full rounded-lg border border-line bg-surface-2 p-2 text-sm text-text focus:border-purple focus:outline-none"
           />
+          {saveError && (
+            <p role="alert" className="text-sm text-rose">
+              Not saved: {saveError}
+            </p>
+          )}
           <div className="flex gap-2">
             <button
               onClick={saveCorrection}
-              className="rounded-md bg-purple px-3 py-1.5 text-xs font-medium text-white"
+              disabled={saving || !canSaveCorrection(draft)}
+              className="rounded-md bg-purple px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              Save correction
+              {saving ? "Saving…" : "Save correction"}
             </button>
             <button
               onClick={() => setEditing(false)}
