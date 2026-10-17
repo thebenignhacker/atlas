@@ -68,7 +68,9 @@ Expected on the public build: `/todos`, `/roadmap`, `/decisions`, `/sessions`, `
 `grep -c '"decisions"' public-snapshot.json` prints 0, and so does `grep -c '"tokens"' public-snapshot.json`.
 
 For a unified or owner deployment, additionally: log in with a wrong password (refused),
-the right password (owner data appears), sign out (public data again).
+the right password (owner data appears), open a URL that does not exist while signed in
+(the owner navigation and the signed-in footer, not the public sidebar), sign out (public
+data again).
 
 ## 4. Error paths
 
@@ -100,6 +102,7 @@ input reproduced.
 | Public build hides owner sections | The public snapshot must never carry todos, decisions or session files |
 | Forge read stays owner-only | The live decisions read must never leave for a public or local request (test/decisions/forge.test.ts, first cell) |
 | Sign-out in owner mode | Standalone owner deployments rendered no sign-out control |
+| Unknown URL while signed in | The root not-found route was prerendered at build time with the public navigation, so a signed-in owner who mistyped a URL saw the signed-out sidebar (test/auth/dynamic-pages.test.ts, third test) |
 | Error paths exit non-zero | A silent zero from a refused database open is how a second empty store appears |
 
 ## 7. Record

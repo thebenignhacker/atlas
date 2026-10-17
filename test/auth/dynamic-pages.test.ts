@@ -44,3 +44,20 @@ test("no static-cache directives anywhere in app/ (would cache owner HTML)", () 
     }
   }
 });
+
+// Next composes the /_not-found route from app/not-found.tsx and the root
+// layout; it is the one route with neither a page.tsx nor a route.ts of its
+// own, so the declarations checked above do not reach it. Left to the default,
+// the route was prerendered at build time with the sidebar of the build's mode
+// baked in: in a unified deployment a signed-in owner who opened an unknown
+// URL saw the public navigation, while notFound() inside a dynamic route showed
+// the owner's. The root layout's declaration applies to the routes below it,
+// that one included.
+test("the root layout is force-dynamic, so the not-found route renders per request too", () => {
+  const src = readFileSync(join(APP, "layout.tsx"), "utf8");
+  assert.match(
+    src,
+    /export const dynamic = ["']force-dynamic["']/,
+    'app/layout.tsx must declare `export const dynamic = "force-dynamic"`: the /_not-found route has no page.tsx of its own to declare it'
+  );
+});
