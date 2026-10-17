@@ -1,6 +1,6 @@
 import "server-only";
 import { getReadDb, getMeta } from "@/lib/db";
-import { computeSignals } from "@/lib/signals";
+import { computeSignals, refreshSignals } from "@/lib/signals";
 import { loadPublicSnapshot, loadOwnerSnapshot } from "@/lib/snapshot";
 import { getLatestOutput } from "@/lib/ai/cache";
 import { isPublicMode, isOwnerMode } from "@/lib/mode";
@@ -87,8 +87,9 @@ export function getStats(mode: ResolvedMode): AtlasStats {
 let repoCache: RepoWithSignals[] | null = null;
 
 export function getRepos(mode: ResolvedMode): RepoWithSignals[] {
-  if (mode === "public") return loadPublicSnapshot().repos;
-  if (mode === "owner") return loadOwnerSnapshot().repos;
+  // Snapshot signals were measured at build time; re-measure against now.
+  if (mode === "public") return refreshSignals(loadPublicSnapshot().repos);
+  if (mode === "owner") return refreshSignals(loadOwnerSnapshot().repos);
   if (repoCache) return repoCache;
   const db = getReadDb();
   try {
