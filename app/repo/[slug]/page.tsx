@@ -19,6 +19,7 @@ import { STALENESS, languageColor, PRIORITY } from "@/lib/display";
 import { relativeTime } from "@/lib/util/date";
 import { aiAvailability } from "@/lib/ai/provider";
 import { isRepoAIEligible, eligibilityReason } from "@/lib/ai/policy";
+import { summaryPresentation } from "@/lib/ai/summary-presentation";
 import { RepoSummary } from "@/components/RepoSummary";
 import { AiBadge } from "@/components/AiBadge";
 
@@ -49,6 +50,7 @@ export default async function RepoPage({
   const avail = aiAvailability(mode);
   const eligible = !readOnly && isRepoAIEligible(repo);
   const initialSummary = getRepoSummary(mode, slug);
+  const summary = summaryPresentation(initialSummary, repo.lastCommitAt);
   const webUrl =
     repo.owner && repo.repoName
       ? `https://github.com/${repo.owner}/${repo.repoName}`
@@ -100,12 +102,15 @@ export default async function RepoPage({
 
       <div className="mb-6">
         {readOnly ? (
-          initialSummary ? (
+          summary.show ? (
             <section className="rounded-[var(--radius-card)] border border-purple/20 bg-surface-1 p-4">
               <div className="mb-2">
-                <AiBadge label="Summary" />
+                <AiBadge label={summary.badge} />
               </div>
-              <p className="text-sm leading-relaxed text-muted">{initialSummary}</p>
+              <p className="text-sm leading-relaxed text-muted">{summary.text}</p>
+              {summary.staleFlag && (
+                <p className="mt-2 text-xs text-faint">{summary.staleFlag}</p>
+              )}
             </section>
           ) : null
         ) : (
@@ -115,6 +120,7 @@ export default async function RepoPage({
             eligible={eligible}
             eligibleReason={eligibilityReason(repo)}
             initial={initialSummary}
+            lastCommitAt={repo.lastCommitAt}
           />
         )}
       </div>

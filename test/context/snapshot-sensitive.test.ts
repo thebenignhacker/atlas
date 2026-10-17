@@ -16,6 +16,7 @@ import { initSchema } from "@/lib/db";
 const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-snap-work-"));
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-snap-data-"));
 const origCwd = process.cwd();
+const SUMMARY_AT = "2026-03-04T05:06:07.000Z";
 
 function seed(): void {
   const db = new Database(path.join(dataDir, "atlas.db"));
@@ -99,6 +100,33 @@ function seed(): void {
   db.prepare(
     "INSERT INTO sessions (id, startedAt, repos, branches, cardCount, createdAt, updatedAt) VALUES (?,?,?,?,?,?,?)"
   ).run("sess-xyz-9999", now, JSON.stringify(["pub-repo"]), JSON.stringify([]), 1, now, now);
+
+  // Cached repo summaries: one for the public repo, one for the sensitive repo
+  // (which must stay out of the public artifact, date included).
+  const summary = db.prepare(
+    `INSERT INTO ai_outputs (id, entityType, entityId, task, contentHash, model, output, generatedAt)
+     VALUES (?,?,?,?,?,?,?,?)`
+  );
+  summary.run(
+    "repo:pub-repo:summary",
+    "repo",
+    "pub-repo",
+    "summary",
+    "h1",
+    "m",
+    "pub-repo is a small public library.",
+    SUMMARY_AT
+  );
+  summary.run(
+    "repo:secret-repo:summary",
+    "repo",
+    "secret-repo",
+    "summary",
+    "h2",
+    "m",
+    "a summary that must never be published",
+    "2026-02-02T00:00:00.000Z"
+  );
   db.close();
 }
 
@@ -171,6 +199,27 @@ test("public snapshot drops sensitive repos and their cards", async () => {
   for (const ownerOnly of ["decisions", "decisionSkips", "todos", "sessionBoard", "tokens"]) {
     assert.ok(!(ownerOnly in snap), `owner-only section "${ownerOnly}" must be absent`);
   }
+});
+
+test("public snapshot carries each published summary with its generation date", async () => {
+  const { generatePublicSnapshot } = await import("@/lib/snapshot");
+  const snap = generatePublicSnapshot();
+
+  assert.equal(snap.summaries["pub-repo"], "pub-repo is a small public library.");
+  assert.deepEqual(snap.summaryDates, { "pub-repo": SUMMARY_AT });
+  assert.ok(
+    !JSON.stringify(snap).includes("must never be published"),
+    "a sensitive repo's summary must not appear"
+  );
+});
+
+test("owner snapshot carries each summary with its generation date", async () => {
+  const { generateOwnerSnapshot } = await import("@/lib/snapshot");
+  const snap = generateOwnerSnapshot({ ok: false, reason: "test" });
+
+  assert.equal(snap.summaries["pub-repo"], "pub-repo is a small public library.");
+  assert.equal(snap.summaryDates?.["pub-repo"], SUMMARY_AT);
+  assert.equal(snap.summaryDates?.["secret-repo"], "2026-02-02T00:00:00.000Z");
 });
 
 test("owner snapshot retains sensitive cards and the session registry", async () => {

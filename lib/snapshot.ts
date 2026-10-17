@@ -123,6 +123,12 @@ export interface PublicSnapshot {
   repos: RepoWithSignals[];
   activity: ActivityEvent[];
   summaries: Record<string, string>;
+  /**
+   * When each entry in `summaries` was generated (ISO), keyed the same way.
+   * Absent on artifacts built before this existed, and a key may be missing
+   * where the row had no date; the repo page does not show an undated summary.
+   */
+  summaryDates?: Record<string, string>;
   /** Only `public` cards, with provenance/verify/paths stripped and names redacted. */
   contextCards: ContextCard[];
   /** Aggregate counts only — safe to publish, leak nothing per-card. */
@@ -197,6 +203,8 @@ export interface OwnerSnapshot {
   repos: RepoWithSignals[];
   activity: ActivityEvent[];
   summaries: Record<string, string>;
+  /** Generation date per summary; same contract as `PublicSnapshot.summaryDates`. */
+  summaryDates?: Record<string, string>;
   todos: Todo[];
   /**
    * Decision-log cards from `<todoDir>/decisions/` (Autonomy Doctrine
@@ -391,11 +399,16 @@ export function generatePublicSnapshot(): PublicSnapshot {
 
     // AI summaries only for public repos (redacted as well).
     const summaries: Record<string, string> = {};
+    const summaryDates: Record<string, string> = {};
     const sumRows = db
-      .prepare("SELECT entityId, output FROM ai_outputs WHERE entityType = 'repo' AND task = 'summary'")
-      .all() as { entityId: string; output: string }[];
+      .prepare(
+        "SELECT entityId, output, generatedAt FROM ai_outputs WHERE entityType = 'repo' AND task = 'summary'"
+      )
+      .all() as { entityId: string; output: string; generatedAt: string | null }[];
     for (const s of sumRows) {
-      if (slugs.has(s.entityId)) summaries[s.entityId] = redact(s.output) ?? "";
+      if (!slugs.has(s.entityId)) continue;
+      summaries[s.entityId] = redact(s.output) ?? "";
+      if (s.generatedAt) summaryDates[s.entityId] = s.generatedAt;
     }
 
     const stats: AtlasStats = {
@@ -493,6 +506,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
       repos,
       activity,
       summaries,
+      summaryDates,
       contextCards,
       contextMetrics,
       usage,
@@ -610,12 +624,16 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       .all() as ActivityEvent[];
 
     const summaries: Record<string, string> = {};
+    const summaryDates: Record<string, string> = {};
     const sumRows = db
       .prepare(
-        "SELECT entityId, output FROM ai_outputs WHERE entityType = 'repo' AND task = 'summary'"
+        "SELECT entityId, output, generatedAt FROM ai_outputs WHERE entityType = 'repo' AND task = 'summary'"
       )
-      .all() as { entityId: string; output: string }[];
-    for (const s of sumRows) summaries[s.entityId] = s.output;
+      .all() as { entityId: string; output: string; generatedAt: string | null }[];
+    for (const s of sumRows) {
+      summaries[s.entityId] = s.output;
+      if (s.generatedAt) summaryDates[s.entityId] = s.generatedAt;
+    }
 
     // Latest cached portfolio digest (most recently generated row). Stored
     // content-hash isn't needed here: the owner deployment cannot regenerate
@@ -716,6 +734,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       repos,
       activity,
       summaries,
+      summaryDates,
       todos,
       decisions,
       decisionSkips,
