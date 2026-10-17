@@ -112,10 +112,10 @@ export function OverviewCharts({ repos }: { repos: RepoWithSignals[] }) {
       {/* Ranking — two bars */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <ChartPanel title="Most active" hint={`${totalCommits} commits / 30d`}>
-          <RankBar data={active} unit="commits" fill={MARIGOLD} width={108} />
+          <RankBar data={active} unit="commits" fill={MARIGOLD} />
         </ChartPanel>
         <ChartPanel title="By workspace" hint={`${byWorkspace.length} shown`}>
-          <RankBar data={byWorkspace} unit="repos" fill={CLAY} width={108} />
+          <RankBar data={byWorkspace} unit="repos" fill={CLAY} />
         </ChartPanel>
       </div>
     </div>
