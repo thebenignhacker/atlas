@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { relativeTime } from "@/lib/util/date";
-import { freshnessLabel, freshnessTone } from "@/lib/freshness-shared";
+import { builtLabel, freshnessLabel, freshnessTone } from "@/lib/freshness-shared";
 import type { FreshnessTone, SectionFreshness } from "@/lib/freshness-shared";
 
 const TONE_STYLE: Record<FreshnessTone, { dot: string; text: string }> = {
@@ -41,16 +41,26 @@ export function FreshnessBadge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-xs ${style.text}`}
+      className={`inline-flex items-start gap-1.5 text-xs ${style.text}`}
       title={detail}
     >
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
-      {freshnessLabel(freshness)}
-      {/* The artifact's own age was previously rendered nowhere at all, which is
-          why a month-old bundle looked like a live page. */}
-      {artifactBuiltAt && (
-        <span className="text-dormant"> · built {relativeTime(artifactBuiltAt)}</span>
-      )}
+      {/* Top-aligned to the first line: once the dated label wraps on a phone,
+          a centered dot would float between the lines. */}
+      <span className={`mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} />
+      {/* One inline run, so a long line wraps as text instead of splitting
+          into two side-by-side columns. */}
+      <span>
+        {freshnessLabel(freshness)}
+        {/* The artifact's own age was previously rendered nowhere at all, which is
+            why a month-old bundle looked like a live page. Kept whole so a wrap
+            breaks before the separator, never inside the date. */}
+        {artifactBuiltAt && (
+          <>
+            {" "}
+            <span className="whitespace-nowrap text-dormant">· {builtLabel(artifactBuiltAt)}</span>
+          </>
+        )}
+      </span>
     </span>
   );
 }

@@ -6,6 +6,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db";
 import {
+  builtLabel,
   freshnessLabel,
   freshnessTone,
   lagDays,
@@ -324,6 +325,57 @@ test("a large gap between collection and newest datum is surfaced in the label",
   // A collector that runs every 10 minutes over frozen events keeps its own
   // clock fresh; the label must still say what the data actually covers.
   assert.match(freshnessLabel(dead, NOW), /data through .* · checked/);
+});
+
+test("a section collected over 30 days ago states its dates inline", () => {
+  // Phones cannot reach the title tooltip, so the absolute date has to be in
+  // the words once a relative age is coarse enough to mislead.
+  const now = new Date("2026-10-17T18:00:00.000Z");
+  const old = section({
+    dataAt: "2026-08-27T06:07:43.000Z",
+    collectedAt: "2026-08-28T13:39:24.282Z",
+  });
+  assert.equal(freshnessLabel(old, now), "data through 7w ago (2026-08-27)");
+  assert.match(
+    freshnessLabel({ ...old, status: "error" }, now),
+    /data through 7w ago \(2026-08-27\)$/
+  );
+
+  const stalled = section({
+    dataAt: "2026-07-20T06:00:00.000Z",
+    collectedAt: "2026-08-28T13:39:24.282Z",
+  });
+  assert.equal(
+    freshnessLabel(stalled, now),
+    "data through 12w ago (2026-07-20) · checked 7w ago (2026-08-28)"
+  );
+});
+
+test("dates are UTC calendar days, whatever offset the clock was written in", () => {
+  const now = new Date("2026-10-17T18:00:00.000Z");
+  // 2026-08-26 in Denver, 2026-08-27 in UTC.
+  const offset = section({
+    dataAt: "2026-08-26T22:30:00-06:00",
+    collectedAt: "2026-08-28T13:39:24.282Z",
+  });
+  assert.match(freshnessLabel(offset, now), /\(2026-08-27\)$/);
+});
+
+test("a section collected within 30 days carries no inline date", () => {
+  const now = new Date("2026-10-17T18:00:00.000Z");
+  const recent = section({
+    dataAt: "2026-10-06T18:00:00.000Z",
+    collectedAt: "2026-10-07T18:00:00.000Z",
+  });
+  const label = freshnessLabel(recent, now);
+  assert.equal(label, "data through 1w ago");
+  assert.doesNotMatch(label, /\(/);
+});
+
+test("the artifact's build age is dated inline only past 30 days", () => {
+  const now = new Date("2026-10-17T18:00:00.000Z");
+  assert.equal(builtLabel("2026-08-28T13:40:47.869Z", now), "built 7w ago (2026-08-28)");
+  assert.equal(builtLabel("2026-10-07T18:00:00.000Z", now), "built 1w ago");
 });
 
 test("liveSection marks build-time reads as collected at build time", () => {
