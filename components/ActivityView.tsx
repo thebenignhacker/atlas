@@ -112,7 +112,7 @@ export function ActivityView({
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <ChartPanel title="Most active repos" hint={`${topRepos.length} shown`}>
-          <RankBar data={topRepos} unit="events" fill="#e8a317" width={108} />
+          <RankBar data={topRepos} unit="events" fill="#e8a317" />
         </ChartPanel>
         <ChartPanel title="By type" hint="events">
           <Donut data={byType} unit="events" />
