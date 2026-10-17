@@ -176,14 +176,16 @@ export function ActivityView({
 
       <div className="space-y-5">
         {byDay.slice(0, 30).map(([date, items]) => (
-          <div key={date} className="flex gap-4">
-            <div className="w-24 shrink-0 pt-0.5 text-right text-xs text-faint">
+          <div key={date} className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
+            <div className="shrink-0 pt-0.5 text-xs text-faint sm:w-24 sm:text-right">
               {relativeTime(date + "T12:00:00Z")}
             </div>
-            <div className="flex-1 space-y-1.5 border-l border-line pl-4">
+            <div className="min-w-0 flex-1 space-y-1.5 border-l border-line pl-4">
               {items.slice(0, 20).map((e) => (
-                <div key={e.id} className="flex items-baseline gap-2">
-                  <span className="truncate text-sm text-text">{e.title}</span>
+                <div key={e.id} className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+                  <span title={e.title} className="min-w-0 truncate text-sm text-text">
+                    {e.title}
+                  </span>
                   {e.repoSlug && (
                     <span className="shrink-0 font-mono text-[11px] text-faint">
                       {repoMap[e.repoSlug] ?? e.repoSlug}
