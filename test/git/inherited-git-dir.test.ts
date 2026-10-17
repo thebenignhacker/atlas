@@ -21,6 +21,7 @@ const CENSUS = path.join(REPO, "scripts", "roadmap-census.py");
 /** Every test file that runs git, itself or through the census script. */
 const GIT_TEST_FILES = [
   "test/decisions/parse.test.ts",
+  "test/git/repo-env.test.ts",
   "test/roadmap/census-origin.test.ts",
   "test/roadmap/census-parity.test.ts",
   "test/roadmap/git-fixture.test.ts",

@@ -13,12 +13,15 @@ ahead, and how many units on origin are absent from the checkout (what a reader 
 working tree, such as the board, does not see). A tree whose origin/main does not resolve
 prints `unknown`, never 0, and is left out of the totals.
 
-Statuses are read from the **Status:** field and normalized to the seven canonical
-statuses the /roadmap board uses -- todo, blocked, ready, in-progress, in-review, done,
-retired -- with the SAME rules as atlas/lib/roadmap.ts normalizeStatus(), so the census
-and the board never disagree on the same files. An unknown or empty status is `todo`
-(seeded, unvetted), never `ready`. A parity test (test/roadmap/census-parity.test.ts)
-runs both over shared fixtures. Exit status 2 on a bad argument, 0 otherwise.
+Statuses are read from the **Status:** field with a port of field() in atlas/lib/roadmap.ts
+(the bold markers are required and the value is read on the field's own line) and
+normalized to the seven canonical statuses the /roadmap board uses -- todo, blocked, ready,
+in-progress, in-review, done, retired -- with a port of normalizeStatus() in the same file.
+An unknown or empty status is `todo` (seeded, unvetted), never `ready`. A parity test
+(test/roadmap/census-parity.test.ts) runs the census and the board over shared fixtures and
+fails when the two place a fixture in different statuses. Each configured todoDir has its
+own row; two that would print under the same name keep their /todo suffix. Exit status 2 on
+a bad argument, 0 otherwise.
 """
 import argparse, collections, json, os, re, subprocess, sys
 
@@ -49,8 +52,16 @@ def normalize(raw):
 
 
 def field(t, k):
-    m = re.search(r'^\*{0,2}%s\*{0,2}\s*[:|]\s*(.+)$' % k, t, re.M | re.I)
-    return m.group(1).strip().strip('*`').strip() if m else ''
+    """Port of field() in lib/roadmap.ts: a `**Key:**` line, colon inside or outside the bold
+    markers, read on that line only, so an empty field is '' and never the next line of the
+    file. Keep the two in step; the parity test fails when they drift."""
+    m = re.search(r'^\*\*%s[: \t]*\*\*[ \t]*:?[ \t]*(.*)$' % re.escape(k), t, re.M | re.I)
+    return m.group(1).strip() if m else ''
+
+
+def bare(v):
+    """A field value without the code or bold marks around it, for the printed columns."""
+    return v.strip('*`').strip()
 
 
 # The variables that tie git to one repository: the list `git rev-parse --local-env-vars` prints,
@@ -158,34 +169,39 @@ if args.list:
         ap.error(f"unknown status(es) {', '.join(bad)}; choose from {', '.join(ORDER)}")
 
 cfg = json.load(open(args.config))
-units, sources = [], {}
-for d in cfg.get('todoDirs', []):
-    d = os.path.expanduser(d)
-    tree = d.replace(os.path.expanduser('~/workspace/'), '').removesuffix('/todo')
+dirs = [os.path.expanduser(d) for d in cfg.get('todoDirs', [])]
+short = [d.replace(os.path.expanduser('~/workspace/'), '') for d in dirs]
+names = [s.removesuffix('/todo') for s in short]
+# `<X>/todo` and `<X>` would both print as `<X>`; those keep the suffix, so each prints apart.
+names = [s if names.count(n) > 1 else n for s, n in zip(short, names)]
+# One source per configured todoDir, in config order: two that share a name still get a row each.
+units, sources = [], []
+for d, tree in zip(dirs, names):
     src, files = read_tree(d, not args.no_fetch)
-    sources[tree] = src
+    src['tree'], src['units'] = tree, collections.Counter()
+    sources.append(src)
     for name, t in files:
         raw = field(t, 'Status')
         title = re.search(r'^#\s+(.+)$', t, re.M)
         units.append(dict(tree=tree, sha=src['sha'], file=name, raw=raw, status=normalize(raw),
-                          repos=field(t, 'Repos') or field(t, 'Repo') or '-', prio=field(t, 'Priority') or '-',
+                          repos=bare(field(t, 'Repos')) or bare(field(t, 'Repo')) or '-',
+                          prio=bare(field(t, 'Priority')) or '-',
                           title=(title.group(1).strip() if title else name)))
-unknown = [t for t, s in sources.items() if not s['sha']]
+        src['units'][units[-1]['status']] += 1
+unknown = [s for s in sources if not s['sha']]
 
 if args.json:
-    for t in unknown:
-        print(f"roadmap-census: {t}: unknown ({sources[t]['why']}), not counted", file=sys.stderr)
-    for t, s in sources.items():
+    for s in unknown:
+        print(f"roadmap-census: {s['tree']}: unknown ({s['why']}), not counted", file=sys.stderr)
+    for s in sources:
         if s['sha'] and s['fetch'] == 'failed':
-            print(f"roadmap-census: {t}: fetch failed, read the last fetched {REF}", file=sys.stderr)
+            print(f"roadmap-census: {s['tree']}: fetch failed, read the last fetched {REF}", file=sys.stderr)
     for u in units:
         print(json.dumps(u))
     sys.exit(0)
 
 tot = collections.Counter(u['status'] for u in units)
-per = {t: collections.Counter() for t, s in sources.items() if s['sha']}
-for u in units:
-    per[u['tree']][u['status']] += 1
+per = [s for s in sources if s['sha']]
 hdr = '| tree | total | ' + ' | '.join(ORDER) + ' |'
 if md:
     note = f" {len(unknown)} tree(s) unknown, not in the totals." if unknown else ''
@@ -193,11 +209,12 @@ if md:
     print(hdr); print('|' + '---|' * (len(ORDER) + 2))
 else:
     print(f"units={len(units)} trees={len(per)} unknown={len(unknown)}")
-for tree, c in sorted(per.items(), key=lambda kv: -sum(kv[1].values())):
-    row = [tree, str(sum(c.values()))] + [str(c[b]) for b in ORDER]
+for s in sorted(per, key=lambda s: -sum(s['units'].values())):
+    c = s['units']
+    row = [s['tree'], str(sum(c.values()))] + [str(c[b]) for b in ORDER]
     print('| ' + ' | '.join(row) + ' |' if md else '  '.join(row))
-for tree in unknown:
-    row = [tree, 'unknown'] + ['-'] * len(ORDER)
+for s in unknown:
+    row = [s['tree'], 'unknown'] + ['-'] * len(ORDER)
     print('| ' + ' | '.join(row) + ' |' if md else '  '.join(row))
 row = ['ALL', str(len(units))] + [str(tot[b]) for b in ORDER]
 print('| **' + '** | **'.join(row) + '** |' if md else '  '.join(row))
@@ -215,7 +232,8 @@ if sources:
         print('|---|---|---|---|---|---|')
     else:
         print(f"\nsource: {REF} per tree ({how})")
-    for tree, s in sources.items():
+    for s in sources:
+        tree = s['tree']
         if md:
             sha = f"`{s['sha']}`" if s['sha'] else f"unknown ({s['why']})"
             print(f"| {tree} | {sha} | {s['fetch']} | {num(s['behind'])} | {num(s['ahead'])} | {num(s['absent'])} |")
@@ -223,10 +241,10 @@ if sources:
             print(f"  {tree}  {s['sha']}  fetch={s['fetch']}  behind={num(s['behind'])}  ahead={num(s['ahead'])}  absent={num(s['absent'])}")
         else:
             print(f"  {tree}  unknown ({s['why']})  fetch={s['fetch']}")
-    gap = [t for t, s in sources.items() if s['behind'] or s['absent']]
+    gap = [s for s in sources if s['behind'] or s['absent']]
     if gap:
-        missing = sum(sources[t]['absent'] or 0 for t in gap)
-        print(f"\nCheckout gap: {len(gap)} tree(s) trail {REF} ({', '.join(gap)}); a reader of those working trees"
+        missing = sum(s['absent'] or 0 for s in gap)
+        print(f"\nCheckout gap: {len(gap)} tree(s) trail {REF} ({', '.join(s['tree'] for s in gap)}); a reader of those working trees"
               f" misses {missing} unit(s) counted above.")
 # Spellings the board folds by rule rather than reads verbatim. Listed so the
 # writers can be fixed; the count above already places them.

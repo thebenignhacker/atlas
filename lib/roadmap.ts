@@ -44,11 +44,15 @@ function roadmapDirs(): string[] {
  * bold markers, value optional:
  *   **Key:** val   |   **Key**: val   |   **Key:**   |   **Key** val
  * The match stays on the field's own line: an empty `**Key:**` reads as "",
- * never as the next line of the file.
+ * never as the next line of the file. scripts/roadmap-census.py carries a port
+ * of this rule; test/roadmap/census-parity.test.ts fails when they drift.
  */
+function fieldLine(key: string): RegExp {
+  return new RegExp(`^\\*\\*${key}[: \\t]*\\*\\*[ \\t]*:?[ \\t]*(.*)$`, "im");
+}
+
 function field(content: string, key: string): string | null {
-  const re = new RegExp(`^\\*\\*${key}[: \\t]*\\*\\*[ \\t]*:?[ \\t]*(.*)$`, "im");
-  const m = content.match(re);
+  const m = content.match(fieldLine(key));
   return m ? m[1].trim() : null;
 }
 
@@ -232,7 +236,9 @@ export function updateRoadmapItem(
   let content = fs.readFileSync(filePath, "utf8");
 
   if (update.status && ROADMAP_STATUSES.includes(update.status)) {
-    const statusLine = /^\*\*Status[:\s]*\*\*\s*:?.*$/im;
+    // The line field() reads, and only that line: an empty `**Status:**` must
+    // not take the next line of the file with it.
+    const statusLine = fieldLine("Status");
     if (statusLine.test(content)) {
       content = content.replace(statusLine, `**Status:** ${update.status}`);
     } else {
