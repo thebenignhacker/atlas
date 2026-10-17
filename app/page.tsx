@@ -6,8 +6,13 @@ import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
 
-export default async function PortfolioPage() {
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ attention?: string | string[] }>;
+}) {
   const mode = await getRequestMode();
+  const attentionOnly = (await searchParams).attention === "1";
   let repos;
   let stats;
   try {
@@ -39,6 +44,13 @@ export default async function PortfolioPage() {
             label: "Need attention",
             value: stats.needsAttention,
             accent: stats.needsAttention ? "text-amber" : "text-text",
+            // The tile answers "which ones?" by opening the filtered list; with
+            // none flagged that list would be empty, so the tile stays plain.
+            href: stats.needsAttention ? "/?attention=1#repos" : undefined,
+            linkLabel:
+              stats.needsAttention === 1
+                ? "1 repository needs attention. Show it."
+                : `${stats.needsAttention} repositories need attention. Show them.`,
           },
           {
             label: "Open P0",
@@ -47,7 +59,7 @@ export default async function PortfolioPage() {
           },
         ]}
       />
-      <PortfolioView repos={repos} />
+      <PortfolioView repos={repos} initialAttentionOnly={attentionOnly} />
     </div>
   );
 }
