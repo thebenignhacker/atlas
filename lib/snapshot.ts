@@ -303,6 +303,12 @@ export function generatePublicSnapshot(): PublicSnapshot {
         "atlas: publicOwners is empty — ALL public repos will be published. Set publicOwners in atlas.config.json to scope the demo to specific orgs/users."
       );
     }
+    // GitHub answers for an owner spelled in another letter case (OPENA2A-ORG
+    // for opena2a-org) and reports its own spelling, which the scan records in
+    // place of the remote's. Compare lowercased, so an entry spelled like the
+    // remote still matches and only a change of owner, not of spelling,
+    // decides whether a repo is published.
+    const allowedOwners = new Set(allow.map((o) => o.toLowerCase()));
     // SENSITIVE repos are a hard never-publish: dropped here even when the repo
     // is GitHub-public. We also resolve their names so cards/text that reference
     // them by slug OR name can be excluded/redacted below. Fail-closed: the
@@ -318,7 +324,8 @@ export function generatePublicSnapshot(): PublicSnapshot {
         r.visibility === "public" &&
         r.isFork !== 1 &&
         !sensitiveSlugs.has(r.slug) &&
-        (allow.length === 0 || (r.owner !== null && allow.includes(r.owner)))
+        (allow.length === 0 ||
+          (r.owner !== null && allowedOwners.has(r.owner.toLowerCase())))
     );
     const slugs = new Set(publicRepos.map((r) => r.slug));
 
