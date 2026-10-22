@@ -168,10 +168,11 @@ export function PortfolioView({
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search repos…"
+              aria-label="Search repositories"
               className="w-full rounded-lg border border-line bg-surface-1 py-2 pl-9 pr-3 text-sm text-text placeholder:text-faint focus:border-teal focus:outline-none"
             />
           </div>
-          <Select value={group} onChange={setGroup}>
+          <Select label="Filter by organisation" value={group} onChange={setGroup}>
             <option value="all">All orgs</option>
             {groups.map((g) => (
               <option key={g} value={g}>
@@ -179,7 +180,7 @@ export function PortfolioView({
               </option>
             ))}
           </Select>
-          <Select value={language} onChange={setLanguage}>
+          <Select label="Filter by language" value={language} onChange={setLanguage}>
             <option value="all">All languages</option>
             {languages.map((l) => (
               <option key={l} value={l}>
@@ -187,7 +188,7 @@ export function PortfolioView({
               </option>
             ))}
           </Select>
-          <Select value={staleness} onChange={setStaleness}>
+          <Select label="Filter by freshness" value={staleness} onChange={setStaleness}>
             <option value="all">Any freshness</option>
             {STALE_KEYS.map((k) => (
               <option key={k} value={k}>
@@ -196,13 +197,14 @@ export function PortfolioView({
             ))}
           </Select>
           {!publicView && (
-            <Select value={visibility} onChange={setVisibility}>
+            <Select label="Filter by visibility" value={visibility} onChange={setVisibility}>
               <option value="all">All visibility</option>
               <option value="public">Public</option>
               <option value="private">Private</option>
             </Select>
           )}
-          <Select value={sort} onChange={(v) => setSort(v as Sort)}>
+          {/* Alone on the phone grid's last row, so it takes all of it: "Recent activity" does not fit half. */}
+          <Select label="Sort repositories" value={sort} onChange={(v) => setSort(v as Sort)} className="col-span-2">
             <option value="activity">Recent activity</option>
             <option value="stars">Most stars</option>
             <option value="attention">Needs attention</option>
@@ -405,20 +407,29 @@ function Toggle({
   );
 }
 
+/**
+ * The filters have no visible label, so `label` is the select's accessible name.
+ * On a phone two selects share a row; the narrower padding there lets "Any freshness" fit.
+ */
 function Select<T extends string>({
+  label,
   value,
   onChange,
   children,
+  className = "",
 }: {
+  label: string;
   value: T;
   onChange: (v: T) => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <select
+      aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className="w-full min-w-0 rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none sm:w-auto"
+      className={`w-full min-w-0 rounded-lg border border-line bg-surface-1 px-2.5 py-2 text-sm text-muted focus:border-teal focus:outline-none sm:w-auto sm:px-3 ${className}`}
     >
       {children}
     </select>

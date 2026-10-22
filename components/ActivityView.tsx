@@ -94,6 +94,7 @@ export function ActivityView({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <select
+          aria-label="Filter by repository"
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
           className="rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"

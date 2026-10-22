@@ -60,23 +60,24 @@ export function TodoView({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search todos…"
+            aria-label="Search todos"
             className="w-full rounded-lg border border-line bg-surface-1 py-2 pl-9 pr-3 text-sm text-text placeholder:text-faint focus:border-teal focus:outline-none"
           />
         </div>
-        <Select value={status} onChange={setStatus} className="w-full min-w-0 sm:w-auto">
+        <Select label="Filter by status" value={status} onChange={setStatus} className="w-full min-w-0 sm:w-auto">
           <option value="open">Open</option>
           <option value="done">Done</option>
           <option value="archived">Archived</option>
           <option value="all">All status</option>
         </Select>
-        <Select value={priority} onChange={setPriority} className="w-full min-w-0 sm:w-auto">
+        <Select label="Filter by priority" value={priority} onChange={setPriority} className="w-full min-w-0 sm:w-auto">
           <option value="all">All priorities</option>
           <option value="P0">P0</option>
           <option value="P1">P1</option>
           <option value="P2">P2</option>
           <option value="P3">P3</option>
         </Select>
-        <Select value={repo} onChange={setRepo} className="w-full min-w-0 sm:w-auto">
+        <Select label="Filter by repository" value={repo} onChange={setRepo} className="w-full min-w-0 sm:w-auto">
           <option value="all">All repos</option>
           {repos.map((r) => (
             <option key={r.slug} value={r.slug}>
@@ -170,12 +171,15 @@ function TodoRow({ todo, repoName }: { todo: Todo; repoName: string | null }) {
   );
 }
 
+/** The filters have no visible label, so `label` is the select's accessible name. */
 function Select<T extends string>({
+  label,
   value,
   onChange,
   children,
   className = "",
 }: {
+  label: string;
   value: T;
   onChange: (v: T) => void;
   children: React.ReactNode;
@@ -183,6 +187,7 @@ function Select<T extends string>({
 }) {
   return (
     <select
+      aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       className={`rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none ${className}`}

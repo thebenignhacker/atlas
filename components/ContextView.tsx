@@ -78,7 +78,7 @@ export function ContextView({ cards }: { cards: ContextCard[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={project} onChange={setProject}>
+        <Select label="Filter by project" value={project} onChange={setProject}>
           <option value="all">All projects</option>
           {projects.map((p) => (
             <option key={p} value={p}>
@@ -86,7 +86,7 @@ export function ContextView({ cards }: { cards: ContextCard[] }) {
             </option>
           ))}
         </Select>
-        <Select value={fresh} onChange={(v) => setFresh(v as typeof fresh)}>
+        <Select label="Filter by state" value={fresh} onChange={(v) => setFresh(v as typeof fresh)}>
           <option value="all">All states</option>
           <option value="flagged">Needs re-verification</option>
           <option value="fresh">Fresh only</option>
@@ -221,17 +221,21 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** The filters have no visible label, so `label` is the select's accessible name. */
 function Select<T extends string>({
+  label,
   value,
   onChange,
   children,
 }: {
+  label: string;
   value: T;
   onChange: (v: T) => void;
   children: React.ReactNode;
 }) {
   return (
     <select
+      aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       className="rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
