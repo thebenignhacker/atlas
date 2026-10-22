@@ -7,7 +7,9 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import type { TokenRollup } from "@/lib/usage/token-rollup";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Tokens" };
+const SUBTITLE =
+  "What the coding sessions cost, from the transcripts: tokens per session and repo, the context each turn re-bills, and which tool results carry it.";
+export const metadata: Metadata = { title: "Tokens", description: SUBTITLE };
 
 const fmt = (n: number) => n.toLocaleString();
 const kfmt = (n: number) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(0)}k` : String(n));
@@ -170,7 +172,7 @@ export default async function TokensPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Tokens"
-        subtitle="What the coding sessions cost, from the transcripts: tokens per session and repo, the context each turn re-bills, and which tool results carry it."
+        subtitle={SUBTITLE}
         freshness={getFreshness(mode, "tokens")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />

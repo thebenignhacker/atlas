@@ -13,7 +13,8 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import { relativeTime } from "@/lib/util/date";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Settings" };
+const SUBTITLE = "AI, privacy, and what Atlas has learned.";
+export const metadata: Metadata = { title: "Settings", description: SUBTITLE };
 
 export default async function SettingsPage() {
   const mode = await getRequestMode();
@@ -38,7 +39,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="px-5 py-8 pb-20 md:px-8">
-      <PageHeader title="Settings" subtitle="AI, privacy, and what Atlas has learned." />
+      <PageHeader title="Settings" subtitle={SUBTITLE} />
 
       <div className="space-y-6">
         <Section icon={Sparkles} title="AI layer">

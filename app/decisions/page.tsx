@@ -10,7 +10,9 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import type { Decision, DecisionSkip } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Decisions" };
+const SUBTITLE =
+  "Every auto-adopted recommendation and queued action: what was chosen, why, and how to revert.";
+export const metadata: Metadata = { title: "Decisions", description: SUBTITLE };
 
 const CLASS_LABEL: Record<Decision["klass"], string> = {
   adopted: "adopted",
@@ -158,7 +160,7 @@ export default async function DecisionsPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Decisions"
-        subtitle="Every auto-adopted recommendation and queued action: what was chosen, why, and how to revert."
+        subtitle={SUBTITLE}
         freshness={freshness}
         artifactBuiltAt={artifactBuiltAt}
       />

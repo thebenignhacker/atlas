@@ -11,7 +11,8 @@ import { OwnerOnly } from "@/components/OwnerOnly";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Roadmap" };
+const SUBTITLE = "Institutional Roadmap v2.2: every build unit, in dependency order.";
+export const metadata: Metadata = { title: "Roadmap", description: SUBTITLE };
 
 export default async function RoadmapPage() {
   const mode = await getRequestMode();
@@ -36,10 +37,7 @@ export default async function RoadmapPage() {
   if (items.length === 0) {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
-        <PageHeader
-          title="Roadmap"
-          subtitle="Institutional Roadmap v2.2: every build unit, in dependency order."
-        />
+        <PageHeader title="Roadmap" subtitle={SUBTITLE} />
         <div className="rounded-[var(--radius-card)] border border-dashed border-line py-16 text-center text-sm text-faint">
           No roadmap items found in <code>&lt;todoDir&gt;/roadmap/</code>.
         </div>
@@ -63,8 +61,8 @@ export default async function RoadmapPage() {
         title="Roadmap"
         subtitle={
           readOnly
-            ? "Institutional Roadmap v2.2: every build unit, in dependency order. Read-only here; edit from local Atlas."
-            : "Institutional Roadmap v2.2: every build unit, in dependency order. Check items off and log status as work lands."
+            ? `${SUBTITLE} Read-only here; edit from local Atlas.`
+            : `${SUBTITLE} Check items off and log status as work lands.`
         }
         freshness={freshness}
         artifactBuiltAt={getArtifactBuiltAt(mode)}

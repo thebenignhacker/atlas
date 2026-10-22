@@ -40,9 +40,16 @@ function sortRepos(list: RepoWithSignals[], sort: Sort): RepoWithSignals[] {
 export function PortfolioView({
   repos,
   initialAttentionOnly = false,
+  publicView = false,
 }: {
   repos: RepoWithSignals[];
   initialAttentionOnly?: boolean;
+  /**
+   * The public snapshot holds only public repos and no todos, so there the
+   * visibility filter cannot narrow the list and "Has todos" matches nothing;
+   * the public view leaves both out.
+   */
+  publicView?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -188,11 +195,13 @@ export function PortfolioView({
               </option>
             ))}
           </Select>
-          <Select value={visibility} onChange={setVisibility}>
-            <option value="all">All visibility</option>
-            <option value="public">Public</option>
-            <option value="private">Private</option>
-          </Select>
+          {!publicView && (
+            <Select value={visibility} onChange={setVisibility}>
+              <option value="all">All visibility</option>
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </Select>
+          )}
           <Select value={sort} onChange={(v) => setSort(v as Sort)}>
             <option value="activity">Recent activity</option>
             <option value="stars">Most stars</option>
@@ -205,9 +214,11 @@ export function PortfolioView({
           <Toggle on={attentionOnly} onClick={toggleAttention} accent="clay">
             <SlidersHorizontal className="h-3.5 w-3.5" /> Needs attention
           </Toggle>
-          <Toggle on={todosOnly} onClick={() => setTodosOnly((v) => !v)} accent="clay">
-            <ListTodo className="h-3.5 w-3.5" /> Has todos
-          </Toggle>
+          {!publicView && (
+            <Toggle on={todosOnly} onClick={() => setTodosOnly((v) => !v)} accent="clay">
+              <ListTodo className="h-3.5 w-3.5" /> Has todos
+            </Toggle>
+          )}
           <Toggle on={grouped} onClick={() => setGrouped((v) => !v)} accent="teal">
             <Layers className="h-3.5 w-3.5" /> Group by org
           </Toggle>

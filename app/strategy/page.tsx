@@ -8,7 +8,9 @@ import { StrategyBoard } from "@/components/StrategyBoard";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Strategy" };
+const SUBTITLE =
+  "Strategy and fundraising work, tracked apart from coding and standards-filing todos.";
+export const metadata: Metadata = { title: "Strategy", description: SUBTITLE };
 
 export default async function StrategyPage() {
   const mode = await getRequestMode();
@@ -33,10 +35,7 @@ export default async function StrategyPage() {
   if (!doc || doc.totalTasks === 0) {
     return (
       <div className="px-5 py-8 pb-20 md:px-8">
-        <PageHeader
-          title="Strategy"
-          subtitle="Strategy and fundraising work, tracked apart from coding and standards-filing todos."
-        />
+        <PageHeader title="Strategy" subtitle={SUBTITLE} />
         <div className="rounded-[var(--radius-card)] border border-dashed border-line py-16 text-center text-sm text-faint">
           No strategy tasks found. Add a markdown doc with{" "}
           <code>#strategy</code>-tagged checkbox items to{" "}

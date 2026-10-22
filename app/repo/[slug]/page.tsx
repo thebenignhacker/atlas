@@ -14,8 +14,10 @@ import {
   getActivityForRepo,
   getTodos,
   getRepoSummary,
+  type RepoWithSignals,
 } from "@/lib/queries";
 import { getRequestMode } from "@/lib/request-mode";
+import { repoMetadata } from "@/lib/repo-metadata";
 import { STALENESS, languageColor, PRIORITY } from "@/lib/display";
 import { relativeTime } from "@/lib/util/date";
 import { aiAvailability } from "@/lib/ai/provider";
@@ -26,7 +28,10 @@ import { AiBadge } from "@/components/AiBadge";
 
 export const dynamic = "force-dynamic";
 
-/** Titled by the repository it shows, from the same lookup the page renders. */
+/**
+ * Titled and described by the repository it shows, from the same lookup the
+ * page renders.
+ */
 export async function generateMetadata({
   params,
 }: {
@@ -34,13 +39,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const mode = await getRequestMode();
-  let name: string | null = null;
+  let repo: RepoWithSignals | null = null;
   try {
-    name = getRepo(mode, slug)?.name ?? null;
+    repo = getRepo(mode, slug);
   } catch {
-    name = null;
+    repo = null;
   }
-  return { title: name ?? "Page not found" };
+  return repoMetadata(repo);
 }
 
 export default async function RepoPage({

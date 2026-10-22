@@ -111,6 +111,12 @@ export function ActivityView({
       </div>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {/* The panel titles here and below are h3s, so they sit under an h2, as
+            on the portfolio; with the page's h1 directly above them the
+            outline skipped a level. */}
+        <h2 className="font-display text-lg font-semibold tracking-tight text-text lg:col-span-2">
+          At a glance
+        </h2>
         <ChartPanel title="Most active repos" hint={`${topRepos.length} shown`}>
           <RankBar data={topRepos} unit="events" fill="#e8a317" />
         </ChartPanel>

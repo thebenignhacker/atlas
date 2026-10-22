@@ -62,7 +62,14 @@ export function ChartEmpty() {
  */
 const DONUT_SIZE = { width: 136, height: 150 };
 
-/** Composition donut with a centered total and a value legend. */
+/**
+ * Composition donut with a centered total and a value legend.
+ *
+ * The legend names every slice with its value, so the ring itself is
+ * decorative: it is hidden from assistive technology and has no keyboard stop.
+ * Recharts gives a chart's svg and a pie's layer a tab stop each by default,
+ * and those unnamed stops came before the portfolio's search box.
+ */
 export function Donut({ data, unit }: { data: Slice[]; unit: string }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return <ChartEmpty />;
@@ -71,29 +78,33 @@ export function Donut({ data, unit }: { data: Slice[]; unit: string }) {
       {/* Fixed-width donut column so the ring's outerRadius always sits inside it
           with margin; a percentage width can shrink below the diameter and clip. */}
       <div className="relative shrink-0" style={DONUT_SIZE}>
-        <PieChart
-          width={DONUT_SIZE.width}
-          height={DONUT_SIZE.height}
-          margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
-        >
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="name"
-            innerRadius={40}
-            outerRadius={58}
-            paddingAngle={2}
-            startAngle={90}
-            endAngle={-270}
-            stroke="#fffdf8"
-            strokeWidth={2}
+        <div aria-hidden="true">
+          <PieChart
+            width={DONUT_SIZE.width}
+            height={DONUT_SIZE.height}
+            margin={{ top: 4, right: 4, bottom: 4, left: 4 }}
+            accessibilityLayer={false}
           >
-            {data.map((d) => (
-              <Cell key={d.name} fill={d.color} />
-            ))}
-          </Pie>
-          <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v, n) => [`${v} ${unit}`, n]} />
-        </PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              innerRadius={40}
+              outerRadius={58}
+              paddingAngle={2}
+              startAngle={90}
+              endAngle={-270}
+              stroke="#fffdf8"
+              strokeWidth={2}
+              rootTabIndex={-1}
+            >
+              {data.map((d) => (
+                <Cell key={d.name} fill={d.color} />
+              ))}
+            </Pie>
+            <Tooltip contentStyle={CHART_TOOLTIP} formatter={(v, n) => [`${v} ${unit}`, n]} />
+          </PieChart>
+        </div>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="font-display text-2xl font-semibold leading-none tnum text-text">
             {total}

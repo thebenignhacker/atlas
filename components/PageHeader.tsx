@@ -109,6 +109,18 @@ export function PageHeader({
   );
 }
 
+/**
+ * The strip's columns for `count` tiles. The grid is laid out for six, which
+ * fill one row on a wide screen. Three, as in the public portfolio, would leave
+ * half of that row empty, so they fill one row from the small breakpoint up,
+ * and on a phone the third spans the row under the first two.
+ */
+function stripColumns(count: number): string {
+  return count === 3
+    ? "grid-cols-2 sm:grid-cols-3 [&>:last-child]:col-span-2 sm:[&>:last-child]:col-span-1"
+    : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6";
+}
+
 export function StatStrip({
   stats,
 }: {
@@ -123,7 +135,9 @@ export function StatStrip({
   }[];
 }) {
   return (
-    <div className="mb-7 grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-line bg-line shadow-[0_1px_0_rgba(33,28,21,0.03)] sm:grid-cols-3 lg:grid-cols-6">
+    <div
+      className={`mb-7 grid ${stripColumns(stats.length)} gap-px overflow-hidden rounded-[var(--radius-card)] border border-line bg-line shadow-[0_1px_0_rgba(33,28,21,0.03)]`}
+    >
       {stats.map((s, i) => {
         const body = (
           <>

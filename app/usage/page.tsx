@@ -11,7 +11,9 @@ import type { FeatureUsage, Routine, RoutineKind } from "@/lib/usage/types";
 import { relativeTime } from "@/lib/util/date";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Usage" };
+const SUBTITLE =
+  "Which Claude Code features this work actually leans on, mined from session transcripts. Metadata only: tool names and timing, never commands or content.";
+export const metadata: Metadata = { title: "Usage", description: SUBTITLE };
 
 const KIND_META: Record<RoutineKind, { label: string; color: string }> = {
   skill: { label: "skill", color: "#1f8a7e" },
@@ -156,7 +158,7 @@ export default async function UsagePage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Usage"
-        subtitle="Which Claude Code features this work actually leans on, mined from session transcripts. Metadata only: tool names and timing, never commands or content."
+        subtitle={SUBTITLE}
         freshness={freshness}
         artifactBuiltAt={builtAt}
       />
