@@ -93,11 +93,14 @@ export function ActivityView({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
+        {/* A select is as wide as its longest option, a repository name, so it
+            is capped to the width of its row; uncapped, a long name made the
+            page scroll sideways on a phone. */}
         <select
           aria-label="Filter by repository"
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
-          className="rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
+          className="max-w-full rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
         >
           <option value="all">All repos</option>
           {repos.map((r) => (
