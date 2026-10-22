@@ -222,11 +222,13 @@ export function RoadmapBoard({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search roadmap…"
+              aria-label="Search roadmap items"
               className="w-40 rounded-lg border border-line bg-surface-1 py-1.5 pl-8 pr-2.5 text-sm text-text placeholder:text-faint focus:border-teal focus:outline-none sm:w-48"
             />
           </div>
 
           <select
+            aria-label="Filter by area"
             value={area}
             onChange={(e) => setArea(e.target.value)}
             className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
@@ -240,6 +242,7 @@ export function RoadmapBoard({
           </select>
 
           <select
+            aria-label="Filter by priority"
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
             className="rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none"
@@ -255,6 +258,7 @@ export function RoadmapBoard({
               a whole sentence, so this one is capped to its row. */}
           {owners.length > 0 && (
             <select
+              aria-label="Filter by owner"
               value={owner}
               onChange={(e) => setOwner(e.target.value)}
               className="min-w-0 max-w-full rounded-lg border border-line bg-surface-1 px-3 py-1.5 text-sm text-text focus:border-teal focus:outline-none sm:max-w-xs"
@@ -470,6 +474,7 @@ function RoadmapCard({
         ) : (
           <div className="relative">
             <select
+              aria-label={`Status of ${item.title}`}
               value={item.status}
               onChange={(e) => onMutate(item.id, { status: e.target.value as RoadmapStatus })}
               disabled={pending}
@@ -590,6 +595,7 @@ function RoadmapCard({
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitComment()}
                 placeholder="Add a status comment…"
+                aria-label={`Add a status comment to ${item.title}`}
                 className="min-w-0 flex-1 rounded-md border border-line bg-base px-2.5 py-1.5 text-xs text-text placeholder:text-faint focus:border-teal focus:outline-none"
               />
               <button
