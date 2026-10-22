@@ -117,6 +117,35 @@ export function hasGitHubToken(): boolean {
   return candidates().length > 0;
 }
 
+/**
+ * The page number in the `rel="last"` link of a GitHub `Link` header, or null
+ * when the header names no last page.
+ */
+function lastPage(link: string | undefined): number | null {
+  const last = link && /<([^>]*)>\s*;\s*rel="last"/.exec(link);
+  const page = last && /[?&]page=(\d+)(?:&|$)/.exec(last[1]);
+  return page ? Number(page[1]) : null;
+}
+
+/**
+ * Count a repository's open pull requests. GitHub lists at most 100 to a page,
+ * so one page's length stops at 100. Asked for one to a page, GitHub names the
+ * last page in the `Link` header when there is more than one, and that page's
+ * number is the count, so one request reads it. A header that names a next page
+ * and no last page has its pages walked and counted; with neither, the first
+ * page holds them all.
+ */
+async function countOpenPrs(octokit: Octokit, owner: string, repo: string): Promise<number> {
+  const params = { owner, repo, state: "open" as const };
+  const first = await octokit.rest.pulls.list({ ...params, per_page: 1 });
+  const link = first.headers.link;
+  const last = lastPage(link);
+  if (last !== null) return last;
+  if (!link || !/<[^>]*>\s*;\s*rel="next"/.test(link)) return first.data.length;
+  const all = await octokit.paginate(octokit.rest.pulls.list, { ...params, per_page: 100 });
+  return all.length;
+}
+
 /** Run async tasks with bounded concurrency to stay friendly to rate limits. */
 async function pool<T, R>(
   items: T[],
@@ -171,13 +200,7 @@ export async function enrichRepos(
       // Best-effort open-PR count; tolerate failure (private/permission/rate).
       let openPrs: number | null = null;
       try {
-        const prs = await octokit.rest.pulls.list({
-          owner,
-          repo: repoName,
-          state: "open",
-          per_page: 100,
-        });
-        openPrs = prs.data.length;
+        openPrs = await countOpenPrs(octokit, owner, repoName);
       } catch {
         openPrs = null;
       }
