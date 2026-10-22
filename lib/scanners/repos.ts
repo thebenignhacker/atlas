@@ -3,7 +3,7 @@ import path from "node:path";
 import type { AtlasConfig } from "@/lib/config";
 import type { Repo } from "@/lib/types";
 import { readGitInfo, parseGitHubRemote } from "@/lib/git";
-import { enrichRepos, type EnrichTarget } from "@/lib/github";
+import { enrichRepos, type EnrichTarget, type RepoEnrichment } from "@/lib/github";
 import { slugify } from "@/lib/util/format";
 
 /** Find every git repo under a root, up to `maxDepth` levels deep. */
@@ -105,9 +105,28 @@ export async function scanRepos(config: AtlasConfig): Promise<RepoScanResult> {
 
   // GitHub enrichment (no-op + warning when no token).
   const enrichment = await enrichRepos(enrichTargets);
+  applyEnrichment(repos, enrichment);
+
+  return {
+    repos,
+    githubTargets: enrichTargets.length,
+    githubEnriched: enrichment.size,
+  };
+}
+
+/**
+ * Copy GitHub's facts onto the scanned repos, owner and name included. A
+ * clone's remote keeps the owner and name it was cloned from until someone
+ * changes it, so after a rename or transfer the remote's would build a GitHub
+ * link that redirects; GitHub reports the current ones. A repo GitHub did not
+ * answer for keeps the remote's.
+ */
+export function applyEnrichment(repos: Repo[], enrichment: Map<string, RepoEnrichment>): void {
   for (const repo of repos) {
     const e = enrichment.get(repo.slug);
     if (!e) continue;
+    repo.owner = e.owner;
+    repo.repoName = e.repoName;
     repo.visibility = e.visibility;
     repo.isFork = e.isFork ? 1 : 0;
     repo.isArchived = e.isArchived ? 1 : 0;
@@ -119,10 +138,4 @@ export async function scanRepos(config: AtlasConfig): Promise<RepoScanResult> {
     repo.pushedAt = e.pushedAt;
     repo.description = e.description;
   }
-
-  return {
-    repos,
-    githubTargets: enrichTargets.length,
-    githubEnriched: enrichment.size,
-  };
 }

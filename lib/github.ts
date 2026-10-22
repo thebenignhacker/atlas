@@ -88,6 +88,13 @@ async function resolveOctokit(): Promise<Octokit | null> {
 }
 
 export interface RepoEnrichment {
+  /**
+   * The owner and name GitHub serves the repository under. They differ from
+   * the clone's remote after a rename or transfer: GitHub redirects a request
+   * for the old owner and name to the repository, and the client follows it.
+   */
+  owner: string;
+  repoName: string;
   visibility: "public" | "private";
   isFork: boolean;
   isArchived: boolean;
@@ -130,14 +137,17 @@ async function pool<T, R>(
 
 /**
  * Enrich repos with GitHub facts. Returns an empty map (and a console note)
- * when no token is present, so a scan still succeeds fully offline.
+ * when no token is present, so a scan still succeeds fully offline. A `client`
+ * is used as given instead of resolving a token (the tests point one at a
+ * local server).
  */
 export async function enrichRepos(
-  targets: EnrichTarget[]
+  targets: EnrichTarget[],
+  client?: Octokit
 ): Promise<Map<string, RepoEnrichment>> {
   const map = new Map<string, RepoEnrichment>();
   if (targets.length === 0) return map;
-  const octokit = await resolveOctokit();
+  const octokit = client ?? (await resolveOctokit());
   if (!octokit) {
     console.warn(
       "atlas: no working GitHub token (GITHUB_TOKEN or `gh auth login`) — skipping enrichment (visibility, stars, forks). Local git facts still scanned."
@@ -148,12 +158,22 @@ export async function enrichRepos(
   await pool(targets, 6, async (t) => {
     try {
       const { data } = await octokit.rest.repos.get({ owner: t.owner, repo: t.repo });
+      const owner = data.owner.login;
+      const repoName = data.name;
+      if (
+        owner.toLowerCase() !== t.owner.toLowerCase() ||
+        repoName.toLowerCase() !== t.repo.toLowerCase()
+      ) {
+        console.log(
+          `atlas: ${t.owner}/${t.repo} is ${owner}/${repoName} on GitHub now; using the new owner and name.`
+        );
+      }
       // Best-effort open-PR count; tolerate failure (private/permission/rate).
       let openPrs: number | null = null;
       try {
         const prs = await octokit.rest.pulls.list({
-          owner: t.owner,
-          repo: t.repo,
+          owner,
+          repo: repoName,
           state: "open",
           per_page: 100,
         });
@@ -163,6 +183,8 @@ export async function enrichRepos(
       }
       const openIssuesTotal = data.open_issues_count ?? 0;
       map.set(t.slug, {
+        owner,
+        repoName,
         visibility: data.private ? "private" : "public",
         isFork: Boolean(data.fork),
         isArchived: Boolean(data.archived),
