@@ -96,7 +96,8 @@ export function OverviewCharts({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-baseline gap-2">
+      {/* Below lg the Portfolio's "At a glance" button carries this heading. */}
+      <div className="hidden items-baseline gap-2 lg:flex">
         <h2 className="font-display text-lg font-semibold tracking-tight text-text">
           At a glance
         </h2>

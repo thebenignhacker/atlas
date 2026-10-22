@@ -66,6 +66,8 @@ export function PortfolioView({
   const [todosOnly, setTodosOnly] = useState(false);
   const [grouped, setGrouped] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // Below lg the charts start closed: that is also the server-rendered state.
+  const [glanceOpen, setGlanceOpen] = useState(false);
 
   // `?attention=1` (where the "Need attention" stat links) turns the filter on.
   // This view stays mounted when that link is followed from this page, so the
@@ -117,6 +119,18 @@ export function PortfolioView({
     });
   }, [repos, q, group, visibility, language, staleness, attentionOnly, todosOnly]);
 
+  // Search text or a filter narrows the list. The charts always describe every
+  // repo, so while the list is narrowed they step aside and the matches follow
+  // the filter bar. Sorting and grouping only rearrange the list.
+  const filtersActive =
+    q.trim() !== "" ||
+    group !== "all" ||
+    visibility !== "all" ||
+    language !== "all" ||
+    staleness !== "all" ||
+    attentionOnly ||
+    todosOnly;
+
   // Separate the user's own active work from forks/clones and archived repos.
   const primary = useMemo(
     () => filtered.filter((r) => r.isFork !== 1 && r.isArchived !== 1),
@@ -160,11 +174,11 @@ export function PortfolioView({
 
   return (
     <div className="space-y-7">
-      <OverviewCharts repos={repos} sampleAsOf={sampleAsOf} />
-
       {/* Filter bar; the "Need attention" stat links here as #repos */}
       <div id="repos" className="scroll-mt-6 space-y-2.5">
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        {/* On a phone the selects pair up under the search box. A last one left
+            alone would get half a row and a cut-off label, so it takes the row. */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&>:last-child:nth-child(even)]:col-span-2">
           <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
             <input
@@ -232,6 +246,34 @@ export function PortfolioView({
           </span>
         </div>
       </div>
+
+      {!filtersActive && (
+        <div>
+          {/* Below lg the charts sit behind this row so a phone reaches the list
+              in a short scroll; from lg up the row is hidden and the charts show
+              with their own heading, by CSS alone. */}
+          <h2 className="lg:hidden">
+            <button
+              type="button"
+              aria-expanded={glanceOpen}
+              aria-controls="at-a-glance"
+              onClick={() => setGlanceOpen((v) => !v)}
+              className="flex w-full items-center gap-2.5 rounded-[var(--radius-card)] border border-line bg-surface-1 px-4 py-3 text-left transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-teal"
+            >
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-faint transition-transform ${glanceOpen ? "" : "-rotate-90"}`}
+              />
+              <span className="font-display text-lg font-semibold tracking-tight text-text">
+                At a glance
+              </span>{" "}
+              <span className="text-xs text-faint tnum">{repos.length} repos</span>
+            </button>
+          </h2>
+          <div id="at-a-glance" className={glanceOpen ? "mt-3 lg:mt-0" : "hidden lg:block"}>
+            <OverviewCharts repos={repos} sampleAsOf={sampleAsOf} />
+          </div>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-dashed border-line py-16 text-center text-sm text-faint">
