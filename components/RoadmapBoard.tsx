@@ -431,8 +431,11 @@ function RoadmapCard({
           </button>
         )}
         <div className="min-w-0 flex-1">
+          {/* A title can carry a run with no break opportunity, such as an
+              identifier. min-w-0 lets the title narrow beside the priority
+              badge, and overflow-wrap: anywhere breaks the run inside it. */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className={`text-sm font-semibold leading-snug text-text ${done ? "line-through decoration-faint" : ""}`}>
+            <h3 className={`min-w-0 text-sm font-semibold leading-snug text-text [overflow-wrap:anywhere] ${done ? "line-through decoration-faint" : ""}`}>
               {item.title}
             </h3>
             {pr && (
@@ -497,7 +500,8 @@ function RoadmapCard({
         )}
       </div>
 
-      {/* Dependencies */}
+      {/* Dependencies. Each chip shows the title of an item this one depends
+          on, so it breaks a long run the same way the title above does. */}
       {deps.length > 0 && (
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-faint">
@@ -508,7 +512,7 @@ function RoadmapCard({
               key={d.id}
               title={d.title}
               className={[
-                "inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium",
+                "inline-flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium [overflow-wrap:anywhere]",
                 d.status === "done" ? "bg-fresh/15 text-fresh" : "bg-dormant/15 text-dormant",
               ].join(" ")}
             >
