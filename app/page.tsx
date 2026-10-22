@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getArtifactBuiltAt, getFreshness, getRepos, getStats } from "@/lib/queries";
+import { sampleNotice } from "@/lib/freshness-shared";
 import { getRequestMode } from "@/lib/request-mode";
 import { PageHeader } from "@/components/PageHeader";
 import { PortfolioStats } from "@/components/PortfolioStats";
@@ -34,19 +35,25 @@ export default async function PortfolioPage({
     );
   }
 
+  const freshness = getFreshness(mode, "repos");
+  const artifactBuiltAt = getArtifactBuiltAt(mode);
+  // Once, so the header's notice and the Health hint name the same date.
+  const sampleAsOf = sampleNotice(freshness, artifactBuiltAt)?.asOf ?? null;
+
   return (
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Portfolio"
         subtitle={SUBTITLE}
-        freshness={getFreshness(mode, "repos")}
-        artifactBuiltAt={getArtifactBuiltAt(mode)}
+        freshness={freshness}
+        artifactBuiltAt={artifactBuiltAt}
       />
       <PortfolioStats stats={stats} mode={mode} />
       <PortfolioView
         repos={repos}
         initialAttentionOnly={attentionOnly}
         publicView={mode === "public"}
+        sampleAsOf={sampleAsOf}
       />
     </div>
   );

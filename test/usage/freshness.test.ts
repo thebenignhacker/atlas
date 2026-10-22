@@ -11,6 +11,7 @@ import {
   freshnessTone,
   lagDays,
   liveSection,
+  sampleNotice,
 } from "@/lib/freshness-shared";
 import type { SectionFreshness } from "@/lib/freshness-shared";
 
@@ -376,6 +377,54 @@ test("the artifact's build age is dated inline only past 30 days", () => {
   const now = new Date("2026-10-17T18:00:00.000Z");
   assert.equal(builtLabel("2026-08-28T13:40:47.869Z", now), "built 7w ago (2026-08-28)");
   assert.equal(builtLabel("2026-10-07T18:00:00.000Z", now), "built 1w ago");
+});
+
+// ---------------------------------------------------------------------------
+// An old artifact says it is a frozen sample
+// ---------------------------------------------------------------------------
+
+/** The public snapshot's repos clocks: built 2026-08-28, newest commit the day before. */
+const SAMPLE_BUILT_AT = "2026-08-28T13:40:47.869Z";
+const SAMPLE_REPOS = section({
+  dataAt: "2026-08-27T00:07:43-06:00",
+  collectedAt: "2026-08-28T13:39:24.282Z",
+  builtAt: SAMPLE_BUILT_AT,
+  count: 53,
+});
+const SAMPLE_NOW = new Date("2026-10-17T13:40:47.869Z");
+
+test("an artifact past 30 days is a frozen sample, dated by the section's newest datum", () => {
+  // Staleness is re-measured against today, so at this age every repository
+  // reads as stale or dormant whatever it did; the notice names the real date.
+  const ageDays = Math.floor(
+    (SAMPLE_NOW.getTime() - new Date(SAMPLE_BUILT_AT).getTime()) / 86_400_000
+  );
+  assert.deepEqual(sampleNotice(SAMPLE_REPOS, SAMPLE_BUILT_AT, SAMPLE_NOW), {
+    asOf: "2026-08-27",
+    ageDays,
+  });
+});
+
+test("an artifact within 30 days, or with no readable build time, is not a sample", () => {
+  const tenDaysOld = new Date(SAMPLE_NOW.getTime() - 10 * 86_400_000).toISOString();
+  assert.equal(sampleNotice(SAMPLE_REPOS, tenDaysOld, SAMPLE_NOW), null);
+  assert.equal(sampleNotice(SAMPLE_REPOS, null, SAMPLE_NOW), null);
+  assert.equal(sampleNotice(SAMPLE_REPOS, undefined, SAMPLE_NOW), null);
+  assert.equal(sampleNotice(SAMPLE_REPOS, "not a date", SAMPLE_NOW), null);
+});
+
+test("the notice appears exactly when the build date is written inline", () => {
+  const at = (days: number) => new Date(SAMPLE_NOW.getTime() - days * 86_400_000).toISOString();
+  assert.equal(sampleNotice(SAMPLE_REPOS, at(30), SAMPLE_NOW), null);
+  assert.doesNotMatch(builtLabel(at(30), SAMPLE_NOW), /\(/);
+  assert.notEqual(sampleNotice(SAMPLE_REPOS, at(31), SAMPLE_NOW), null);
+  assert.match(builtLabel(at(31), SAMPLE_NOW), /\(/);
+});
+
+test("a section with no datum dates the notice by the build", () => {
+  const never = section({ dataAt: null, collectedAt: null, status: "never", count: 0 });
+  assert.equal(sampleNotice(never, SAMPLE_BUILT_AT, SAMPLE_NOW)?.asOf, "2026-08-28");
+  assert.equal(sampleNotice(null, SAMPLE_BUILT_AT, SAMPLE_NOW)?.asOf, "2026-08-28");
 });
 
 test("liveSection marks build-time reads as collected at build time", () => {

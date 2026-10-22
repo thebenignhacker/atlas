@@ -156,6 +156,28 @@ export function builtLabel(
 }
 
 /**
+ * Ages and staleness are re-measured against today, not against the artifact,
+ * so past 30 days every repository in it reads as stale or dormant whatever it
+ * actually did. Such an artifact is a frozen sample, and a page reading it has
+ * to say so. Keyed on the same threshold as the inline dates, so the notice and
+ * the dated line always appear together.
+ *
+ * `asOf` is the UTC day of the section's newest datum, or of the build when the
+ * section holds none. Null when the artifact is 30 days old or less, or carries
+ * no readable build time (local mode has no artifact at all).
+ */
+export function sampleNotice(
+  f: SectionFreshness | null | undefined,
+  generatedAt: string | null | undefined,
+  now = new Date()
+): { asOf: string; ageDays: number } | null {
+  const ageDays = artifactAgeDays(generatedAt, now);
+  if (ageDays === null || ageDays <= INLINE_DATE_AFTER_DAYS) return null;
+  const asOf = utcDate(f?.dataAt ?? null) ?? utcDate(generatedAt ?? null);
+  return asOf ? { asOf, ageDays } : null;
+}
+
+/**
  * Freshness for a section read live from markdown at build time. Both clocks
  * are the build instant because the files ARE read then — there is no collector
  * in between that could have stalled. Stated explicitly so nobody later "fixes"

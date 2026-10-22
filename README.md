@@ -227,6 +227,9 @@ Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`:
    The committed `public-snapshot.json` is the data source; no database is needed.
 
 Re-run `npm run snapshot` and redeploy whenever you want to refresh the public view.
+When the committed snapshot is more than 30 days old, the Portfolio, Activity, Context and
+Usage pages label themselves a frozen sample and state the date the data was collected;
+re-run `npm run snapshot`, commit the result and redeploy to clear it.
 
 The interface has a light theme only, in every mode: `app/globals.css` sets
 `color-scheme: light` and defines no dark palette, so a browser or system set to dark

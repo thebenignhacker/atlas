@@ -41,6 +41,7 @@ export function PortfolioView({
   repos,
   initialAttentionOnly = false,
   publicView = false,
+  sampleAsOf = null,
 }: {
   repos: RepoWithSignals[];
   initialAttentionOnly?: boolean;
@@ -50,6 +51,8 @@ export function PortfolioView({
    * the public view leaves both out.
    */
   publicView?: boolean;
+  /** The collection date when the data is a frozen sample (`sampleNotice`), else null. */
+  sampleAsOf?: string | null;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -157,7 +160,7 @@ export function PortfolioView({
 
   return (
     <div className="space-y-7">
-      <OverviewCharts repos={repos} />
+      <OverviewCharts repos={repos} sampleAsOf={sampleAsOf} />
 
       {/* Filter bar; the "Need attention" stat links here as #repos */}
       <div id="repos" className="scroll-mt-6 space-y-2.5">

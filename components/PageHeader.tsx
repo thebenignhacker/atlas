@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { relativeTime } from "@/lib/util/date";
-import { builtLabel, freshnessLabel, freshnessTone } from "@/lib/freshness-shared";
+import { builtLabel, freshnessLabel, freshnessTone, sampleNotice } from "@/lib/freshness-shared";
 import type { FreshnessTone, SectionFreshness } from "@/lib/freshness-shared";
 
 const TONE_STYLE: Record<FreshnessTone, { dot: string; text: string }> = {
@@ -82,6 +82,7 @@ export function PageHeader({
   children?: React.ReactNode;
 }) {
   const showFreshness = freshness !== undefined || artifactBuiltAt !== undefined;
+  const sample = sampleNotice(freshness, artifactBuiltAt);
   return (
     <header className="mb-7 flex flex-wrap items-end justify-between gap-3 border-b border-line pb-5">
       <div>
@@ -105,6 +106,23 @@ export function PageHeader({
           )
         )}
       </div>
+      {/* Its own row under the title and the freshness line. The line states the
+          age; this states what that age does to every status on the page. The
+          rule's colour is marked important because the global `*` border colour
+          in globals.css is unlayered, so it outranks every border utility. */}
+      {sample && (
+        <div className="basis-full">
+          <p
+            role="note"
+            className={`max-w-2xl border-l-2 border-aging/40! pl-3 text-[13px] leading-relaxed ${TONE_STYLE.degraded.text}`}
+          >
+            <span className="font-semibold">Frozen sample:</span> this build shows data
+            collected on {sample.asOf}. Ages and health are measured from today against that
+            date, so every repository reads as stale or dormant until the snapshot is
+            regenerated. Each repository&apos;s GitHub link shows its current state.
+          </p>
+        </div>
+      )}
     </header>
   );
 }
