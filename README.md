@@ -118,7 +118,10 @@ your filesystem + local git + GitHub API + (optional) an LLM
 
 `npm run scan` walks the roots in `atlas.config.json`, reads local git (last commit,
 branch, dirty state, ahead/behind, recent commits), parses your todo markdown, and
-enriches each repo with GitHub data (visibility, stars, forks, open PRs). GitHub
+enriches each repo with GitHub data (visibility, stars, forks, open PRs). Enrichment
+also reads the repo's owner and name from GitHub, so a repo renamed or transferred
+since you cloned it links to its new place and is checked against `publicOwners` by
+its new owner, even while the clone's remote still names the old one. GitHub
 enrichment uses `GITHUB_TOKEN` if set, otherwise falls back to the `gh` CLI, otherwise
 skips cleanly. Re-run it anytime, or schedule it.
 

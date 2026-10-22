@@ -24,7 +24,9 @@ ATLAS_MODE=local npx next dev -p 3100
 
 Expected from `scan`: a repo count that matches what you know is on disk, a todo count,
 `parsed N decision cards` (and, if any were refused, `M not ingested (listed on /decisions)`),
-and a session-board line. A board that says UNAVAILABLE names the missing parser path.
+and a session-board line. A board that says UNAVAILABLE names the missing parser path. A repo
+renamed or transferred on GitHub since it was cloned prints `<old owner>/<old name> is
+<owner>/<name> on GitHub now`, and its page links to the new name.
 
 Open every page and read the numbers, not just the status code:
 
@@ -70,6 +72,15 @@ On `/` the stat strip holds Repos, Public and Need attention, with no Private, F
 Open P0 tile, and the filter bar has no visibility filter and no "Has todos" toggle. At a
 375 px width every sidebar icon has its label under it, no filter under the search box sits
 alone in half a row, and the sort select shows "Recent activity" in full.
+
+Then check the snapshot's repository links. The command prints each one that does not answer
+200 and is expected to print nothing; a `301` line links to an owner or name the repository
+has since left:
+
+```bash
+node -e 'for (const r of require("./public-snapshot.json").repos) console.log(`https://github.com/${r.owner}/${r.repoName}`)' | sort -u |
+  while read -r u; do printf '%s %s\n' "$(curl -s -o /dev/null -I -w '%{http_code}' "$u")" "$u"; done | grep -v '^200 '
+```
 
 For a unified or owner deployment, additionally: log in with a wrong password (refused),
 the right password (owner data appears), open a URL that does not exist while signed in

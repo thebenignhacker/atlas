@@ -13,6 +13,8 @@ export interface Repo {
   path: string;
   groupName: string | null;
   remoteUrl: string | null;
+  // Parsed from the remote, then replaced by the owner and name GitHub reports
+  // when enrichment succeeds (they differ after a rename or transfer).
   owner: string | null;
   repoName: string | null;
   branch: string | null;
