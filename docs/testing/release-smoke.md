@@ -68,7 +68,8 @@ Expected on the public build: `/todos`, `/roadmap`, `/decisions`, `/sessions`, `
 `grep -c '"decisions"' public-snapshot.json` prints 0, and so does `grep -c '"tokens"' public-snapshot.json`.
 On `/` the stat strip holds Repos, Public and Need attention, with no Private, Forks or
 Open P0 tile, and the filter bar has no visibility filter and no "Has todos" toggle. At a
-375 px width every sidebar icon has its label under it.
+375 px width every sidebar icon has its label under it, no filter under the search box sits
+alone in half a row, and the sort select shows "Recent activity" in full.
 
 For a unified or owner deployment, additionally: log in with a wrong password (refused),
 the right password (owner data appears), open a URL that does not exist while signed in
@@ -104,6 +105,7 @@ input reproduced.
 | CLI hints are pasteable | Hints printed `atlas-context …`, a command not on PATH without `npm link` |
 | Public build hides owner sections | The public snapshot must never carry todos, decisions or session files |
 | Public portfolio tiles and filters | The public snapshot carries no private repos, forks or todos, so the Private, Forks and Open P0 tiles read 0 whatever the portfolio held, and the Private option and the "Has todos" toggle matched no repo (test/portfolio/public-view.test.ts) |
+| Public filters at 375 px | The sort select takes a row of its own, so with the public view's three filters the freshness filter sat alone in half a row, the other half empty (test/portfolio/public-view.test.ts) |
 | Sidebar labels at 375 px | The labels were hidden below md and touch screens do not show a `title` tooltip, so on a phone the icons alone had to tell Context from Usage (test/content/nav-labels.test.ts) |
 | Forge read stays owner-only | The live decisions read must never leave for a public or local request (test/decisions/forge.test.ts, first cell) |
 | Sign-out in owner mode | Standalone owner deployments rendered no sign-out control |
