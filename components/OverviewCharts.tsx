@@ -18,7 +18,14 @@ const STALE_META: Record<StalenessBucket, { label: string; color: string }> = {
   dormant: { label: "Dormant", color: "#b7ad9a" },
 };
 
-export function OverviewCharts({ repos }: { repos: RepoWithSignals[] }) {
+export function OverviewCharts({
+  repos,
+  sampleAsOf,
+}: {
+  repos: RepoWithSignals[];
+  /** The collection date when the data is a frozen sample, else null. */
+  sampleAsOf: string | null;
+}) {
   const languages = useMemo<Slice[]>(() => {
     const counts = new Map<string, number>();
     for (const r of repos) if (r.language) counts.set(r.language, (counts.get(r.language) ?? 0) + 1);
@@ -101,7 +108,12 @@ export function OverviewCharts({ repos }: { repos: RepoWithSignals[] }) {
         <ChartPanel title="Languages" hint={`${languages.length} shown`}>
           <Donut data={languages} unit="repos" />
         </ChartPanel>
-        <ChartPanel title="Health" hint="by activity">
+        {/* Buckets are measured from today, so a frozen sample lands entirely in
+            stale and dormant; the hint names the date they are measured against. */}
+        <ChartPanel
+          title="Health"
+          hint={sampleAsOf ? `measured today against a sample from ${sampleAsOf}` : "by activity"}
+        >
           <Donut data={health} unit="repos" />
         </ChartPanel>
         <ChartPanel title="Visibility" hint="public / private">
