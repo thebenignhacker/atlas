@@ -165,12 +165,15 @@ function Card({ card }: { card: ContextCard }) {
       {card.provenance.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-faint">
           <FileCode2 className="h-3.5 w-3.5" />
+          {/* A file name with no space or hyphen did not wrap, so a long one was
+              wider than its row and made the page scroll sideways on a phone; a
+              name that does not fit its row now breaks between characters. */}
           {card.provenance.map((p) => (
             <span
               key={p.path}
-              className={
+              className={`wrap-anywhere ${
                 card.driftedPaths.includes(p.path) ? "text-amber" : "text-muted"
-              }
+              }`}
             >
               {base(p.path)}
               {card.driftedPaths.includes(p.path) && " (changed)"}
