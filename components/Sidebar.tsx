@@ -33,9 +33,16 @@ const NAV = [
   { href: "/todos", label: "Todos", icon: ListChecks, ownerOnly: true },
   { href: "/decisions", label: "Decisions", icon: Scale, ownerOnly: true },
   { href: "/activity", label: "Activity", icon: Activity, ownerOnly: false },
-  { href: "/digest", label: "AI Digest", icon: Sparkles, ownerOnly: true },
+  { href: "/digest", label: "AI digest", icon: Sparkles, ownerOnly: true },
   { href: "/settings", label: "Settings", icon: Settings, ownerOnly: true },
 ];
+
+// Below md the rail stacks each icon over its label. The label was hidden
+// there, leaving only the `title` tooltip, which touch screens do not show, so
+// on a phone the icons alone had to tell Context from Usage.
+const ITEM =
+  "flex flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-1.5 text-sm font-medium md:flex-row md:justify-start md:gap-2.5 md:px-3 md:py-2";
+const LABEL = "max-w-full text-center text-[10px] leading-3 md:text-left md:text-sm md:leading-5";
 
 export function Sidebar({
   mode = "local",
@@ -48,8 +55,11 @@ export function Sidebar({
   const publicMode = mode === "public";
   const nav = publicMode ? NAV.filter((n) => !n.ownerOnly) : NAV;
 
+  // The rail is fixed to the viewport, so it scrolls when its items are taller
+  // than the screen. Below md it hides the scrollbar: a scrollbar that takes
+  // layout width would leave the labels too little of the 4rem rail.
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 flex w-14 flex-col items-stretch border-r border-line bg-surface-1/90 px-1.5 py-3 backdrop-blur-md md:w-60 md:gap-0 md:bg-surface-1/70 md:px-0 md:py-0">
+    <aside className="fixed inset-y-0 left-0 z-20 flex w-16 flex-col items-stretch overflow-y-auto border-r border-line bg-surface-1/90 px-1 py-3 backdrop-blur-md max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden md:w-60 md:gap-0 md:bg-surface-1/70 md:px-0 md:py-0">
       <Link
         href="/"
         className="flex items-center justify-center gap-2.5 py-2 md:justify-start md:px-6 md:py-6"
@@ -72,7 +82,7 @@ export function Sidebar({
               href={href}
               title={label}
               className={[
-                "group relative flex items-center justify-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium transition-all md:justify-start md:px-3",
+                `group relative ${ITEM} transition-all`,
                 active
                   ? "bg-surface-2 text-text"
                   : "text-muted hover:bg-surface-2/60 hover:text-text",
@@ -85,7 +95,7 @@ export function Sidebar({
                 className={`h-4.5 w-4.5 shrink-0 transition-colors ${active ? "text-clay" : "text-faint group-hover:text-muted"}`}
                 strokeWidth={2}
               />
-              <span className="hidden md:inline">{label}</span>
+              <span className={LABEL}>{label}</span>
             </Link>
           );
         })}
@@ -98,20 +108,20 @@ export function Sidebar({
               <button
                 type="submit"
                 title="Sign out"
-                className="flex w-full items-center justify-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text md:justify-start md:px-3"
+                className={`${ITEM} w-full text-muted transition-colors hover:bg-surface-2/60 hover:text-text`}
               >
                 <LogOut className="h-4.5 w-4.5 shrink-0 text-faint" strokeWidth={2} />
-                <span className="hidden md:inline">Sign out</span>
+                <span className={LABEL}>Sign out</span>
               </button>
             </form>
           ) : (
             <Link
               href="/login"
               title="Owner login"
-              className="flex items-center justify-center gap-2.5 rounded-lg px-2 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2/60 hover:text-text md:justify-start md:px-3"
+              className={`${ITEM} text-muted transition-colors hover:bg-surface-2/60 hover:text-text`}
             >
               <LogIn className="h-4.5 w-4.5 shrink-0 text-faint" strokeWidth={2} />
-              <span className="hidden md:inline">Owner login</span>
+              <span className={LABEL}>Owner login</span>
             </Link>
           )}
         </div>

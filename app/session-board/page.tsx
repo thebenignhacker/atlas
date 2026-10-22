@@ -7,7 +7,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Session board" };
+const SUBTITLE = "Who holds what across the shared trees, from .claude-sessions files.";
+export const metadata: Metadata = { title: "Session board", description: SUBTITLE };
 
 export default async function SessionBoardPage() {
   const mode = await getRequestMode();
@@ -40,7 +41,7 @@ export default async function SessionBoardPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Session board"
-        subtitle="Who holds what across the shared trees, from .claude-sessions files."
+        subtitle={SUBTITLE}
         freshness={getFreshness(mode, "sessionBoard")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />

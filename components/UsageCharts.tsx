@@ -80,6 +80,12 @@ export function UsageCharts({ usage }: { usage: UsageRollup }) {
 
   return (
     <div className="mb-7 grid grid-cols-1 gap-3 lg:grid-cols-3">
+      {/* The panel titles are h3s, so the panels sit under an h2, as on the
+          portfolio; with the page's h1 directly above them the outline
+          skipped a level. */}
+      <h2 className="font-display text-lg font-semibold tracking-tight text-text lg:col-span-3">
+        At a glance
+      </h2>
       <Panel title="By category" hint={`${categories.length} kinds`}>
         {categories.length === 0 ? (
           <Empty />

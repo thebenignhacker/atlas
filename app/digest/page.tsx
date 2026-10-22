@@ -9,11 +9,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "AI Digest" };
+const SUBTITLE = "A grounded briefing on what moved and what's next.";
+export const metadata: Metadata = { title: "AI digest", description: SUBTITLE };
 
 export default async function DigestPage() {
   const mode = await getRequestMode();
-  if (mode === "public") return <OwnerOnly feature="AI Digest" />;
+  if (mode === "public") return <OwnerOnly feature="AI digest" />;
   const owner = mode === "owner";
   let stats;
   try {
@@ -38,11 +39,7 @@ export default async function DigestPage() {
 
   return (
     <div className="px-5 py-8 pb-20 md:px-8">
-      <PageHeader
-        title="AI Digest"
-        subtitle="A grounded briefing on what moved and what's next."
-        lastScanAt={stats.lastScanAt}
-      />
+      <PageHeader title="AI digest" subtitle={SUBTITLE} lastScanAt={stats.lastScanAt} />
       <DigestView
         available={avail.ok || owner}
         reason={avail.ok ? undefined : avail.reason}

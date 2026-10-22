@@ -3,7 +3,8 @@ import { Compass } from "lucide-react";
 import { safeRedirectPath } from "@/lib/owner-auth/redirect";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Owner access" };
+const SUBTITLE = "This view shows full, private data. Enter the owner password to continue.";
+export const metadata: Metadata = { title: "Owner access", description: SUBTITLE };
 
 const ERRORS: Record<string, string> = {
   bad: "Incorrect password.",
@@ -32,9 +33,7 @@ export default async function LoginPage({
         </div>
 
         <h1 className="font-display text-xl font-semibold text-text">Owner access</h1>
-        <p className="mt-1 text-sm text-muted">
-          This view shows full, private data. Enter the owner password to continue.
-        </p>
+        <p className="mt-1 text-sm text-muted">{SUBTITLE}</p>
 
         {error && (
           <div className="mt-4 rounded-[var(--radius-card)] border border-clay/40 bg-clay/[0.06] px-3 py-2 text-[13px] text-clay">

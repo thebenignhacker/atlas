@@ -7,7 +7,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { OwnerOnly } from "@/components/OwnerOnly";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Todos" };
+const SUBTITLE = "Every scattered note, unified and triageable.";
+export const metadata: Metadata = { title: "Todos", description: SUBTITLE };
 
 export default async function TodosPage() {
   const mode = await getRequestMode();
@@ -34,7 +35,7 @@ export default async function TodosPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Todos"
-        subtitle="Every scattered note, unified and triageable."
+        subtitle={SUBTITLE}
         freshness={getFreshness(mode, "todos")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />

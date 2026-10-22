@@ -6,7 +6,8 @@ import { ActivityView } from "@/components/ActivityView";
 import { EmptyState } from "@/components/EmptyState";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Activity" };
+const SUBTITLE = "Where your energy went, across every repo.";
+export const metadata: Metadata = { title: "Activity", description: SUBTITLE };
 
 export default async function ActivityPage() {
   const mode = await getRequestMode();
@@ -29,7 +30,7 @@ export default async function ActivityPage() {
     <div className="px-5 py-8 pb-20 md:px-8">
       <PageHeader
         title="Activity"
-        subtitle="Where your energy went, across every repo."
+        subtitle={SUBTITLE}
         freshness={getFreshness(mode, "activity")}
         artifactBuiltAt={getArtifactBuiltAt(mode)}
       />
