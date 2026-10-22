@@ -176,9 +176,12 @@ export function PortfolioView({
     <div className="space-y-7">
       {/* Filter bar; the "Need attention" stat links here as #repos */}
       <div id="repos" className="scroll-mt-6 space-y-2.5">
-        {/* On a phone the selects pair up under the search box. A last one left
-            alone would get half a row and a cut-off label, so it takes the row. */}
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&>:last-child:nth-child(even)]:col-span-2">
+        {/* On a phone the search box and the sort select take a row each and
+            the filters between them pair up. When the filters are odd in number,
+            as the public view's three are, the last one has no partner and takes
+            its row too: it is the sort select's previous sibling, at an even
+            position, since the search box is the first child. */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center [&>:nth-last-child(2):nth-child(even)]:col-span-2">
           <div className="relative col-span-2 sm:flex-1 sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
             <input
