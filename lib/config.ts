@@ -24,7 +24,9 @@ export interface AtlasConfig {
   /** Directory name fragments to skip while walking. */
   exclude: string[];
   /**
-   * GitHub owners/orgs allowed to appear in the PUBLIC snapshot. Empty = all
+   * GitHub owners/orgs allowed to appear in the PUBLIC snapshot, compared
+   * without regard to letter case (the scan records GitHub's spelling of the
+   * owner, which can differ in case from the one typed here). Empty = all
    * public repos. Use this to keep specific accounts out of the public demo.
    */
   publicOwners: string[];

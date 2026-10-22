@@ -137,7 +137,7 @@ Edit `atlas.config.json` (copied from the example):
 | `strategyDocs` | Markdown files whose `#strategy` checkbox lines feed the Strategy page (owner view) |
 | `github.user` / `github.orgs` | Your GitHub identity, used for enrichment |
 | `exclude` | Directory names, or name prefixes such as `archive-`, skipped while walking `scanRoots` |
-| `publicOwners` | GitHub owners allowed in the public snapshot; empty means every public repo |
+| `publicOwners` | GitHub owners allowed in the public snapshot, compared without regard to letter case; empty means every public repo |
 | `sensitiveRepos` | Repo slugs that never enter the public snapshot, whatever their GitHub visibility |
 | `publicUsageProjects` | Project names that may be named in the public usage view; the rest are bucketed as "other". Empty uses the built-in list `DEFAULT_PUBLIC_USAGE_PROJECTS` in `lib/usage/catalog-meta.ts` |
 | `ai.enabled` | Turn the AI layer on or off (default: off) |
