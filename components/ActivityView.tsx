@@ -95,12 +95,14 @@ export function ActivityView({
       <div className="flex flex-wrap items-center justify-between gap-2">
         {/* A select is as wide as its longest option, a repository name, so it
             is capped to the width of its row; uncapped, a long name made the
-            page scroll sideways on a phone. */}
+            page scroll sideways on a phone. It also clips its text to its own
+            box: WebKit counted a chosen name wider than the capped select
+            toward the page's width, so at 320px the page scrolled sideways. */}
         <select
           aria-label="Filter by repository"
           value={repo}
           onChange={(e) => setRepo(e.target.value)}
-          className="max-w-full rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
+          className="max-w-full overflow-hidden rounded-lg border border-line bg-surface-1 px-3 py-2 text-sm text-muted focus:border-teal focus:outline-none"
         >
           <option value="all">All repos</option>
           {repos.map((r) => (
