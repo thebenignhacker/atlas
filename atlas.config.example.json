@@ -2,6 +2,7 @@
   "scanRoots": ["~/workspace", "~/code", "~/projects"],
   "scanDepth": 2,
   "todoDirs": ["~/workspace/todos"],
+  "todoSkipDirs": [],
   "strategyDocs": [],
   "github": {
     "user": "your-github-username",

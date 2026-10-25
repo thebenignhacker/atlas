@@ -12,6 +12,12 @@ export interface AtlasConfig {
   /** Directories containing todo markdown files. */
   todoDirs: string[];
   /**
+   * Directory names the todos scan does not enter, matched exactly at any depth
+   * under a todo directory: for subdirectories whose markdown files are records,
+   * not todos. Empty skips nothing.
+   */
+  todoSkipDirs: string[];
+  /**
    * Markdown docs tracked on the owner-only /strategy page. Kept deliberately
    * separate from todoDirs/roadmap so strategy/fundraising work never mixes with
    * coding or standards-filing todos. Only checkbox lines tagged `#strategy` are
@@ -60,6 +66,7 @@ const DEFAULT_CONFIG: AtlasConfig = {
   scanRoots: ["~/workspace"],
   scanDepth: 2,
   todoDirs: [],
+  todoSkipDirs: [],
   strategyDocs: [],
   github: { user: undefined, orgs: [] },
   exclude: ["node_modules", ".next", ".git", "archive-", "dist", "build"],
