@@ -128,7 +128,10 @@ function resolveRepoSlug(
   return { slug: null, guess };
 }
 
-function listMarkdown(dir: string): { path: string; archived: boolean }[] {
+function listMarkdown(
+  dir: string,
+  skipDirs: ReadonlySet<string>
+): { path: string; archived: boolean }[] {
   const out: { path: string; archived: boolean }[] = [];
   function walk(d: string, archived: boolean) {
     let entries: fs.Dirent[];
@@ -144,6 +147,8 @@ function listMarkdown(dir: string): { path: string; archived: boolean }[] {
         // Decision cards have their own scanner and table; ingesting them here
         // too would render every card as a todo on the board.
         if (e.name === "decisions") continue;
+        // Directories the config names as holding records rather than todos.
+        if (skipDirs.has(e.name)) continue;
         walk(full, archived || /archive|done/i.test(e.name));
       } else if (e.isFile() && e.name.toLowerCase().endsWith(".md")) {
         out.push({ path: full, archived });
@@ -159,6 +164,7 @@ export function scanTodos(config: AtlasConfig, repos: Repo[]): Todo[] {
   const reposByName = new Map<string, Repo>();
   for (const r of repos) reposByName.set(r.name.toLowerCase(), r);
   const repoNames = repos.map((r) => r.name.toLowerCase());
+  const skipDirs = new Set(config.todoSkipDirs);
 
   const todos: Todo[] = [];
   for (const dir of config.todoDirs) {
@@ -166,7 +172,7 @@ export function scanTodos(config: AtlasConfig, repos: Repo[]): Todo[] {
       console.warn(`atlas: todo dir does not exist: ${dir}`);
       continue;
     }
-    for (const { path: filePath, archived } of listMarkdown(dir)) {
+    for (const { path: filePath, archived } of listMarkdown(dir, skipDirs)) {
       let content: string;
       let mtime: string;
       try {
