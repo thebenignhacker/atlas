@@ -134,6 +134,7 @@ Edit `atlas.config.json` (copied from the example):
 | `scanRoots` | Directories to scan for git repos |
 | `scanDepth` | How many levels deep to look for a `.git` folder |
 | `todoDirs` | Directories holding your todo markdown files |
+| `todoSkipDirs` | Directory names skipped while walking `todoDirs`, matched exactly at any depth, for folders that hold records rather than todos; empty skips nothing |
 | `strategyDocs` | Markdown files whose `#strategy` checkbox lines feed the Strategy page (owner view) |
 | `github.user` / `github.orgs` | Your GitHub identity, used for enrichment |
 | `exclude` | Directory names, or name prefixes such as `archive-`, skipped while walking `scanRoots` |
