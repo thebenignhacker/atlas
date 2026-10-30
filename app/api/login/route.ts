@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { atlasMode, authControlsEnabled } from "@/lib/mode";
 import { verifyPassword } from "@/lib/owner-auth/password";
 import { signSession, sessionCookie } from "@/lib/owner-auth/session";
 import { sameOriginPath } from "@/lib/owner-auth/redirect";
@@ -21,9 +22,14 @@ function backToLogin(error: string, retryAfterSec?: number): NextResponse {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  // Fail closed on misconfiguration.
+  // No sign-in in public and local modes: the route does not exist there.
+  if (!authControlsEnabled(atlasMode())) return new NextResponse(null, { status: 404 });
+
+  // Fail closed on a missing secret. The visitor reads a neutral sentence; the
+  // variable names go to the server log, never their values.
   if (!process.env.OWNER_PASSWORD_HASH || !process.env.AUTH_SECRET) {
-    return new NextResponse("Server misconfigured.", { status: 503 });
+    console.error("atlas: sign-in is unavailable: AUTH_SECRET and OWNER_PASSWORD_HASH must both be set.");
+    return new NextResponse("Sign-in is unavailable.", { status: 503 });
   }
 
   const ip = clientIp(req);

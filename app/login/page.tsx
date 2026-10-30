@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { Compass } from "lucide-react";
+import { atlasMode, authControlsEnabled } from "@/lib/mode";
 import { safeRedirectPath } from "@/lib/owner-auth/redirect";
 
 export const dynamic = "force-dynamic";
 const SUBTITLE = "This view shows full, private data. Enter the owner password to continue.";
-export const metadata: Metadata = { title: "Owner access", description: SUBTITLE };
+
+// Behind the same check as the page: a static export would reach the browser
+// with the not-found answer and title its tab "Owner access".
+export async function generateMetadata(): Promise<Metadata> {
+  if (!authControlsEnabled(atlasMode())) notFound();
+  return { title: "Owner access", description: SUBTITLE };
+}
 
 const ERRORS: Record<string, string> = {
   bad: "Incorrect password.",
@@ -16,6 +24,9 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ error?: string; callbackUrl?: string }>;
 }) {
+  // Public and local modes have nothing to sign in to: the page does not exist
+  // there, by the same check that hides the sidebar's login link.
+  if (!authControlsEnabled(atlasMode())) notFound();
   const sp = await searchParams;
   const error = sp.error ? ERRORS[sp.error] ?? "Sign-in failed." : null;
   const callbackUrl = safeRedirectPath(sp.callbackUrl);

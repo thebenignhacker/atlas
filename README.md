@@ -234,6 +234,8 @@ Re-run `npm run snapshot` and redeploy whenever you want to refresh the public v
 When the committed snapshot is more than 30 days old, the Portfolio, Activity, Context and
 Usage pages label themselves a frozen sample and state the date the data was collected;
 re-run `npm run snapshot`, commit the result and redeploy to clear it.
+In public mode, as in local mode, there is no sign-in and `/login` answers 404; the
+sign-in page exists only in unified and owner mode.
 
 The interface has a light theme only, in every mode: `app/globals.css` sets
 `color-scheme: light` and defines no dark palette, so a browser or system set to dark

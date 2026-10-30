@@ -23,10 +23,9 @@ export async function proxy(req: NextRequest) {
   }
 
   if (!process.env.AUTH_SECRET || !process.env.OWNER_PASSWORD_HASH) {
-    return new NextResponse(
-      "Server misconfigured: owner mode requires AUTH_SECRET and OWNER_PASSWORD_HASH.",
-      { status: 503 }
-    );
+    // The visitor reads a neutral sentence; the variable names go to the log.
+    console.error("atlas: owner mode serves nothing: AUTH_SECRET and OWNER_PASSWORD_HASH must both be set.");
+    return new NextResponse("Sign-in is unavailable.", { status: 503 });
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
