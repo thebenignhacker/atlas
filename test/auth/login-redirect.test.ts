@@ -14,6 +14,7 @@ import { POST as logout } from "@/app/api/logout/route";
 // localhost origin a handler sees.
 
 const PASSWORD = "FAKE-owner-pass";
+process.env.ATLAS_MODE = "unified";
 process.env.AUTH_SECRET = "FAKE-test-secret-not-a-real-one";
 process.env.OWNER_PASSWORD_HASH = hashPassword(PASSWORD);
 
