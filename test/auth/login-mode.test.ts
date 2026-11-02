@@ -52,6 +52,15 @@ function loginRequest(password: string): NextRequest {
   });
 }
 
+// The sidebar's sign-out form, sent from the deployment's own page; the
+// requests the route refuses are in logout-origin.test.ts.
+function logoutRequest(): NextRequest {
+  return new NextRequest(`${ORIGIN}/api/logout`, {
+    method: "POST",
+    headers: { "sec-fetch-site": "same-origin", origin: ORIGIN },
+  });
+}
+
 function digestOf(err: unknown): unknown {
   return (err as { digest?: unknown }).digest;
 }
@@ -90,7 +99,7 @@ for (const [where, mode] of noSignIn) {
   test(`${where}: POST /api/logout answers 404 with an empty body and sets no cookie`, async () => {
     for (const [secrets, env] of held) {
       setEnv({ ATLAS_MODE: mode, ...env });
-      const res = await logout();
+      const res = await logout(logoutRequest());
       assert.equal(res.status, 404, secrets);
       assert.equal(res.headers.get("set-cookie"), null, secrets);
       assert.equal(await res.text(), "", secrets);
@@ -172,7 +181,7 @@ for (const mode of ["unified", "owner"]) {
     assert.equal(signIn.status, 303);
     assert.equal(signIn.headers.get("location"), "/");
     assert.match(signIn.headers.get("set-cookie") ?? "", new RegExp(`^${SESSION_COOKIE}=`));
-    const signOut = await logout();
+    const signOut = await logout(logoutRequest());
     assert.equal(signOut.status, 303);
     assert.equal(signOut.headers.get("location"), "/login");
     assert.match(signOut.headers.get("set-cookie") ?? "", new RegExp(`^${SESSION_COOKIE}=;`));
