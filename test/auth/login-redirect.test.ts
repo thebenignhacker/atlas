@@ -19,14 +19,14 @@ process.env.AUTH_SECRET = "FAKE-test-secret-not-a-real-one";
 process.env.OWNER_PASSWORD_HASH = hashPassword(PASSWORD);
 
 const SEEN_ORIGIN = "http://localhost:43117";
-let client = 0;
 
+// These requests are built here, not received on a socket, so the limiter
+// counts them all under one shared key (lib/owner-auth/client-key.ts). A good
+// login clears that key; the rate-limit test below fills it.
 function loginRequest(fields: Record<string, string>): NextRequest {
   return new NextRequest(`${SEEN_ORIGIN}/api/login`, {
     method: "POST",
     body: new URLSearchParams(fields),
-    // A fresh client per request, so the rate limit only trips where a test asks.
-    headers: { "x-forwarded-for": `198.51.100.${++client}` },
   });
 }
 
@@ -56,7 +56,6 @@ test("a rate-limited client goes back to /login with a relative Location and Ret
     new NextRequest(`${SEEN_ORIGIN}/api/login`, {
       method: "POST",
       body: new URLSearchParams({ password: "wrong" }),
-      headers: { "x-forwarded-for": "198.51.100.250" },
     });
   let res = await login(req());
   for (let i = 0; i < 10 && res.headers.get("location") !== "/login?error=rate"; i++) res = await login(req());

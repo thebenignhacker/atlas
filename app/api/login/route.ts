@@ -6,14 +6,10 @@ import { signSession, sessionCookie } from "@/lib/owner-auth/session";
 import { sameOriginPath } from "@/lib/owner-auth/redirect";
 import { seeOther } from "@/lib/owner-auth/see-other";
 import { rateLimit, recordFailure, clearAttempts } from "@/lib/owner-auth/ratelimit";
+import { clientKey } from "@/lib/owner-auth/client-key";
 
-// scrypt needs the Node runtime (not edge).
+// scrypt and the client-key subscription need the Node runtime (not edge).
 export const runtime = "nodejs";
-
-function clientIp(req: NextRequest): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  return fwd?.split(",")[0]?.trim() || "unknown";
-}
 
 function backToLogin(error: string, retryAfterSec?: number): NextResponse {
   const res = seeOther(`/login?${new URLSearchParams({ error })}`);
@@ -32,19 +28,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return new NextResponse("Sign-in is unavailable.", { status: 503 });
   }
 
-  const ip = clientIp(req);
-  const rl = rateLimit(ip);
+  // The socket address, or a platform header the deployment declares; never a
+  // header the client chooses (lib/owner-auth/client-key.ts).
+  const key = clientKey(req.headers);
+  const rl = rateLimit(key);
   if (!rl.allowed) return backToLogin("rate", rl.retryAfterSec);
 
   const form = await req.formData();
   const password = String(form.get("password") ?? "");
 
   if (!verifyPassword(password, process.env.OWNER_PASSWORD_HASH)) {
-    recordFailure(ip);
+    recordFailure(key);
     return backToLogin("bad");
   }
 
-  clearAttempts(ip);
+  clearAttempts(key);
   const token = await signSession();
   // sameOriginPath strips control/backslash chars, re-checks the resolved
   // origin and turns a path that starts with "//" into "/"; the off-site
