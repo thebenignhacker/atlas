@@ -44,16 +44,26 @@ const ITEM =
   "flex flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-1.5 text-sm font-medium md:flex-row md:justify-start md:gap-2.5 md:px-3 md:py-2";
 const LABEL = "max-w-full text-center text-[10px] leading-3 md:text-left md:text-sm md:leading-5";
 
+/**
+ * `mode` is the data mode the request reads; `signedIn` is whether it carries a
+ * verified owner session. They differ in a standalone owner deployment, whose
+ * mode is "owner" on /login as well, where the visitor has no session. Where
+ * sign-in exists (`authEnabled`), the session decides the sign-out control, the
+ * signed-in label and the owner-only items: a signed-out visitor sees the items
+ * a unified deployment shows its public view.
+ */
 export function Sidebar({
   mode = "local",
   authEnabled = false,
+  signedIn = false,
 }: {
   mode?: "local" | "public" | "owner";
   authEnabled?: boolean;
+  signedIn?: boolean;
 }) {
   const pathname = usePathname();
-  const publicMode = mode === "public";
-  const nav = publicMode ? NAV.filter((n) => !n.ownerOnly) : NAV;
+  const ownerNav = mode !== "public" && (!authEnabled || signedIn);
+  const nav = ownerNav ? NAV : NAV.filter((n) => !n.ownerOnly);
 
   // The rail is fixed to the viewport, so it scrolls when its items are taller
   // than the screen. Below md it hides the scrollbar: a scrollbar that takes
@@ -103,7 +113,7 @@ export function Sidebar({
 
       {authEnabled && (
         <div className="px-0 pb-1 md:px-3">
-          {mode === "owner" ? (
+          {signedIn ? (
             <form action="/api/logout" method="POST">
               <button
                 type="submit"
@@ -138,10 +148,14 @@ export function Sidebar({
             public demo · built with Atlas
           </a>
         ) : mode === "owner" ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-fresh" />
-            owner view · signed in
-          </span>
+          signedIn ? (
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-fresh" />
+              owner view · signed in
+            </span>
+          ) : (
+            "owner view · signed out"
+          )
         ) : (
           "local-first · your data stays here"
         )}

@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
-import { atlasMode, resolveRequestMode, type ResolvedMode } from "@/lib/mode";
+import { atlasMode, authControlsEnabled, resolveRequestMode, type ResolvedMode } from "@/lib/mode";
 import { SESSION_COOKIE, verifySession } from "@/lib/owner-auth/session";
 
 /**
@@ -24,7 +24,20 @@ export const getRequestMode = cache(async (): Promise<ResolvedMode> => {
   return resolveRequestMode(env, await verifySession(token));
 });
 
-/** Convenience: is the current request an authenticated owner? */
+/**
+ * Is the current request an authenticated owner, that is, does it carry a
+ * verified owner session? This is the signed-in state the sidebar shows.
+ *
+ * It is not the same question as getRequestMode() === "owner". In "unified" the
+ * two agree. In "owner" getRequestMode() answers "owner" without reading the
+ * session, and the proxy lets the login surfaces through without one, so only
+ * the cookie can say whether a visitor on /login is signed in. Local and public
+ * modes have no sessions; their cookies are not read.
+ */
 export const isOwnerRequest = cache(async (): Promise<boolean> => {
-  return (await getRequestMode()) === "owner";
+  const env = atlasMode();
+  if (!authControlsEnabled(env)) return false;
+  if (env === "unified") return (await getRequestMode()) === "owner";
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return verifySession(token);
 });

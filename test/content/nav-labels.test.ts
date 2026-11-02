@@ -33,8 +33,8 @@ function items(html: string): { name: string; labelClasses: string[][] }[] {
   return out;
 }
 
-function render(mode: "local" | "public" | "owner", authEnabled: boolean): string {
-  return renderToStaticMarkup(inAppRouter(createElement(Sidebar, { mode, authEnabled }), "/usage"));
+function render(mode: "local" | "public" | "owner", authEnabled: boolean, signedIn = false): string {
+  return renderToStaticMarkup(inAppRouter(createElement(Sidebar, { mode, authEnabled, signedIn }), "/usage"));
 }
 
 test("every sidebar item in the public view shows its label below md", () => {
@@ -50,7 +50,7 @@ test("every sidebar item in the public view shows its label below md", () => {
 });
 
 test("every sidebar item in the owner view shows its label below md", () => {
-  const found = items(render("owner", true));
+  const found = items(render("owner", true, true));
   assert.deepEqual(
     found.map((i) => i.name),
     [
@@ -80,7 +80,7 @@ test("the sidebar scrolls when its items are taller than the screen, without a s
   // phone screen, and the rail is fixed to the viewport. A scrollbar that takes
   // layout width (10px in headless Chrome) pushed "Roadmap", "Sessions" and
   // "Decisions" past the edge of the rail.
-  const attr = render("owner", true).match(/^<aside class="([^"]*)"/)?.[1] ?? "";
+  const attr = render("owner", true, true).match(/^<aside class="([^"]*)"/)?.[1] ?? "";
   const aside = attr.replace(/&gt;/g, ">").replace(/&amp;/g, "&").split(" ");
   for (const c of ["overflow-y-auto", "max-md:[scrollbar-width:none]", "max-md:[&::-webkit-scrollbar]:hidden"]) {
     assert.ok(aside.includes(c), `${c}: ${aside.join(" ")}`);

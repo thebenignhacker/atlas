@@ -9,6 +9,8 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // No session cookie can exist in public and local modes: nothing to clear.
+  // proxy.ts answers 404 there before a route runs, whatever the method asked;
+  // this repeats the check for POST, the one method the route serves.
   if (!authControlsEnabled(atlasMode())) return new NextResponse(null, { status: 404 });
   // The answer clears the session cookie, and a browser can apply that header in
   // the answer to another site's form too, so only this deployment may ask
