@@ -43,13 +43,12 @@ function setEnv(env: Env): void {
 }
 after(() => setEnv(saved));
 
-let client = 0;
+// Every request here carries the right password, so none records a failed
+// attempt and the rate limit never answers first.
 function loginRequest(password: string): NextRequest {
   return new NextRequest(`${ORIGIN}/api/login`, {
     method: "POST",
     body: new URLSearchParams({ password, callbackUrl: "/" }),
-    // A fresh client per request, so the rate limit never answers first.
-    headers: { "x-forwarded-for": `198.51.100.${++client}` },
   });
 }
 

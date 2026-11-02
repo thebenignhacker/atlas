@@ -6,10 +6,15 @@
  * PRIMARY defense is the slow scrypt hash (./password) plus a strong password.
  * For a hard cross-instance limit, back this with Vercel KV / Upstash (see
  * .env.example). Kept dependency-free here so "basic password" needs no extra infra.
+ *
+ * The login route keys attempts with ./client-key, never with a header the
+ * client chooses. Each recorded failure first drops every bucket whose window
+ * has passed, so after it the map holds only keys with a failure inside their
+ * current window.
  */
 
-const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+export const MAX_ATTEMPTS = 5;
+export const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
 interface Bucket {
   count: number;
@@ -30,15 +35,25 @@ export function rateLimit(
   return { allowed: true, retryAfterSec: 0 };
 }
 
-export function recordFailure(key: string, now: number = Date.now()): void {
-  const b = buckets.get(key);
-  if (!b || now > b.resetAt) {
-    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
-  } else {
-    b.count += 1;
+/** Removes every bucket whose window has passed at `now`. */
+function dropExpired(now: number): void {
+  for (const [key, b] of buckets) {
+    if (now > b.resetAt) buckets.delete(key);
   }
+}
+
+export function recordFailure(key: string, now: number = Date.now()): void {
+  dropExpired(now);
+  const b = buckets.get(key);
+  if (b) b.count += 1;
+  else buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
 }
 
 export function clearAttempts(key: string): void {
   buckets.delete(key);
+}
+
+/** How many keys the limiter holds a bucket for. */
+export function trackedKeyCount(): number {
+  return buckets.size;
 }

@@ -256,6 +256,8 @@ no OAuth, no second project.
    - `ATLAS_MODE=unified`
    - `AUTH_SECRET` (from step 1)
    - `OWNER_PASSWORD_HASH` (from step 1)
+   - `ATLAS_TRUSTED_PROXY_HEADER=x-forwarded-for` on Vercel, so failed sign-ins are
+     counted per visitor address (see Security below)
 3. Run `npm run snapshot` (public) and `npm run snapshot:owner` (full, gitignored) — both
    are bundled; the public one is served to visitors, the owner one only after login.
 4. Deploy with both snapshots present in the working directory (for example
@@ -268,8 +270,17 @@ deployment also exists if you prefer the private view on a separate project.)
 
 Security: the password is stored only as a salted **scrypt** hash; sessions are
 HMAC-signed (`AUTH_SECRET`), `HttpOnly; Secure; SameSite=Strict` cookies that expire after
-7 days. Login attempts are rate-limited per IP within one server instance (the counter
-resets on a cold start, so it slows guessing rather than capping it globally). The gate
+7 days. Login attempts are rate-limited within one server instance: after five failed
+attempts from one client address within fifteen minutes of the first, that address is
+refused until the fifteen minutes end (the counter resets on a cold start, so it slows
+guessing rather than capping it globally). The client address is the TCP peer of the
+connection, not a header the client sends, unless `ATLAS_TRUSTED_PROXY_HEADER` names a
+header that a proxy in front of the server sets on every request; then it is that
+header's right-most entry. Vercel's request-headers documentation states that the
+platform overwrites `x-forwarded-for`, which is why the steps above name it. Behind a
+proxy, set it: without it, the visitors the proxy forwards are counted by the proxy's
+address, not their own. Name a header only if no request can reach the server without
+passing that proxy, or a client can pick a fresh value for every attempt. The gate
 **fails closed**: in unified mode a request without a verified session is served the
 public data, never the owner data; in a standalone `ATLAS_MODE=owner` deployment every
 route except the login surfaces requires a session, unauthenticated visitors are
