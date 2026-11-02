@@ -65,7 +65,9 @@ test("a rate-limited client goes back to /login with a relative Location and Ret
 });
 
 test("logout answers 303 to /login with a relative Location and clears the session", async () => {
-  const res = await logout();
+  const res = await logout(
+    new NextRequest(`${SEEN_ORIGIN}/api/logout`, { method: "POST", headers: { "sec-fetch-site": "same-origin" } })
+  );
   assert.equal(res.status, 303);
   assert.equal(res.headers.get("location"), "/login");
   assert.match(res.headers.get("set-cookie") ?? "", new RegExp(`^${SESSION_COOKIE}=;`));
