@@ -3,7 +3,7 @@ import { Geist, Geist_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { atlasMode, authControlsEnabled } from "@/lib/mode";
-import { getRequestMode } from "@/lib/request-mode";
+import { getRequestMode, isOwnerRequest } from "@/lib/request-mode";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -43,8 +43,11 @@ export default async function RootLayout({
   // Per-request mode: in a "unified" deployment this is "owner" only for a signed-in
   // request, else "public". The Sidebar shows the owner nav + a sign-out only when
   // genuinely authenticated; otherwise an owner-login link (when auth is enabled).
+  // "Authenticated" comes from the session, not the mode: a standalone owner
+  // deployment's mode is "owner" on /login too, where the visitor has no session.
   const mode = await getRequestMode();
   const authEnabled = authControlsEnabled(atlasMode());
+  const signedIn = await isOwnerRequest();
   return (
     <html
       lang="en"
@@ -52,7 +55,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full">
         <div className="flex min-h-screen">
-          <Sidebar mode={mode} authEnabled={authEnabled} />
+          <Sidebar mode={mode} authEnabled={authEnabled} signedIn={signedIn} />
           <main className="flex-1 min-w-0 pl-16 md:pl-60">{children}</main>
         </div>
       </body>

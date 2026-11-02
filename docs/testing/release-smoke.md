@@ -68,6 +68,10 @@ ATLAS_MODE=public npm run build && ATLAS_MODE=public npm start
 Expected on the public build: `/todos`, `/roadmap`, `/decisions`, `/sessions`, `/session-board`,
 `/strategy`, `/digest` and `/settings` show the owner-only gate, not data;
 `grep -c '"decisions"' public-snapshot.json` prints 0, and so does `grep -c '"tokens"' public-snapshot.json`.
+`/login` is the not-found page, sidebar included, in the HTML the server sends
+(`curl -s http://localhost:3000/login | grep -c '<h1'` prints 1), and `/api/login` and
+`/api/logout` answer 404 to GET, HEAD, POST, PUT, DELETE, PATCH and OPTIONS
+(`curl -s -o /dev/null -w '%{http_code}\n' -X OPTIONS http://localhost:3000/api/login` prints 404).
 On `/` the stat strip holds Repos, Public and Need attention, with no Private, Forks or
 Open P0 tile, and the filter bar has no visibility filter and no "Has todos" toggle. At a
 375 px width every sidebar icon has its label under it, no filter under the search box sits
@@ -82,10 +86,12 @@ node -e 'for (const r of require("./public-snapshot.json").repos) console.log(`h
   while read -r u; do printf '%s %s\n' "$(curl -s -o /dev/null -I -w '%{http_code}' "$u")" "$u"; done | grep -v '^200 '
 ```
 
-For a unified or owner deployment, additionally: log in with a wrong password (refused),
+For a unified or owner deployment, additionally: open `/login` signed out (an "Owner
+login" item and no Sign out button), log in with a wrong password (refused),
 the right password (owner data appears), open a URL that does not exist while signed in
 (the owner navigation and the signed-in footer, not the public sidebar), sign out (public
-data again).
+data again). In an owner deployment, start the sign-in from `/roadmap`: after the wrong
+password, the right one lands on `/roadmap`, not on `/`.
 
 ## 4. Error paths
 
@@ -120,6 +126,9 @@ input reproduced.
 | Sidebar labels at 375 px | The labels were hidden below md and touch screens do not show a `title` tooltip, so on a phone the icons alone had to tell Context from Usage (test/content/nav-labels.test.ts) |
 | Forge read stays owner-only | The live decisions read must never leave for a public or local request (test/decisions/forge.test.ts, first cell) |
 | Sign-out in owner mode | Standalone owner deployments rendered no sign-out control |
+| `/login` signed out in owner mode | The sidebar took the deployment mode for the session, so a signed-out visitor on `/login` saw a Sign out button and "owner view · signed in" (test/auth/sidebar-session.test.ts) |
+| Wrong password, then the right one | The failed attempt's redirect dropped `callbackUrl`, so the next sign-in landed on `/` (test/auth/login-redirect.test.ts) |
+| `/login` and the sign-in routes on the public build | The page's notFound() reached the browser as an empty document, and the routes answered GET, HEAD, PUT, DELETE and PATCH with 405 and OPTIONS with 204 (test/auth/login-mode.test.ts) |
 | Unknown URL while signed in | The root not-found route was prerendered at build time with the public navigation, so a signed-in owner who mistyped a URL saw the signed-out sidebar (test/auth/dynamic-pages.test.ts, third test) |
 | Error paths exit non-zero | A silent zero from a refused database open is how a second empty store appears |
 

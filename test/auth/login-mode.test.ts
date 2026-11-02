@@ -13,9 +13,12 @@ import { proxy } from "@/proxy";
 // Sign-in exists only where lib/mode.ts enables auth controls: unified and
 // owner mode. In public mode (also what an unset ATLAS_MODE resolves to) and in
 // local mode there is nothing to sign in to, so the login page and both routes
-// answer 404 and set no cookie, whatever secrets the environment holds. Where
-// sign-in is enabled but a secret is missing, the visitor reads one neutral
-// sentence and the server log names the two variables, never their values.
+// answer 404 and set no cookie, whatever secrets the environment holds. The
+// proxy answers there before a route runs: 404 on the two routes without a
+// look at the method, and /login rewritten to the not-found route. Where sign-in is
+// enabled but a secret is missing, the visitor reads one neutral sentence and
+// the server log names the two variables, never their values; in owner mode
+// the proxy answers so on the login surfaces too.
 
 const PASSWORD = "FAKE-owner-pass";
 const SECRET = "FAKE-test-secret-not-a-real-one";
@@ -63,6 +66,13 @@ function logoutRequest(): NextRequest {
 
 function digestOf(err: unknown): unknown {
   return (err as { digest?: unknown }).digest;
+}
+
+const METHODS = ["GET", "HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"];
+const LOGIN_SURFACES = ["/login", "/api/login", "/api/logout"];
+
+function proxyRequest(path: string, method = "GET"): NextRequest {
+  return new NextRequest(`${ORIGIN}${path}`, { method });
 }
 
 test("the pinned digest is the one next/navigation's notFound() throws", () => {
@@ -122,6 +132,53 @@ for (const [where, mode] of noSignIn) {
       return true;
     });
   });
+
+  // The routes export only POST. The framework answered the other methods
+  // before the routes' own check ran: 405, and 204 with "Allow: OPTIONS, POST"
+  // for OPTIONS. The proxy answers first.
+  test(`${where}: the proxy answers 404 to ${METHODS.join(", ")} on /api/login and /api/logout`, async () => {
+    for (const [secrets, env] of held) {
+      setEnv({ ATLAS_MODE: mode, ...env });
+      for (const path of ["/api/login", "/api/logout"]) {
+        for (const method of METHODS) {
+          const label = `${secrets}: ${method} ${path}`;
+          const res = await proxy(proxyRequest(path, method));
+          assert.equal(res.status, 404, label);
+          assert.equal(res.headers.get("x-middleware-next"), null, `${label}: the route never runs`);
+          assert.equal(res.headers.get("set-cookie"), null, label);
+          assert.equal(res.headers.get("allow"), null, label);
+          assert.equal(await res.text(), "", label);
+        }
+      }
+    }
+  });
+
+  // Under next 16.2.7 the page's notFound() reached the browser as an empty
+  // <html id="__next_error__"> document that only the client bundle fills in.
+  // The not-found route renders on the server, inside the shell.
+  test(`${where}: the proxy rewrites /login to the not-found route for ${METHODS.join(", ")}`, async () => {
+    for (const [secrets, env] of held) {
+      setEnv({ ATLAS_MODE: mode, ...env });
+      for (const method of METHODS) {
+        const label = `${secrets}: ${method} /login`;
+        const res = await proxy(proxyRequest("/login?callbackUrl=%2Froadmap&error=bad", method));
+        const target = res.headers.get("x-middleware-rewrite");
+        assert.ok(target, `${label}: a rewrite`);
+        const url = new URL(target);
+        assert.equal(url.origin, ORIGIN, `${label}: an internal rewrite`);
+        assert.equal(url.pathname, "/_not-found", label);
+        assert.equal(res.headers.get("set-cookie"), null, label);
+      }
+    }
+  });
+
+  test(`${where}: the proxy passes other paths through`, async () => {
+    setEnv({ ATLAS_MODE: mode });
+    for (const path of ["/", "/roadmap", "/login/extra", "/api/roadmap"]) {
+      const res = await proxy(proxyRequest(path));
+      assert.equal(res.headers.get("x-middleware-next"), "1", path);
+    }
+  });
 }
 
 const missing: [string, Env][] = [
@@ -163,6 +220,42 @@ for (const [what, env] of missing) {
     assert.equal(res.status, 503);
     assertNeutralBody(await res.text());
     assertOperatorLine(logged.mock.calls, env);
+  });
+
+  // The README says owner mode serves nothing (503) without the two secrets.
+  // The proxy let the login surfaces through before that check, so /login
+  // served a password form that could not succeed and /api/logout answered 303.
+  test(`ATLAS_MODE=owner, ${what}: the proxy answers 503 on the login surfaces too`, async (t) => {
+    setEnv({ ATLAS_MODE: "owner", ...env });
+    for (const path of LOGIN_SURFACES) {
+      for (const method of METHODS) {
+        const label = `${method} ${path}`;
+        const logged = t.mock.method(console, "error", () => {});
+        const res = await proxy(proxyRequest(path, method));
+        assert.equal(res.status, 503, label);
+        assert.equal(res.headers.get("x-middleware-next"), null, `${label}: the route never runs`);
+        assert.equal(res.headers.get("set-cookie"), null, label);
+        assertNeutralBody(await res.text());
+        assertOperatorLine(logged.mock.calls, env);
+        logged.mock.restore();
+      }
+    }
+  });
+}
+
+const signInWithoutSession: [string, Env][] = [
+  ["ATLAS_MODE=unified, no secrets", { ATLAS_MODE: "unified" }],
+  ["ATLAS_MODE=unified, both secrets set", { ATLAS_MODE: "unified", AUTH_SECRET: SECRET, OWNER_PASSWORD_HASH: HASH }],
+  ["ATLAS_MODE=owner, both secrets set", { ATLAS_MODE: "owner", AUTH_SECRET: SECRET, OWNER_PASSWORD_HASH: HASH }],
+];
+
+for (const [where, env] of signInWithoutSession) {
+  test(`${where}: the proxy lets the login surfaces through without a session`, async () => {
+    setEnv(env);
+    for (const path of LOGIN_SURFACES) {
+      const res = await proxy(proxyRequest(path));
+      assert.equal(res.headers.get("x-middleware-next"), "1", path);
+    }
   });
 }
 
