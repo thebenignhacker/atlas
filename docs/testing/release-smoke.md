@@ -91,7 +91,11 @@ login" item and no Sign out button), log in with a wrong password (refused),
 the right password (owner data appears), open a URL that does not exist while signed in
 (the owner navigation and the signed-in footer, not the public sidebar), sign out (public
 data again). In an owner deployment, start the sign-in from `/roadmap`: after the wrong
-password, the right one lands on `/roadmap`, not on `/`.
+password, the right one lands on `/roadmap`, not on `/`. Then send the sign-in route a body
+that is not form data:
+`curl -s -o /dev/null -w '%{http_code} %header{location}\n' -H 'Content-Type: text/plain' --data x <origin>/api/login`
+prints `303 /login?error=bad`, or `303 /login?error=rate` once the sign-in limit applies,
+and counts as one failed sign-in.
 
 ## 4. Error paths
 
@@ -128,6 +132,7 @@ input reproduced.
 | Sign-out in owner mode | Standalone owner deployments rendered no sign-out control |
 | `/login` signed out in owner mode | The sidebar took the deployment mode for the session, so a signed-out visitor on `/login` saw a Sign out button and "owner view · signed in" (test/auth/sidebar-session.test.ts) |
 | Wrong password, then the right one | The failed attempt's redirect dropped `callbackUrl`, so the next sign-in landed on `/` (test/auth/login-redirect.test.ts) |
+| Sign-in body that is not form data | `POST /api/login` answered a text/plain or application/json body with 500 and an empty body, and a text/plain body still got 500 once the client had reached the sign-in limit (test/auth/login-body.test.ts) |
 | `/login` and the sign-in routes on the public build | The page's notFound() reached the browser as an empty document, and the routes answered GET, HEAD, PUT, DELETE and PATCH with 405 and OPTIONS with 204 (test/auth/login-mode.test.ts) |
 | Unknown URL while signed in | The root not-found route was prerendered at build time with the public navigation, so a signed-in owner who mistyped a URL saw the signed-out sidebar (test/auth/dynamic-pages.test.ts, third test) |
 | Error paths exit non-zero | A silent zero from a refused database open is how a second empty store appears |

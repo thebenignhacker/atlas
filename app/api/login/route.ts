@@ -35,11 +35,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return new NextResponse("Sign-in is unavailable.", { status: 503 });
   }
 
-  const form = await req.formData();
+  // req.formData() rejects with a TypeError when the body is not form data:
+  // text/plain, application/json, no Content-Type, or multipart that does not
+  // parse. With no form there is no password to check, so the attempt is
+  // answered below as a failed sign-in, after the rate-limit check like any
+  // other (test/auth/login-body.test.ts).
+  const form = await req.formData().catch(() => null);
   // sameOriginPath strips control/backslash chars, re-checks the resolved
   // origin and turns a path that starts with "//" into "/"; the off-site
   // callbackUrl payloads in test/auth/redirect.test.ts all land on "/".
-  const callbackUrl = sameOriginPath(form.get("callbackUrl"));
+  const callbackUrl = sameOriginPath(form?.get("callbackUrl"));
 
   // The socket address, or a platform header the deployment declares; never a
   // header the client chooses (lib/owner-auth/client-key.ts).
@@ -47,9 +52,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const rl = rateLimit(key);
   if (!rl.allowed) return backToLogin("rate", callbackUrl, rl.retryAfterSec);
 
-  const password = String(form.get("password") ?? "");
+  const password = String(form?.get("password") ?? "");
 
-  if (!verifyPassword(password, process.env.OWNER_PASSWORD_HASH)) {
+  if (!form || !verifyPassword(password, process.env.OWNER_PASSWORD_HASH)) {
     recordFailure(key);
     return backToLogin("bad", callbackUrl);
   }
