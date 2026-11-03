@@ -179,7 +179,7 @@ To enable: set `ai.enabled` to `true` and provide a key
 | `npm run context -- <cmd>` | The `atlas-context` CLI without `npm link` (see Context Store) |
 | `npm run ingest:decision <card.md>` | Ingest one decision card incrementally, for a file-write hook to call; `npm run scan` reconciles anything it missed |
 | `npm run dev` | Start the dashboard (full local view) |
-| `npm run build` / `npm start` | Production build and serve |
+| `npm run build` / `npm start` | Production build and serve, in public mode unless `ATLAS_MODE` selects another (see Deployment modes) |
 | `npm test` / `npm run lint` / `npm run typecheck` | The checks CI runs, with `npm run build`, on every pull request and every push to `main` |
 
 **Roadmap census** counts every unit Atlas tracks, by status, across all `todoDirs`:
@@ -205,12 +205,15 @@ is left out of the totals.
 
 ## Deployment modes
 
-Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`:
+Atlas runs in four modes from one codebase, selected by `ATLAS_MODE`. An unset or
+unrecognised value selects public, the least privileged mode. `npm run dev` sets
+`ATLAS_MODE=local`. `npm start` does not set it, so a production build serves the public
+view unless you set `ATLAS_MODE` yourself.
 
-- **Local (default):** reads the full SQLite database. You see everything. No login,
-  because it is your machine.
-- **Public (`ATLAS_MODE=public`):** reads only `public-snapshot.json` and serves a
-  sanitized, read-only view. Private repos, forks, local file paths, todos, and settings
+- **Local (`ATLAS_MODE=local`):** reads the full SQLite database. You see everything. No
+  login, because it is your machine.
+- **Public (default, `ATLAS_MODE=public`):** reads only `public-snapshot.json` and serves
+  a sanitized, read-only view. Private repos, forks, local file paths, todos, and settings
   are never present. The full database is never deployed, so it cannot leak.
 - **Owner (`ATLAS_MODE=owner`):** reads `owner-snapshot.json` (your full data) behind a
   password — a standalone private deployment.
