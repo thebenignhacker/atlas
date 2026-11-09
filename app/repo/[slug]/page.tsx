@@ -155,7 +155,7 @@ export default async function RepoPage({
         <Fact label="Branch">
           <span className="flex min-w-0 items-start gap-1 font-mono text-sm">
             <GitBranch className="mt-[3px] h-3.5 w-3.5 shrink-0 text-faint" />
-            <span className="min-w-0 wrap-anywhere">{repo.branch ?? "—"}</span>
+            <span className="min-w-0 wrap-anywhere">{repo.branch ?? repo.defaultBranch ?? "—"}</span>
           </span>
         </Fact>
         <Fact label="Language">
