@@ -268,6 +268,7 @@ export interface OwnerSnapshot {
  *    rebuilds the GitHub link from owner/repoName instead)
  *  - lastCommitSha (not shown publicly; avoids leaking internal refs)
  *  - dirty / ahead / behind (local, unpublished working state)
+ *  - branch (the clone's checked-out branch: local working state named by whoever last ran git checkout; defaultBranch is the GitHub-public fact)
  *  - linked todo count (todos are hidden from the public entirely)
  * Keeps only facts that are already public on GitHub.
  */
@@ -276,6 +277,7 @@ function sanitizeRepo(repo: RepoWithSignals): RepoWithSignals {
     ...repo,
     path: "",
     remoteUrl: null,
+    branch: null,
     lastCommitSha: null,
     dirty: 0,
     ahead: 0,
