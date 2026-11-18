@@ -1,5 +1,10 @@
 # Atlas
 
+[![CI](https://github.com/thebenignhacker/atlas/actions/workflows/ci.yml/badge.svg)](https://github.com/thebenignhacker/atlas/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+[Website](https://atlas-opena2a.vercel.app)
+
 A local-first command center for developers who build many projects with LLM coding tools.
 
 If you run Claude Code, Cursor, Copilot, or any agent across dozens of repos, you lose
