@@ -553,6 +553,51 @@ test("the snapshot still redacts the listed name inside a token no published car
   assert.doesNotMatch(JSON.stringify(r.snapshot), /vault-secrets/i);
 });
 
+test("the snapshot replaces the whole token when free text extends a published name with the listed name in it", () => {
+  // A version, a branch, a package or a command named after the published
+  // repository vault-docs is a longer token, none of the published card's
+  // identifiers, so the listed name in it is redacted. A marker for the word
+  // vault alone, [private]-docs-v2 beside the card's name vault-docs, would
+  // spell out the listed name, so the whole token is replaced, once also when
+  // it holds the listed name twice. The published name itself, in any letter
+  // case, is left as written.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [{ ...VAULTS[0], visibility: "private" }, VAULT_DOCS, PLAIN],
+    commits: [
+      { repoSlug: VAULT_DOCS.slug, sha: "2b3c4d5e", title: "release vault-docs-v2" },
+      { repoSlug: VAULT_DOCS.slug, sha: "3c4d5e6f", title: "Merge branch 'feature/vault-docs-search'" },
+      { repoSlug: VAULT_DOCS.slug, sha: "4d5e6f7a", title: "bump new-vault-docs preview" },
+      { repoSlug: VAULT_DOCS.slug, sha: "5e6f7a8c", title: "theme package vault-docs_theme for the site" },
+      { repoSlug: VAULT_DOCS.slug, sha: "6f7a8b9c", title: "vault-docs-cli builds the Vault-Docs site" },
+      { repoSlug: VAULT_DOCS.slug, sha: "7a8b9c0d", title: "drop vault-vault-docs" },
+    ],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.doesNotMatch(
+    JSON.stringify(r.snapshot),
+    /[\w-]\[private\]|\[private\][\w-]/,
+    "no [private] marker may be joined to the rest of a token"
+  );
+  assert.deepEqual(
+    r.snapshot.activity
+      .filter((e) => e.repoSlug === VAULT_DOCS.slug)
+      .map((e) => e.title)
+      .sort(),
+    [
+      "a commit in vault-docs",
+      "release [private]",
+      "Merge branch 'feature/[private]'",
+      "bump [private] preview",
+      "theme package [private] for the site",
+      "[private] builds the Vault-Docs site",
+      "drop [private]",
+    ].sort()
+  );
+});
+
 test("the gate's listed-identifier check reads each word match as the whole token around it", async () => {
   const { listedIdentifierLeak } = await import("@/lib/snapshot");
   const cleared = new Set(["vault-docs", "otherorg-vault-docs"]);
