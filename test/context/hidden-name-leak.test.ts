@@ -28,6 +28,20 @@ test("case differences in the published identifier still clear", () => {
   assert.equal(hiddenNameLeak("crypto-census", text, published), null);
 });
 
+test("a public name that starts a line or follows a tab or a control character is not a leak", () => {
+  // The text is JSON text, where a newline is written \n, a tab \t and other
+  // control characters \u00XX. The escape is read as the character it stands
+  // for, which is not part of the token after it (#85).
+  for (const s of [
+    "Intro.\ncrypto-census-data is the dataset.",
+    "publish:\tcrypto-census-data weekly",
+    "a\r\ncrypto-census-data",
+    "a\u0001crypto-census-data",
+  ]) {
+    assert.equal(hiddenNameLeak("crypto-census", json({ x: s }), published), null, JSON.stringify(s));
+  }
+});
+
 test("a name absent from the text is not a leak", () => {
   assert.equal(hiddenNameLeak("crypto-census", json({ repos: [] }), published), null);
 });
@@ -61,6 +75,26 @@ test("a prefix extension is caught too, not just a suffix", () => {
   assert.equal(
     hiddenNameLeak("crypto-census", text, published),
     "internal-crypto-census"
+  );
+});
+
+test("a private name that starts a line or follows a tab is a leak, reported without the escape", () => {
+  assert.equal(
+    hiddenNameLeak("crypto-census", json({ x: "Intro.\ncrypto-census went private" }), published),
+    "crypto-census"
+  );
+  assert.equal(
+    hiddenNameLeak("crypto-census", json({ x: "rotate:\tcrypto-census-secrets" }), published),
+    "crypto-census-secrets"
+  );
+});
+
+test("an escaped backslash is one character: the letter after it starts the next token", () => {
+  // The text C:\ncrypto-census-data holds a backslash, not a newline, so its
+  // token is ncrypto-census-data, which nothing publishes.
+  assert.equal(
+    hiddenNameLeak("crypto-census", json({ x: "C:\\ncrypto-census-data" }), published),
+    "ncrypto-census-data"
   );
 });
 
