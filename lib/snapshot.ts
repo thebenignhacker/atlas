@@ -35,6 +35,7 @@ import type { UsageRollup } from "@/lib/usage/types";
 import { loadRoadmap } from "@/lib/roadmap";
 import type { RoadmapItem } from "@/lib/roadmap-shared";
 import { loadStrategyDocs } from "@/lib/strategy";
+import { ACTIVITY_NEWEST_FIRST, instantOf, newestFirst } from "@/lib/util/date";
 import type { StrategyDoc } from "@/lib/strategy-shared";
 import type { SessionBoard } from "@/lib/session-board-shared";
 
@@ -349,18 +350,8 @@ function sanitizeRepo(repo: RepoWithSignals): RepoWithSignals {
   };
 }
 
-/**
- * A commit time as milliseconds since the epoch, for ordering two of them. The
- * scan records lastCommitAt with the committer's UTC offset (git log
- * --format=%cI), so two times written with different offsets need not sort as
- * text in the order they happened: 2026-03-02T01:00:00+00:00 sorts after
- * 2026-03-01T23:30:00-07:00, which is five and a half hours later. A null or
- * unparseable time is -Infinity, below each parsed one.
- */
-function commitInstant(at: string | null): number {
-  const ms = at === null ? NaN : Date.parse(at);
-  return Number.isNaN(ms) ? -Infinity : ms;
-}
+/** A commit time as milliseconds since the epoch (instantOf, lib/util/date). */
+const commitInstant = (at: string | null): number => instantOf(at);
 
 /** The commit sha an activity event's meta records ({"sha": ...}), or null. */
 function metaSha(meta: string | null): string | null {
@@ -624,7 +615,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
           openTodos: 0,
         })
       )
-      .sort((a, b) => (b.lastCommitAt ?? "").localeCompare(a.lastCommitAt ?? ""));
+      .sort((a, b) => newestFirst(a.lastCommitAt, b.lastCommitAt));
 
     // Each publishable clone's events are published under its card's slug. An
     // event of another clone than the card's own is published with a meta of
@@ -638,7 +629,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
     const activity: ActivityEvent[] = [];
     const commitIndex = new Map<string, number>();
     for (const e of db
-      .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000")
+      .prepare(`SELECT * FROM activity ORDER BY ${ACTIVITY_NEWEST_FIRST} LIMIT 4000`)
       .all() as ActivityEvent[]) {
       const card = e.repoSlug ? cardOf.get(e.repoSlug) : undefined;
       if (card === undefined) continue;
@@ -878,7 +869,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
         signals: computeSignals(r),
         openTodos: todoMap.get(r.slug) ?? 0,
       }))
-      .sort((a, b) => (b.lastCommitAt ?? "").localeCompare(a.lastCommitAt ?? ""));
+      .sort((a, b) => newestFirst(a.lastCommitAt, b.lastCommitAt));
 
     const todos = db
       .prepare("SELECT * FROM todos ORDER BY createdAt DESC")
@@ -893,7 +884,7 @@ export function generateOwnerSnapshot(ai: AIAvailability): OwnerSnapshot {
       .all() as DecisionSkip[];
 
     const activity = db
-      .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000")
+      .prepare(`SELECT * FROM activity ORDER BY ${ACTIVITY_NEWEST_FIRST} LIMIT 4000`)
       .all() as ActivityEvent[];
 
     const summaries: Record<string, string> = {};
