@@ -9,10 +9,11 @@ import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db";
 
 /**
- * A distinctive token of a sensitive context card that is the name of a
- * published repository. lib/snapshot leaves that name as written, and the
- * artifact carries it as the published card's own name, so a gate that refused
- * the token would stop every snapshot while the sensitive card exists.
+ * A distinctive token of a sensitive context card, or its whole subject or
+ * claim, that is the name of a published repository. lib/snapshot leaves that
+ * name as written, and the artifact carries it as the published card's own
+ * name, so a gate that refused it would stop every snapshot while the
+ * sensitive card exists.
  *
  * Every test runs the real publish gate against a seeded database and asserts
  * on its exit status, the violations it prints and the artifact it writes.
@@ -34,21 +35,25 @@ interface Card {
   sensitive: 0 | 1;
 }
 
-/** The private card flagged sensitive, with the given claim. */
-const hosting = (claim: string): Card => ({
+/** The private card flagged sensitive, with the given claim and subject
+ *  (hosting unless given). */
+const hosting = (claim: string, subject = "hosting"): Card => ({
   id: "tooling:hosting",
   project: "tooling",
-  subject: "hosting",
+  subject,
   claim,
   visibility: "private",
   sensitive: 1,
 });
 
-/** Seed otherorg/docs-site (public, in the directory docs-site) and
- *  testorg/other (private, listed in sensitiveRepos), the given cards, and the
- *  given commit titles on otherorg/docs-site; run the real publish gate; and
- *  return its exit status, its violations and its artifact. */
-function runGate(opts: { cards: Card[]; commits?: string[] }) {
+/** Seed otherorg/<published> (public, in the directory of that name;
+ *  docs-site unless given) and testorg/other (private, listed in
+ *  sensitiveRepos), the given cards, and the given commit titles on
+ *  otherorg/<published>; run the real publish gate; and return its exit
+ *  status, its violations and its artifact. */
+function runGate(opts: { cards: Card[]; commits?: string[]; published?: string }) {
+  const name = opts.published ?? "docs-site";
+  const publishedSlug = `otherorg-${name}`;
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-gate-card-"));
   const dataDir = path.join(work, "data");
   fs.mkdirSync(dataDir, { recursive: true });
@@ -71,15 +76,15 @@ function runGate(opts: { cards: Card[]; commits?: string[] }) {
   const repo = db.prepare(
     "INSERT INTO repos (slug, name, path, owner, repoName, visibility, isFork, lastCommitAt) VALUES (?,?,?,?,?,?,?,?)"
   );
-  repo.run("otherorg-docs-site", "docs-site", "/x/docs-site", "otherorg", "docs-site", "public", 0, at);
+  repo.run(publishedSlug, name, `/x/${name}`, "otherorg", name, "public", 0, at);
   repo.run("testorg-other", "other", "/x/other", "testorg", "other", "private", 0, at);
   const event = db.prepare(
     "INSERT INTO activity (id, repoSlug, type, title, ts) VALUES (?,?,?,?,?)"
   );
   for (const title of opts.commits ?? []) {
     // A hash, as the scan makes an event id (lib/scanners/activity.ts).
-    const id = createHash("md5").update(`otherorg-docs-site:${title}`).digest("hex");
-    event.run(id, "otherorg-docs-site", "commit", title, at);
+    const id = createHash("md5").update(`${publishedSlug}:${title}`).digest("hex");
+    event.run(id, publishedSlug, "commit", title, at);
   }
   const card = db.prepare(
     `INSERT INTO context_cards (id, project, repoSlug, subject, claim, derivedAt, lastVerifiedAt,
@@ -188,6 +193,60 @@ test("the gate still refuses the claim of a sensitive card that names a publishe
         project: "tooling",
         subject: "notes",
         claim: "the docs-site moves to the new host",
+        visibility: "public",
+        sensitive: 0,
+      },
+    ],
+  });
+  assert.notEqual(r.status, 0, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.text, null, "no artifact may be written when the gate refuses");
+  assert.deepEqual(r.violations, ['sensitive card text from "tooling:hosting" present in snapshot']);
+});
+
+test("a sensitive card whose whole subject is a published repository's name does not stop the snapshot", () => {
+  // The subject, 12 or more characters long, is the name of the published
+  // otherorg/documentation-site, which the artifact carries as that
+  // repository's own name.
+  const r = runGate({
+    published: "documentation-site",
+    cards: [hosting("moves to the new host", "documentation-site")],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot && r.text !== null, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug), ["otherorg-documentation-site"]);
+  // The sensitive card stays withheld.
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  assert.ok(!r.text.includes("tooling:hosting"), "the sensitive card's id must not appear");
+  assert.ok(!r.text.includes("moves to the new host"), "the sensitive card's claim must not appear");
+});
+
+test("a sensitive card whose whole claim is a published repository's name in another letter case does not stop the snapshot", () => {
+  // lib/snapshot keeps Documentation-Site, in lower case the published card's
+  // name, so the commit title carries the claim as written.
+  const r = runGate({
+    published: "documentation-site",
+    cards: [hosting("Documentation-Site")],
+    commits: ["fix the Documentation-Site build"],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  assert.deepEqual(r.snapshot.activity.map((e) => e.title), ["fix the Documentation-Site build"]);
+});
+
+test("the gate still refuses the claim of a sensitive card whose subject is a published repository's name, quoted whole", () => {
+  // The claim holds no distinctive token for lib/snapshot to redact, so a
+  // published card quoting it publishes it whole. The gate reports the
+  // sensitive card's text once: for the claim, not for the subject.
+  const r = runGate({
+    published: "documentation-site",
+    cards: [
+      hosting("the copy holds the staging notes", "documentation-site"),
+      {
+        id: "tooling:notes",
+        project: "tooling",
+        subject: "notes",
+        claim: "quoted: the copy holds the staging notes",
         visibility: "public",
         sensitive: 0,
       },
