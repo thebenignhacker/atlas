@@ -187,9 +187,9 @@ function main() {
           JSON.stringify([owner.toLowerCase(), repoName.toLowerCase()]);
         const keyedRows = db
           .prepare(
-            "SELECT slug, owner, repoName FROM repos WHERE owner IS NOT NULL AND repoName IS NOT NULL"
+            "SELECT slug, name, owner, repoName FROM repos WHERE owner IS NOT NULL AND repoName IS NOT NULL"
           )
-          .all() as { slug: string; owner: string; repoName: string }[];
+          .all() as { slug: string; name: string; owner: string; repoName: string }[];
         const listedKeys = new Set(
           sensitiveRepoRows.flatMap((r) =>
             r.owner === null || r.repoName === null ? [] : [repoKey(r.owner, r.repoName)]
@@ -245,6 +245,32 @@ function main() {
           violations.push(
             `sensitive repo "${listed}" present in snapshot.repos through the clone "${clone}"`
           );
+        // The one-card rule publishes one clone of each GitHub repository and
+        // leaves the others out of the text checked above. When a listed row's
+        // owner or repoName is unknown, or out of date after a rename, no
+        // published card has them, and the only rows that carry a listed slug
+        // or name can be clones the rule left out. So look for each listed slug
+        // and name, as a word, in the slug and directory name of every clone of
+        // a published repository that is not itself published.
+        const publishedByKey = new Map<string, string>();
+        for (const r of snapshot.repos)
+          if (r.owner !== null && r.repoName !== null)
+            publishedByKey.set(repoKey(r.owner, r.repoName), r.slug);
+        for (const row of keyedRows) {
+          const published = publishedByKey.get(repoKey(row.owner, row.repoName));
+          if (published === undefined || publicSlugSet.has(row.slug)) continue;
+          for (const listedRow of sensitiveRepoRows) {
+            for (const token of [listedRow.slug, listedRow.name]) {
+              if (!token) continue;
+              const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const word = new RegExp(`\\b${esc}\\b`, "i");
+              if (word.test(row.slug) || word.test(row.name))
+                violations.push(
+                  `sensitive repo identifier "${token}" names "${row.slug}", a clone of the published repository "${published}"`
+                );
+            }
+          }
+        }
         // A sensitive card must not appear by id, nor have its text surface via
         // any other card — both the whole trimmed claim/subject AND its
         // distinctive tokens (so a short secret like `prod-db-pw` quoted inside
