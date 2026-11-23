@@ -461,6 +461,63 @@ test("a published repository whose name extends the listed name with a hyphen do
   }
 });
 
+test("a second clone of a published repository whose name extends the listed name with a hyphen does not stop the snapshot", () => {
+  // The reproduction of #83: the cases above, with a second, older clone of
+  // the published repository in the directory vault-docs-wt. The one-card rule
+  // publishes the clone in the directory named vault-docs and leaves out
+  // vault-docs-wt, whose slug and directory name carry the word vault, and in
+  // the second case the listed slug testorg-vault as well. The listed clone is
+  // one GitHub answered for, so the published repository is another
+  // repository than the listed one.
+  for (const [listed, docs] of [
+    [{ ...VAULTS[0], visibility: "private" }, VAULT_DOCS],
+    [VAULTS[0], { ...VAULT_DOCS, slug: "testorg-vault-docs", owner: "testorg" }],
+  ] as const) {
+    const wt: Clone = {
+      ...docs,
+      slug: `${docs.slug}-wt`,
+      name: "vault-docs-wt",
+      lastCommitAt: "2026-01-05T00:00:00.000Z",
+    };
+    const r = runGate({
+      sensitiveRepos: ["testorg-vault"],
+      publicOwners: ["testorg", "otherorg"],
+      clones: [listed, docs, wt, PLAIN],
+    });
+    assert.equal(r.status, 0, `the gate must write the snapshot with ${wt.slug}; got:\n${r.out}`);
+    assert.ok(r.snapshot, "the artifact must be written");
+    assert.deepEqual(r.snapshot.repos.map((x) => x.slug).sort(), [docs.slug, "testorg-plain"].sort());
+    assert.doesNotMatch(
+      JSON.stringify(r.snapshot),
+      /vault-docs-wt/i,
+      "the second clone's slug and directory name may not be written to the artifact"
+    );
+  }
+});
+
+test("the gate refuses a second clone of a published repository that carries the listed name when GitHub did not answer for the listed clone", () => {
+  // Without GitHub's answer the listed clone keeps the owner and name of its
+  // remote, which a transfer and a rename leave out of date, so
+  // otherorg/vault-docs can be the listed repository, and the second clone in
+  // the directory vault-docs-wt is still read for the listed name.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [
+      { ...VAULTS[0], visibility: "unknown" },
+      VAULT_DOCS,
+      { ...VAULT_DOCS, slug: "otherorg-vault-docs-wt", name: "vault-docs-wt", lastCommitAt: "2026-01-05T00:00:00.000Z" },
+      PLAIN,
+    ],
+  });
+  assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.snapshot, null, "no artifact may be written");
+  assert.match(
+    r.out,
+    /sensitive repo identifier "vault" names "otherorg-vault-docs-wt", a clone of the published repository "otherorg-vault-docs"/
+  );
+});
+
 test("the gate refuses the listed name, alone or extended with a hyphen, in a token no published card carries", () => {
   // sanitizeCard redacts a card's subject, claim and detail, not its id, so the
   // id reaches the artifact as written. vault names the listed repository, and
