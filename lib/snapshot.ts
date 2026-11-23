@@ -567,23 +567,33 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // its name explicitly so any cross-reference in another repo's text is
     // scrubbed. Sensitive names are redacted regardless of the distinctiveness
     // heuristic — they are an explicit never-publish.
+    const hiddenRedactNames = new Set(
+      hidden
+        .map((h) => h.name)
+        .filter(
+          (n) =>
+            !publicNameSet.has(n) &&
+            n.length >= 5 &&
+            (n.length >= 12 || /[-_]/.test(n))
+        )
+    );
     const redactNames = Array.from(
       new Set([
-        ...hidden
-          .map((h) => h.name)
-          .filter(
-            (n) =>
-              !publicNameSet.has(n) &&
-              n.length >= 5 &&
-              (n.length >= 12 || /[-_]/.test(n))
-          ),
+        ...hiddenRedactNames,
         ...sensitiveRepoNames.filter((n) => n && !publicNameSet.has(n)),
         ...sensitiveCardTokens.filter((t) => !publicNameSet.has(t)),
       ])
     );
-    const redactRes = redactNames.map(
-      (n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi")
-    );
+    // A hidden name is matched with no word boundary, as the gate's hidden-name
+    // check (hiddenNameLeak) reads it, so it is found glued to a word as well:
+    // crypto-census inside mycrypto-census or crypto-censusx. Matched as a word,
+    // those tokens were kept as written and the gate refused the snapshot. A
+    // sensitive name or card token is matched as a word, as the gate's
+    // listed-identifier check (listedIdentifierLeak) reads it.
+    const redactRes = redactNames.map((n) => {
+      const esc = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(hiddenRedactNames.has(n) ? esc : `\\b${esc}\\b`, "gi");
+    });
     // `\b` treats `-` as a boundary, so a name is also found inside a longer
     // token: vault inside vault-docs or vault-docs-v2. Each match therefore
     // stands for its whole token, the run of letters, digits, `_` and `-`
@@ -596,8 +606,8 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // sensitive cards clear tokens against the same set, and its
     // listed-identifier check against it less the listed repository's own
     // slug, name and repoName, or against none for a row GitHub did not answer
-    // for (scripts/snapshot.ts). Every word match of the name lies inside one
-    // such token, and the tokens are found in one pass over the text.
+    // for (scripts/snapshot.ts). Every match of the name lies inside one such
+    // token, and the tokens are found in one pass over the text.
     const publishedIdentifiers = new Set(
       publicRepos
         .flatMap((r) => [r.name, r.slug, r.repoName])

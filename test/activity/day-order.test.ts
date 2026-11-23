@@ -110,6 +110,22 @@ test("an event whose time does not parse is listed last, under never", () => {
   }
 });
 
+test("a day after the clock's UTC day is labelled with its date, not a negative age", () => {
+  // The reproduction of #93: 01:00 UTC on 2026-03-03, after NOW, as a
+  // committer whose clock runs ahead writes. Its day was labelled "-1d ago".
+  const events = [event("ahead", "2026-03-03T01:00:00Z"), event("beta", BETA_AT)];
+  for (const zone of ZONES) {
+    assert.deepEqual(
+      dayList(render(events, zone)),
+      [
+        ["2026-03-03", ["ahead"]],
+        ["today", ["beta"]],
+      ],
+      `rendered in ${zone}`
+    );
+  }
+});
+
 test("the heatmap counts each event on its UTC day", () => {
   for (const zone of ZONES) {
     const html = render(inInstantOrder(), zone);

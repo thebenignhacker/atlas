@@ -209,9 +209,10 @@ export function ActivityView({
           <div className="space-y-5">
             {firstEvents(byDay, shown).map(([date, items]) => (
               <div key={date} className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
-                {/* A day is aged from its start, midnight UTC. relativeTime
-                    floors whole days, so aged from noon the current day
-                    would read "-1d ago" until noon UTC. */}
+                {/* A day is aged from its start, midnight UTC, so relativeTime,
+                    which floors whole days, counts an earlier day from the
+                    clock's own UTC day. A day after the clock's UTC day, an
+                    event a committer's clock dated ahead, reads as its date. */}
                 <div className="shrink-0 pt-0.5 text-xs text-faint sm:w-24 sm:text-right">
                   {relativeTime(date + "T00:00:00Z")}
                 </div>

@@ -7,6 +7,7 @@ import { getLearningPreamble } from "@/lib/ai/learning";
 import { isOwnerMode, type ResolvedMode } from "@/lib/mode";
 import { loadOwnerSnapshot } from "@/lib/snapshot";
 import { relativeTime } from "@/lib/util/date";
+import { recentEventLine } from "@/lib/ai/digest-lines";
 
 const SYSTEM = `You are Atlas, briefing a developer who ships many projects at once.
 Given a factual snapshot of their portfolio, write a short markdown briefing with these sections:
@@ -65,7 +66,7 @@ function buildSnapshot(): {
   const recent = getActivity("local", 40)
     .filter((e) => !e.repoSlug || eligibleSlugs.has(e.repoSlug))
     .slice(0, 25)
-    .map((e) => `- ${(e.ts ?? "").slice(0, 10)} ${e.title}`);
+    .map(recentEventLine);
 
   const text = [
     `PORTFOLIO: ${eligible.length} repos in scope (${excluded} excluded by privacy policy).`,
