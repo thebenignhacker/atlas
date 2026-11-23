@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ActivityEvent } from "@/lib/types";
-import { relativeTime } from "@/lib/util/date";
+import { newestFirst, relativeTime, utcDate } from "@/lib/util/date";
 import { ChartPanel, Donut, RankBar, type Slice } from "@/components/Charts";
 import { ShowMore } from "@/components/ShowMore";
 
@@ -60,10 +60,15 @@ export function ActivityView({
     [weeks]
   );
 
+  // An event's day is the UTC date of its instant (utcDate). Commit times carry
+  // the committer's UTC offset, so the first ten characters of ts can name a
+  // different day. Events are sorted by instant (newestFirst) before grouping,
+  // so each day lists its events latest first; a time that does not parse
+  // goes under "", the last day.
   const byDay = useMemo<DayGroup[]>(() => {
     const groups = new Map<string, ActivityEvent[]>();
-    for (const e of filtered) {
-      const key = (e.ts ?? "").slice(0, 10);
+    for (const e of [...filtered].sort((a, b) => newestFirst(a.ts, b.ts))) {
+      const key = utcDate(e.ts) ?? "";
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(e);
     }
@@ -204,8 +209,11 @@ export function ActivityView({
           <div className="space-y-5">
             {firstEvents(byDay, shown).map(([date, items]) => (
               <div key={date} className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
+                {/* A day is aged from its start, midnight UTC. relativeTime
+                    floors whole days, so aged from noon the current day
+                    would read "-1d ago" until noon UTC. */}
                 <div className="shrink-0 pt-0.5 text-xs text-faint sm:w-24 sm:text-right">
-                  {relativeTime(date + "T12:00:00Z")}
+                  {relativeTime(date + "T00:00:00Z")}
                 </div>
                 <div className="min-w-0 flex-1 space-y-1.5 border-l border-line pl-4">
                   {items.map((e) => (
@@ -284,15 +292,16 @@ function buildHeatmap(events: ActivityEvent[]): {
 } {
   const counts = new Map<string, number>();
   for (const e of events) {
-    const key = (e.ts ?? "").slice(0, 10);
+    const key = utcDate(e.ts);
     if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  // Start on the Sunday WEEKS*7 days before today.
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
+  // The cells are UTC days, like the counts: the grid reads only the clock's
+  // UTC fields. Start on the Sunday WEEKS*7 days before today.
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const start = new Date(today);
-  start.setDate(start.getDate() - (WEEKS * 7 - 1));
-  start.setDate(start.getDate() - start.getDay()); // back to Sunday
+  start.setUTCDate(start.getUTCDate() - (WEEKS * 7 - 1));
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay()); // back to Sunday
 
   const weeks: Day[][] = [];
   let max = 0;
@@ -308,7 +317,7 @@ function buildHeatmap(events: ActivityEvent[]): {
         total += count;
       }
       week.push({ date: key, count });
-      cursor.setDate(cursor.getDate() + 1);
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     weeks.push(week);
   }
