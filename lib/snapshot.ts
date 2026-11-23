@@ -557,31 +557,60 @@ export function generatePublicSnapshot(): PublicSnapshot {
       (n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi")
     );
     // `\b` treats `-` as a boundary, so a name is also found inside a longer
-    // token: vault inside vault-docs. A match whose whole token (the run of
-    // letters, digits, `_` and `-` around it) is, in lower case, the name, slug
-    // or repoName of a published card is left as written. That token is in the
-    // artifact anyway as the card's own, and a marker inside it, [private]-docs
-    // beside the card's vault-docs, would spell out the redacted name. The
-    // gate's hidden-name check clears tokens against the same set, and its
-    // listed-identifier check against it less the listed repository's own
-    // slug, name and repoName (scripts/snapshot.ts).
+    // token: vault inside vault-docs or vault-docs-v2. Each match therefore
+    // stands for its whole token, the run of letters, digits, `_` and `-`
+    // around it, and matches whose tokens meet are one token. The whole token
+    // is replaced with [private]: a marker for the name alone, [private]-docs-v2
+    // beside a published card's vault-docs, would spell out the redacted name.
+    // A token that is, in lower case, the name, slug or repoName of a published
+    // card is left as written, since it is in the artifact anyway as the
+    // card's own. The gate's hidden-name check clears tokens against the same
+    // set, and its listed-identifier check against it less the listed
+    // repository's own slug, name and repoName, or against none for a row
+    // GitHub did not answer for (scripts/snapshot.ts). Every word match of the
+    // name lies inside one such token, and the tokens are found in one pass
+    // over the text.
     const publishedIdentifiers = new Set(
       publicRepos
         .flatMap((r) => [r.name, r.slug, r.repoName])
         .filter((s): s is string => !!s)
         .map((s) => s.toLowerCase())
     );
-    const mark = (match: string, at: number, text: string): string => {
-      let start = at;
-      while (start > 0 && /[\w-]/.test(text[start - 1])) start--;
-      let end = at + match.length;
-      while (end < text.length && /[\w-]/.test(text[end])) end++;
-      return publishedIdentifiers.has(text.slice(start, end).toLowerCase()) ? match : "[private]";
+    const tokenChar = /[\w-]/;
+    const redactTokens = (text: string, re: RegExp): string => {
+      let out = "";
+      let copied = 0; // text before this index is in `out`
+      let start = -1; // the open token is text[start, end); none while -1
+      let end = -1;
+      const close = (): void => {
+        const token = text.slice(start, end);
+        out += text.slice(copied, start);
+        out += publishedIdentifiers.has(token.toLowerCase()) ? token : "[private]";
+        copied = end;
+      };
+      for (const m of text.matchAll(re)) {
+        let stop = m.index + m[0].length;
+        if (start !== -1 && m.index <= end) {
+          // In the open token, or right after it: the same token.
+          if (stop > end) {
+            while (stop < text.length && tokenChar.test(text[stop])) stop++;
+            end = stop;
+          }
+          continue;
+        }
+        if (start !== -1) close();
+        start = m.index;
+        while (start > copied && tokenChar.test(text[start - 1])) start--;
+        while (stop < text.length && tokenChar.test(text[stop])) stop++;
+        end = stop;
+      }
+      if (start !== -1) close();
+      return out + text.slice(copied);
     };
     const redact = (s: string | null): string | null => {
       if (!s) return s;
       let out = s;
-      for (const re of redactRes) out = out.replace(re, mark);
+      for (const re of redactRes) out = redactTokens(out, re);
       return out;
     };
 
