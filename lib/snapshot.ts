@@ -321,7 +321,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
     const sensitiveRepoNames = rows
       .filter((r) => sensitiveSlugs.has(r.slug))
       .map((r) => r.name);
-    const publicRepos = rows.filter(
+    const publishableRows = rows.filter(
       (r) =>
         r.visibility === "public" &&
         r.isFork !== 1 &&
@@ -329,6 +329,43 @@ export function generatePublicSnapshot(): PublicSnapshot {
         (allow.length === 0 ||
           (r.owner !== null && allowedOwners.has(r.owner.toLowerCase())))
     );
+    // One card per GitHub repository. The scan records each directory it finds
+    // holding a .git as a repo of its own, so a second clone of a repository (a
+    // lane or scratch checkout) is a second row with the same owner and
+    // repoName, and publishing both shows the repository twice and counts it
+    // twice. Rows are grouped by owner and repoName, compared in lower case, and
+    // each group keeps one of its rows and drops the rest, merging nothing into
+    // the kept row (its slug is the card's URL): the row whose name equals its
+    // repoName in lower case (the clone in the directory named after the
+    // repository), else the row with the greatest lastCommitAt (compared as
+    // strings, a null lowest), else the row with the smallest slug. A row with a
+    // null owner or a null repoName is in no group and is kept.
+    const repoKey = (r: Repo): string | null =>
+      r.owner === null || r.repoName === null
+        ? null
+        : JSON.stringify([r.owner.toLowerCase(), r.repoName.toLowerCase()]);
+    const inNamedDir = (r: Repo): boolean =>
+      r.repoName !== null && r.name.toLowerCase() === r.repoName.toLowerCase();
+    const keptOver = (a: Repo, b: Repo): boolean => {
+      if (inNamedDir(a) !== inNamedDir(b)) return inNamedDir(a);
+      if (a.lastCommitAt !== b.lastCommitAt) {
+        if (a.lastCommitAt === null) return false;
+        if (b.lastCommitAt === null) return true;
+        return a.lastCommitAt > b.lastCommitAt;
+      }
+      return a.slug < b.slug;
+    };
+    const keptByRepo = new Map<string, Repo>();
+    for (const r of publishableRows) {
+      const key = repoKey(r);
+      if (key === null) continue;
+      const kept = keptByRepo.get(key);
+      if (kept === undefined || keptOver(r, kept)) keptByRepo.set(key, r);
+    }
+    const publicRepos = publishableRows.filter((r) => {
+      const key = repoKey(r);
+      return key === null || keptByRepo.get(key) === r;
+    });
     const slugs = new Set(publicRepos.map((r) => r.slug));
 
     // Redact distinctive private/fork repo names from free text. Public commit
