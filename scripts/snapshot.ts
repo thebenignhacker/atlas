@@ -254,11 +254,17 @@ function main() {
         // nor the text checks here look for a bare repoName, so skipping the name
         // would let free text name the listed repository by its GitHub name.
         const publishedNames = new Set(snapshot.repos.map((r) => r.name.toLowerCase()));
-        const listedTokens = (r: (typeof sensitiveRepoRows)[number]): string[] =>
+        // Whether GitHub answered for a listed row during the scan (visibility
+        // public or private), so that its owner and repoName are GitHub's and
+        // not its remote's (applyEnrichment in lib/scanners/repos.ts).
+        type ListedRow = (typeof sensitiveRepoRows)[number];
+        const answered = (r: ListedRow): r is ListedRow & { owner: string; repoName: string } =>
           r.owner !== null &&
           r.repoName !== null &&
+          (r.visibility === "public" || r.visibility === "private");
+        const listedTokens = (r: ListedRow): string[] =>
+          answered(r) &&
           r.repoName.toLowerCase() === r.name.toLowerCase() &&
-          (r.visibility === "public" || r.visibility === "private") &&
           publishedNames.has(r.name.toLowerCase())
             ? [r.slug, `${r.owner}/${r.repoName}`]
             : [r.slug, r.name];
@@ -280,13 +286,8 @@ function main() {
             .filter((s): s is string => !!s)
             .map((s) => s.toLowerCase())
         );
-        const clearedFor = (r: (typeof sensitiveRepoRows)[number]): Set<string> => {
-          if (
-            r.owner === null ||
-            r.repoName === null ||
-            (r.visibility !== "public" && r.visibility !== "private")
-          )
-            return new Set();
+        const clearedFor = (r: ListedRow): Set<string> => {
+          if (!answered(r)) return new Set();
           const own = new Set([r.slug, r.name, r.repoName].map((s) => s.toLowerCase()));
           return new Set([...publishedIdentifiers].filter((s) => !own.has(s)));
         };
@@ -310,15 +311,22 @@ function main() {
           );
         // The one-card rule publishes one clone of each GitHub repository and
         // leaves the others out of the text checked above. When a listed row's
-        // owner or repoName is unknown, or out of date after a rename, no
-        // published card has them, and the only rows that carry a listed slug
-        // or name can be clones the rule left out. So look for the identifiers
-        // listedTokens gives for each listed row, as words, in the slug and
-        // directory name of every clone of a published repository that is not
-        // itself published. listedTokens leaves out a name only for a row GitHub
-        // answered for, whose owner and repoName are GitHub's; the owner/repoName
-        // it gives in its place matches no slug or directory name, neither of
-        // which holds a slash.
+        // owner or repoName is unknown, or out of date after a transfer or a
+        // rename, no published card has them, and the only rows that carry a
+        // listed slug or name can be clones the rule left out. So for each
+        // listed row GitHub did not answer for, look for the identifiers
+        // listedTokens gives, as words, in the slug and directory name of every
+        // clone of a published repository that is not itself published.
+        //
+        // A listed row GitHub answered for is left out of this check. Its owner
+        // and repoName are GitHub's, lib/snapshot withholds every row with them,
+        // and the check above refuses a published card with them, so the
+        // published repository a clone belongs to is another repository, and a
+        // word match in that clone's slug or directory name does not name the
+        // listed one. `\b` treats `-` as a boundary, so with testorg/vault
+        // listed, vault is found inside vault-docs-wt, the directory of a
+        // second clone of the published otherorg/vault-docs. The text checks
+        // above still look for that row's identifiers.
         const publishedByKey = new Map<string, string>();
         for (const r of snapshot.repos)
           if (r.owner !== null && r.repoName !== null)
@@ -327,6 +335,7 @@ function main() {
           const published = publishedByKey.get(repoKey(row.owner, row.repoName));
           if (published === undefined || publicSlugSet.has(row.slug)) continue;
           for (const listedRow of sensitiveRepoRows) {
+            if (answered(listedRow)) continue;
             for (const token of listedTokens(listedRow)) {
               if (!token) continue;
               const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
