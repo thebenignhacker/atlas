@@ -15,7 +15,8 @@ import { initSchema } from "@/lib/db";
  * name, so a gate that refused it would stop every snapshot while the
  * sensitive card exists.
  *
- * The same holds for an occurrence of another token of the card where the
+ * The same holds for an occurrence of another token of the card, or of its
+ * whole subject or claim, where the
  * whole hyphen-joined token around it is a published repository's slug or
  * GitHub name, or a published name, slug or GitHub name that the token is only
  * part of: the artifact carries those in the repository card's slug, repoName
@@ -388,6 +389,119 @@ test("a sensitive card that names part of a published repository's name does not
     "fix the [private] build",
     "release docs-site-v2",
   ]);
+});
+
+/** otherorg/documentation-site in the directory docs-web, so its name is not
+ *  its GitHub name. */
+const documentationWeb: Published = {
+  slug: "otherorg-docs-web",
+  name: "docs-web",
+  owner: "otherorg",
+  repoName: "documentation-site",
+};
+
+/** otherorg/documentation-site-v2, in the directory documentation-site-v2. */
+const documentationSiteV2: Published = {
+  slug: "otherorg-documentation-site-v2",
+  name: "documentation-site-v2",
+  owner: "otherorg",
+  repoName: "documentation-site-v2",
+};
+
+test("a sensitive card whose whole subject is a published slug, GitHub name or name part does not stop the snapshot", () => {
+  // Each subject is 12 or more characters long and not a published
+  // repository's name. The artifact carries it only inside a whole token that
+  // is the published repository's slug, repoName or name: in that
+  // repository's card, and in a commit title, where lib/snapshot keeps such a
+  // token as written and redacts the subject where it stands alone.
+  const cases: [Published, string, string[], string[], string[]][] = [
+    // The slug of otherorg/docs-site.
+    [
+      docsSite,
+      "otherorg-docs-site",
+      ["otherorg-docs-site"],
+      ["fix the otherorg-docs-site build"],
+      ["fix the otherorg-docs-site build"],
+    ],
+    // The GitHub name of the repository in the directory docs-web.
+    [
+      documentationWeb,
+      "documentation-site",
+      ["otherorg-docs-web"],
+      ["fix the documentation-site build"],
+      ["fix the documentation-site build"],
+    ],
+    // A hyphen-joined part of the name, slug and GitHub name of
+    // otherorg/documentation-site-v2.
+    [
+      documentationSiteV2,
+      "documentation-site",
+      ["otherorg-documentation-site-v2"],
+      ["release documentation-site-v2", "fix the documentation-site build"],
+      ["fix the [private] build", "release documentation-site-v2"],
+    ],
+  ];
+  for (const [published, subject, slugs, commits, titles] of cases) {
+    const r = runGate({ published, commits, cards: [hosting("moves to the new host", subject)] });
+    assert.equal(r.status, 0, `the gate must write the snapshot for ${subject}; got:\n${r.out}`);
+    assert.ok(r.snapshot && r.text !== null, `the artifact must be written for ${subject}`);
+    assert.deepEqual(r.snapshot.repos.map((x) => x.slug), slugs);
+    // The sensitive card stays withheld.
+    assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+    assert.ok(!r.text.includes("tooling:hosting"), "the sensitive card's id must not appear");
+    assert.ok(!r.text.includes("moves to the new host"), "the sensitive card's claim must not appear");
+    assert.deepEqual(r.snapshot.activity.map((e) => e.title).sort(), titles);
+  }
+});
+
+test("a sensitive card whose whole claim is a published GitHub name in another letter case does not stop the snapshot", () => {
+  // lib/snapshot keeps Documentation-Site, in lower case the published
+  // repository's repoName, so the commit title carries the claim as written.
+  const r = runGate({
+    published: documentationWeb,
+    cards: [hosting("Documentation-Site")],
+    commits: ["fix the Documentation-Site build"],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  assert.deepEqual(r.snapshot.activity.map((e) => e.title), ["fix the Documentation-Site build"]);
+});
+
+test("the gate still refuses the subject of a sensitive card that is a published slug, GitHub name or name part, quoted whole elsewhere", () => {
+  // Each published card carries the subject in its project, which sanitizeCard
+  // does not redact, inside a whole token that no published repository
+  // carries: the subject alone, or a token that extends it. The
+  // distinctive-token check also refuses that token, so the gate reports the
+  // card's text and its token.
+  const cases: [Published, string, string][] = [
+    [docsSite, "otherorg-docs-site", "otherorg-docs-site-secrets"],
+    [documentationWeb, "documentation-site", "documentation-site-secrets"],
+    [documentationSiteV2, "documentation-site", "documentation-site edge"],
+    [documentationSiteV2, "documentation-site", "documentation-site-secrets"],
+  ];
+  for (const [published, subject, project] of cases) {
+    const r = runGate({
+      published,
+      cards: [
+        hosting("moves to the new host", subject),
+        {
+          id: "tooling:edge",
+          project,
+          subject: "edge",
+          claim: "a published card",
+          visibility: "public",
+          sensitive: 0,
+        },
+      ],
+    });
+    assert.notEqual(r.status, 0, `the gate must refuse ${project}; got:\n${r.out}`);
+    assert.equal(r.text, null, `no artifact may be written when the gate refuses ${project}`);
+    assert.deepEqual(r.violations, [
+      'sensitive card text from "tooling:hosting" present in snapshot',
+      `distinctive sensitive token "${subject}" (from card "tooling:hosting") present in snapshot text`,
+    ]);
+  }
 });
 
 test("the gate still refuses a token of a sensitive card whose whole token extends a published identifier", () => {

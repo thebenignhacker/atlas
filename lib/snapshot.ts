@@ -165,6 +165,49 @@ export function listedIdentifierLeak(
 }
 
 /**
+ * Whether the trimmed subject or claim of a sensitive context card occurs in
+ * published text, and if so in what token. Returns that token, or null.
+ *
+ * The text is looked for as written, as a plain substring, so it is also found
+ * inside a longer token: documentation-site inside documentation-site-v2. Each
+ * occurrence is therefore read as the whole token around it, the occurrence
+ * with the run of letters, digits, `_` and `-` on each side of it, and is not
+ * counted when that token, in lower case, is in `cleared`. The gate passes the
+ * name, slug and repoName of each published card, the identifiers it clears
+ * the card's distinctive tokens against (listedIdentifierLeak). An occurrence
+ * that is not such an identifier is counted, such as documentation-site
+ * standing alone beside the published documentation-site-v2, or a subject or
+ * claim of more than one word.
+ *
+ * `text` is JSON text. A subject or claim that holds a `"`, a backslash or a
+ * control character, which JSON escapes, is returned when the JSON text
+ * contains it as written. Any other is looked for in the text with each escape
+ * read as the character it stands for, as listedIdentifierLeak reads it.
+ *
+ * Pure (no I/O) so the boundary can be tested in both directions.
+ */
+export function sensitiveTextLeak(
+  sensitive: string,
+  text: string,
+  cleared: Set<string>
+): string | null {
+  if (!sensitive || !text.includes(sensitive)) return null;
+  for (const ch of sensitive)
+    if (ch === '"' || ch === "\\" || ch.charCodeAt(0) < 0x20) return sensitive;
+  const plain = unescapeJsonText(text);
+  const tokenChar = /[\w-]/;
+  for (let i = plain.indexOf(sensitive); i !== -1; i = plain.indexOf(sensitive, i + 1)) {
+    let start = i;
+    let end = i + sensitive.length;
+    while (start > 0 && tokenChar.test(plain[start - 1])) start--;
+    while (end < plain.length && tokenChar.test(plain[end])) end++;
+    const token = plain.slice(start, end);
+    if (!cleared.has(token.toLowerCase())) return token;
+  }
+  return null;
+}
+
+/**
  * The published repo cards that belong to a repository listed in
  * `sensitiveRepos`, as `[listed slug, published slug]` pairs: each card whose
  * owner and repoName equal, in lower case, those of a listed row. Each clone

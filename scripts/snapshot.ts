@@ -8,6 +8,7 @@ import {
   hiddenNameLeak,
   listedIdentifierLeak,
   sensitiveRepoClones,
+  sensitiveTextLeak,
   snapshotPath,
 } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
@@ -374,10 +375,20 @@ function main() {
         // The redaction in lib/snapshot and check 2 clear tokens against the
         // same identifiers. A token no published repo card carries is still
         // counted, such as otherorg-docs-site-secrets beside the published
-        // slug otherorg-docs-site, as are the sensitive card's other tokens,
-        // and a subject or claim that holds a published name among other words
-        // is still looked for whole. In the loop below, the checks of its id
-        // make no such exception.
+        // slug otherorg-docs-site, as are the sensitive card's other tokens.
+        //
+        // A subject or claim of 12 or more characters that is not a published
+        // name is looked for whole, as a substring, and each occurrence is read
+        // as the whole token around it (sensitiveTextLeak), cleared against the
+        // same identifiers. So a subject that is a published slug or repoName,
+        // or a hyphen-joined part of a published name, slug or repoName, does
+        // not stop the snapshot where the artifact carries it only inside such
+        // an identifier, as the distinctive-token check decides for the same
+        // text. It is still counted inside a token no published repo card
+        // carries, such as documentation-site standing alone beside the
+        // published documentation-site-v2, and a subject or claim that holds a
+        // published name among other words is still looked for whole. In the
+        // loop below, the checks of its id make no such exception.
         const publicCardIds = new Set(snapshot.contextCards.map((c) => c.id));
         for (const c of sensitiveCards) {
           if (publicCardIds.has(c.id))
@@ -387,7 +398,7 @@ function main() {
           for (const text of [c.subject, c.claim]) {
             const t = (text ?? "").trim();
             if (publishedNames.has(t.toLowerCase())) continue;
-            if (t.length >= 12 && json.includes(t))
+            if (t.length >= 12 && sensitiveTextLeak(t, json, publishedIdentifiers) !== null)
               violations.push(`sensitive card text from "${c.id}" present in snapshot`);
           }
           for (const tok of [

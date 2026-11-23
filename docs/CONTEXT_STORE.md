@@ -157,17 +157,19 @@ subject or claim that, trimmed and in lower case, is the name of a published
 repo: while a repo named `documentation-site` is published, a sensitive card
 whose subject is `documentation-site`, or whose claim is `Documentation-Site`,
 does not stop the snapshot. Nor does the gate abort on an occurrence of one of
-the card's other words where the run of letters, digits, `_` and `-` around
-that occurrence is, compared in lower case, a published repo's own name, slug
-or GitHub name: the word is a published repo's slug (`otherorg-docs-site`) or
-GitHub name (`docs-site` for a repo cloned into a directory named `docs-web`),
-or part of a published repo's name, slug or GitHub name, joined to the rest of
-it by hyphens (`docs-site` while only `docs-site-v2` is published). A run that
-no published repo carries (`otherorg-docs-site-secrets`) is still refused. The
-card is still withheld, and the gate still refuses its other words that the
-gate looks for, such as `new-edge-host`, and its subject and its claim quoted
-whole (12 or more characters) when they are not a published repo's name, such
-as the claim "the docs-site moves to the new host". Sensitive content still
+the card's other words, or of its subject or claim quoted whole (12 or more
+characters), where the run of letters, digits, `_` and `-` around that
+occurrence is, compared in lower case, a published repo's own name, slug or
+GitHub name: the word, subject or claim is a published repo's slug
+(`otherorg-docs-site`) or GitHub name (`docs-site` for a repo cloned into a
+directory named `docs-web`), or part of a published repo's name, slug or
+GitHub name, joined to the rest of it by hyphens (`docs-site` while only
+`docs-site-v2` is published). A run that no published repo carries
+(`otherorg-docs-site-secrets`, or `documentation-site` standing alone while
+only `documentation-site-v2` is published) is still refused. The card is still
+withheld, and the gate still refuses its other words that the gate looks for,
+such as `new-edge-host`, and its subject and its claim quoted whole anywhere
+else, such as the claim "the docs-site moves to the new host". Sensitive content still
 appears in the password-gated owner view (that is not a public surface) and is
 flagged with a lock badge in the UI.
 
