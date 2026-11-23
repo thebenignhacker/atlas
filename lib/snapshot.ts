@@ -331,7 +331,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
     );
     // One card per GitHub repository. The scan records each directory it finds
     // holding a .git as a repo of its own, so a second clone of a repository (a
-    // lane or scratch checkout) is a second row with the same owner and
+    // worktree or scratch checkout) is a second row with the same owner and
     // repoName, and publishing both shows the repository twice and counts it
     // twice. Rows are grouped by owner and repoName, compared in lower case, and
     // each group keeps one of its rows and drops the rest, merging nothing into

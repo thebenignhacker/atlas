@@ -8,7 +8,7 @@ import { initSchema } from "@/lib/db";
 
 /**
  * The scan records each directory it finds holding a .git as a repo of its
- * own, so a second clone of a GitHub repository (a lane or scratch checkout
+ * own, so a second clone of a GitHub repository (a worktree or scratch checkout
  * beside the clone named after it) is a second row with the same owner and
  * repoName. The public snapshot publishes one card per GitHub repository: the
  * row whose directory name is the repository's name, else the row with the
@@ -39,13 +39,13 @@ interface SeedRow {
 const CLONES: SeedRow[] = [
   { slug: "testorg-tool", name: "tool", repoName: "tool", lastCommitAt: "2026-01-01T00:00:00.000Z" },
   { slug: "testorg-tool-scratch", name: "tool-scratch", repoName: "tool", lastCommitAt: "2026-03-01T00:00:00.000Z" },
-  { slug: "testorg-tool-lane-7", name: "tool-lane-7", repoName: "tool", lastCommitAt: "2026-02-01T00:00:00.000Z" },
+  { slug: "testorg-tool-copy-7", name: "tool-copy-7", repoName: "tool", lastCommitAt: "2026-02-01T00:00:00.000Z" },
   { slug: "testorg-other-a", name: "other-a", repoName: "other", lastCommitAt: "2026-01-05T00:00:00.000Z" },
   { slug: "testorg-other-b", name: "other-b", repoName: "other", lastCommitAt: "2026-02-05T00:00:00.000Z" },
   { slug: "testorg-loose", name: "loose", repoName: null, lastCommitAt: "2026-01-01T00:00:00.000Z" },
 ];
 const KEPT = ["testorg-loose", "testorg-other-b", "testorg-tool"];
-const DROPPED = ["testorg-tool-scratch", "testorg-tool-lane-7", "testorg-other-a"];
+const DROPPED = ["testorg-tool-scratch", "testorg-tool-copy-7", "testorg-other-a"];
 
 // The letter case of the group key and of the directory-name rule, a null
 // lastCommitAt, and a tie on lastCommitAt. The tie's larger slug is inserted
@@ -55,7 +55,7 @@ const EDGES: SeedRow[] = [
   { slug: "testorg-mixed-copy", name: "mixed-copy", repoName: "mixed", lastCommitAt: "2026-04-01T00:00:00.000Z" },
   { slug: "testorg-same-b", name: "same-b", repoName: "same", lastCommitAt: "2026-01-01T00:00:00.000Z" },
   { slug: "testorg-same-a", name: "same-a", repoName: "same", lastCommitAt: "2026-01-01T00:00:00.000Z" },
-  { slug: "testorg-dated-lane", name: "dated-lane", repoName: "dated", lastCommitAt: "2026-01-01T00:00:00.000Z" },
+  { slug: "testorg-dated-copy", name: "dated-copy", repoName: "dated", lastCommitAt: "2026-01-01T00:00:00.000Z" },
   { slug: "testorg-a-undated", name: "a-undated", repoName: "dated", lastCommitAt: null },
 ];
 
@@ -134,7 +134,7 @@ test("activity of a clone that is not published is not published", async () => {
 test("owner, repoName and the directory name compare in lower case; a null lastCommitAt ranks lowest; a tie goes to the smallest slug", async () => {
   const snap = await snapshotOf(caseDir);
   assert.deepEqual(snap.repos.map((r) => r.slug).sort(), [
-    "testorg-dated-lane",
+    "testorg-dated-copy",
     "testorg-mixed",
     "testorg-same-a",
   ]);
