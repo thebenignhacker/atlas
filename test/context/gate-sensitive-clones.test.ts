@@ -70,14 +70,15 @@ const PLAIN: Clone = {
 };
 
 /** Seed a throwaway atlas tree with one row and one event per clone, and the
- *  given commits and context cards, run the real publish gate against it, and
- *  return its exit status and artifact. */
+ *  given commits, context cards and AI summaries (keyed by slug), run the real
+ *  publish gate against it, and return its exit status and artifact. */
 function runGate(opts: {
   sensitiveRepos: string[];
   publicOwners: string[];
   clones: Clone[];
   cards?: Card[];
   commits?: Commit[];
+  summaries?: Record<string, string>;
 }) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-gate-clones-"));
   const dataDir = path.join(work, "data");
@@ -130,6 +131,11 @@ function runGate(opts: {
   const now = "2026-01-10T00:00:00.000Z";
   for (const c of opts.cards ?? [])
     card.run(c.id, "tooling", c.repoSlug, c.subject, c.claim, now, now, "fresh", "active", "public", 0, now, now);
+  const summary = db.prepare(
+    "INSERT INTO ai_outputs (id, entityType, entityId, task, output, generatedAt) VALUES (?,?,?,?,?,?)"
+  );
+  for (const [entityId, output] of Object.entries(opts.summaries ?? {}))
+    summary.run(createHash("md5").update(`summary:${entityId}`).digest("hex"), "repo", entityId, "summary", output, now);
   db.close();
 
   // Run from the repo root (tsconfig `@/` aliases resolve against cwd) with the
@@ -145,6 +151,7 @@ function runGate(opts: {
         repos: { slug: string }[];
         activity: { repoSlug: string | null; title: string; meta: string | null }[];
         contextCards: { id: string }[];
+        summaries: Record<string, string>;
       })
     : null;
   return { status: r.status ?? -1, out: `${r.stdout ?? ""}${r.stderr ?? ""}`, snapshot };
@@ -655,6 +662,35 @@ test("the snapshot replaces the whole token when free text extends a published n
   );
 });
 
+test("a published repository whose name extends the listed name is kept where it starts a line or follows a tab", () => {
+  // The reproduction of #85. The generator reads a newline or a tab as the end
+  // of a token, so it keeps my-vault, the published card's own name, as
+  // written. The gate reads the JSON text, where they are written \n and \t;
+  // it read the escape letter as part of the token after it, nmy-vault and
+  // tmy-vault, which no published card carries, and refused the snapshot.
+  const myVault: Clone = {
+    slug: "otherorg-my-vault",
+    name: "my-vault",
+    repoName: "my-vault",
+    owner: "otherorg",
+    lastCommitAt: "2026-01-20T00:00:00.000Z",
+  };
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [{ ...VAULTS[0], visibility: "private" }, myVault, PLAIN],
+    commits: [{ repoSlug: myVault.slug, sha: "8b9c0d1e", title: "publish:\tmy-vault weekly" }],
+    summaries: { [myVault.slug]: "Overview.\nmy-vault holds the docs." },
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.equal(r.snapshot.summaries[myVault.slug], "Overview.\nmy-vault holds the docs.");
+  assert.ok(
+    r.snapshot.activity.some((e) => e.repoSlug === myVault.slug && e.title === "publish:\tmy-vault weekly"),
+    "the commit title must be published as written"
+  );
+});
+
 test("the gate's listed-identifier check reads each word match as the whole token around it", async () => {
   const { listedIdentifierLeak } = await import("@/lib/snapshot");
   const cleared = new Set(["vault-docs", "otherorg-vault-docs"]);
@@ -673,4 +709,16 @@ test("the gate's listed-identifier check reads each word match as the whole toke
   assert.equal(listedIdentifierLeak("vault", "vaults, myvault and vault_docs", cleared), null);
   // An empty set counts every word match.
   assert.equal(listedIdentifierLeak("vault", "vault-docs", new Set()), "vault-docs");
+  // The text is JSON text: an escape sequence is read as the character it
+  // stands for, so a newline, a tab or a control character before a token is
+  // not part of it, and a word match right after one is found.
+  const json = (s: string): string => JSON.stringify({ text: s });
+  const myVault = new Set(["my-vault"]);
+  assert.equal(listedIdentifierLeak("vault", json("Overview.\nmy-vault\tmy-vault"), myVault), null);
+  assert.equal(listedIdentifierLeak("vault", json("a\u0001my-vault"), myVault), null);
+  assert.equal(listedIdentifierLeak("vault", json("Overview.\nvault holds it"), myVault), "vault");
+  assert.equal(listedIdentifierLeak("vault", json("Overview.\tvault-secrets"), myVault), "vault-secrets");
+  // An escaped backslash is one character, and the letter after it is the
+  // first letter of the next token.
+  assert.equal(listedIdentifierLeak("vault", json("C:\\nmy-vault"), myVault), "nmy-vault");
 });

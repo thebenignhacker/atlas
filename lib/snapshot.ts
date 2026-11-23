@@ -72,10 +72,40 @@ export function isCardPublishable(
   );
 }
 
+/** The characters the one-letter JSON escapes stand for. `\"`, `\\` and `\/`
+ *  stand for the character after the backslash. */
+const JSON_ESCAPES: Record<string, string> = { b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
+
+/**
+ * JSON text with each escape sequence replaced by the character it stands for:
+ * `\n` by a newline, `\t` by a tab, `\u0001` by U+0001, `\\` by one backslash.
+ *
+ * The gate's text checks read the JSON text of the artifact, where an escape
+ * is a backslash and a letter. Read as written, the letter joins the token
+ * after it: a published `crypto-census-data` at the start of a line was read
+ * as `ncrypto-census-data`, after a tab as `tcrypto-census-data`, and refused,
+ * while the generator, which redacts the text before it is serialized, read a
+ * newline or a tab as the end of a token and kept the name as written. The
+ * escapes are read left to right, so the `\\` of an escaped backslash is one
+ * character and the letter after it starts the next token.
+ */
+function unescapeJsonText(text: string): string {
+  return text.replace(
+    /\\(?:u([0-9a-fA-F]{4})|(.))/g,
+    (_escape, hex: string | undefined, c: string) =>
+      hex !== undefined ? String.fromCharCode(parseInt(hex, 16)) : (JSON_ESCAPES[c] ?? c)
+  );
+}
+
 /**
  * Whether a hidden (private or fork) repo name actually leaks into published
  * text, and if so as what. Returns the offending token, or null when the name
  * is absent or appears only inside identifiers that are themselves published.
+ *
+ * `text` is JSON text, as the gate checks the serialized artifact: each escape
+ * sequence in it is read as the character it stands for (unescapeJsonText),
+ * so an escaped control character is not part of the token after it, and a
+ * newline or a tab ends a token, as it does where the generator redacts.
  *
  * A plain `\b${name}\b` test does not work here: `\b` treats `-` as a boundary,
  * so a private `crypto-census` matches inside the PUBLIC `crypto-census-data`
@@ -96,7 +126,7 @@ export function hiddenNameLeak(
 ): string | null {
   const esc = hiddenName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tokens =
-    text.match(new RegExp(`(?<![\\w-])[\\w-]*${esc}[\\w-]*(?![\\w-])`, "gi")) ?? [];
+    unescapeJsonText(text).match(new RegExp(`(?<![\\w-])[\\w-]*${esc}[\\w-]*(?![\\w-])`, "gi")) ?? [];
   return tokens.find((t) => !publicIdentifiers.has(t.toLowerCase())) ?? null;
 }
 
@@ -114,6 +144,10 @@ export function hiddenNameLeak(
  * word match is. The gate passes the name, slug and repoName of each published
  * card, less the listed row's own slug, name and repoName, or an empty set.
  *
+ * `text` is JSON text, read as hiddenNameLeak reads it: an escape sequence is
+ * the character it stands for, so a word match right after a newline or a tab
+ * is found, and the letter of the escape is not part of the token around it.
+ *
  * Pure (no I/O) so the boundary can be tested in both directions.
  */
 export function listedIdentifierLeak(
@@ -123,7 +157,7 @@ export function listedIdentifierLeak(
 ): string | null {
   const esc = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const tokens =
-    text.match(new RegExp(`(?<![\\w-])[\\w-]*\\b${esc}\\b[\\w-]*(?![\\w-])`, "gi")) ?? [];
+    unescapeJsonText(text).match(new RegExp(`(?<![\\w-])[\\w-]*\\b${esc}\\b[\\w-]*(?![\\w-])`, "gi")) ?? [];
   return tokens.find((t) => !cleared.has(t.toLowerCase())) ?? null;
 }
 

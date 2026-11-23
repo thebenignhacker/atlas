@@ -37,8 +37,16 @@ interface Repo {
   isFork?: number;
 }
 
-/** Build a throwaway atlas tree + DB and run the real publish gate against it. */
-function runGate(opts: { repos: Repo[]; cardClaim: string; cardProject?: string }) {
+/** Build a throwaway atlas tree + DB and run the real publish gate against it.
+ *  `summaries` maps a repo slug to its AI summary; `commits` are commit events
+ *  with the subject as their title, as the scan writes them. */
+function runGate(opts: {
+  repos: Repo[];
+  cardClaim: string;
+  cardProject?: string;
+  summaries?: Record<string, string>;
+  commits?: { repoSlug: string; title: string }[];
+}) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-gate-work-"));
   const dataDir = path.join(work, "data");
   fs.mkdirSync(dataDir, { recursive: true });
@@ -83,6 +91,15 @@ function runGate(opts: { repos: Repo[]; cardClaim: string; cardProject?: string 
     now,
     now
   );
+  const summary = db.prepare(
+    "INSERT INTO ai_outputs (id, entityType, entityId, task, output, generatedAt) VALUES (?,?,?,?,?,?)"
+  );
+  for (const [entityId, output] of Object.entries(opts.summaries ?? {}))
+    summary.run(`summary-${entityId}`, "repo", entityId, "summary", output, now);
+  const commit = db.prepare(
+    "INSERT INTO activity (id, repoSlug, type, title, ts) VALUES (?,?,?,?,?)"
+  );
+  (opts.commits ?? []).forEach((c, i) => commit.run(`event-${i}`, c.repoSlug, "commit", c.title, now));
   db.close();
 
   // Run from the repo root (tsconfig `@/` aliases resolve against cwd) but point
@@ -175,6 +192,53 @@ test("a public repo whose name extends a private one still publishes", () => {
   });
   assert.equal(r.status, 0, `gate must pass; got:\n${r.out}`);
   assert.equal(r.published, true);
+});
+
+test("a public repo name that starts a line or follows a tab still publishes", () => {
+  // The reproduction of #85. The generator reads a newline or a tab as the end
+  // of a token, so it keeps crypto-census-data as written. The gate reads the
+  // JSON text, where they are written \n and \t; it read the escape letter as
+  // part of the token after it, ncrypto-census-data and tcrypto-census-data,
+  // which no repo publishes, and refused the snapshot.
+  const r = runGate({
+    repos: [
+      ...PUBLIC_ONLY,
+      { slug: "crypto-census-data", name: "crypto-census-data", repoName: "crypto-census-data", visibility: "public" },
+      { slug: "crypto-census", name: "crypto-census", repoName: "crypto-census", visibility: "private" },
+    ],
+    cardClaim: "Notes.\ncrypto-census-data is published weekly.",
+    summaries: { "crypto-census-data": "Intro.\ncrypto-census-data is the dataset." },
+    commits: [{ repoSlug: "crypto-census-data", title: "publish:\tcrypto-census-data weekly" }],
+  });
+  assert.equal(r.status, 0, `gate must pass; got:\n${r.out}`);
+  assert.equal(r.published, true);
+  const work = dirs[dirs.length - 1];
+  const snap = JSON.parse(fs.readFileSync(path.join(work, "public-snapshot.json"), "utf8"));
+  assert.equal(snap.summaries["crypto-census-data"], "Intro.\ncrypto-census-data is the dataset.");
+  assert.ok(
+    snap.activity.some((e: { title: string }) => e.title === "publish:\tcrypto-census-data weekly"),
+    "the commit title must be published as written"
+  );
+  assert.equal(snap.contextCards[0].claim, "Notes.\ncrypto-census-data is published weekly.");
+});
+
+test("a private name that starts a line or follows a tab still aborts the publish", () => {
+  // The card's project is published as written (sanitizeCard redacts only the
+  // subject, claim and detail), so the gate is what refuses it.
+  for (const cardProject of ["notes\ncrypto-census", "notes\tcrypto-census-secrets"]) {
+    const r = runGate({
+      repos: [
+        ...PUBLIC_ONLY,
+        { slug: "crypto-census-data", name: "crypto-census-data", repoName: "crypto-census-data", visibility: "public" },
+        { slug: "crypto-census", name: "crypto-census", repoName: "crypto-census", visibility: "private" },
+      ],
+      cardProject,
+      cardClaim: "benign text",
+    });
+    assert.notEqual(r.status, 0, `gate must abort on ${JSON.stringify(cardProject)}; got:\n${r.out}`);
+    assert.match(r.out, /hidden repo name "crypto-census" referenced in snapshot text \(as "crypto-census(-secrets)?"\)/);
+    assert.equal(r.published, false);
+  }
 });
 
 test("a bare mention of a private repo name aborts the publish", () => {
