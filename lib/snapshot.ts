@@ -143,6 +143,9 @@ export function hiddenNameLeak(
  * `cleared`, such as `vault-secrets`, is counted, and with an empty set every
  * word match is. The gate passes the name, slug and repoName of each published
  * card, less the listed row's own slug, name and repoName, or an empty set.
+ * The gate also looks for each distinctive token of a sensitive context card
+ * that is not a published card's name, passing the name, slug and repoName of
+ * each published card.
  *
  * `text` is JSON text, read as hiddenNameLeak reads it: an escape sequence is
  * the character it stands for, so a word match right after a newline or a tab
@@ -589,12 +592,12 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // beside a published card's vault-docs, would spell out the redacted name.
     // A token that is, in lower case, the name, slug or repoName of a published
     // card is left as written, since it is in the artifact anyway as the
-    // card's own. The gate's hidden-name check clears tokens against the same
-    // set, and its listed-identifier check against it less the listed
-    // repository's own slug, name and repoName, or against none for a row
-    // GitHub did not answer for (scripts/snapshot.ts). Every word match of the
-    // name lies inside one such token, and the tokens are found in one pass
-    // over the text.
+    // card's own. The gate's hidden-name check and its check of the tokens of
+    // sensitive cards clear tokens against the same set, and its
+    // listed-identifier check against it less the listed repository's own
+    // slug, name and repoName, or against none for a row GitHub did not answer
+    // for (scripts/snapshot.ts). Every word match of the name lies inside one
+    // such token, and the tokens are found in one pass over the text.
     const publishedIdentifiers = new Set(
       publicRepos
         .flatMap((r) => [r.name, r.slug, r.repoName])

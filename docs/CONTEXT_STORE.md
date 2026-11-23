@@ -156,12 +156,20 @@ published repo's own name. For the same reason the gate does not refuse a
 subject or claim that, trimmed and in lower case, is the name of a published
 repo: while a repo named `documentation-site` is published, a sensitive card
 whose subject is `documentation-site`, or whose claim is `Documentation-Site`,
-does not stop the snapshot. The card is still withheld, and the gate still
-refuses its other words that the gate looks for, such as `new-edge-host`, and
-its subject and its claim quoted whole (12 or more characters) when they are
-not a published repo's name, such as the claim "the docs-site moves to the new
-host". Sensitive content still appears in the password-gated owner view (that
-is not a public surface) and is flagged with a lock badge in the UI.
+does not stop the snapshot. Nor does the gate abort on an occurrence of one of
+the card's other words where the run of letters, digits, `_` and `-` around
+that occurrence is, compared in lower case, a published repo's own name, slug
+or GitHub name: the word is a published repo's slug (`otherorg-docs-site`) or
+GitHub name (`docs-site` for a repo cloned into a directory named `docs-web`),
+or part of a published repo's name, slug or GitHub name, joined to the rest of
+it by hyphens (`docs-site` while only `docs-site-v2` is published). A run that
+no published repo carries (`otherorg-docs-site-secrets`) is still refused. The
+card is still withheld, and the gate still refuses its other words that the
+gate looks for, such as `new-edge-host`, and its subject and its claim quoted
+whole (12 or more characters) when they are not a published repo's name, such
+as the claim "the docs-site moves to the new host". Sensitive content still
+appears in the password-gated owner view (that is not a public surface) and is
+flagged with a lock badge in the UI.
 
 > Upgrading from a database created before the `sensitive` column existed? Run
 > `npm run setup-db` once — it applies the column migration (idempotent, no data

@@ -15,6 +15,13 @@ import { initSchema } from "@/lib/db";
  * name, so a gate that refused it would stop every snapshot while the
  * sensitive card exists.
  *
+ * The same holds for an occurrence of another token of the card where the
+ * whole hyphen-joined token around it is a published repository's slug or
+ * GitHub name, or a published name, slug or GitHub name that the token is only
+ * part of: the artifact carries those in the repository card's slug, repoName
+ * and name fields, and lib/snapshot keeps them as written in free text. A
+ * whole token that no published repository carries is still refused.
+ *
  * Every test runs the real publish gate against a seeded database and asserts
  * on its exit status, the violations it prints and the artifact it writes.
  */
@@ -46,14 +53,29 @@ const hosting = (claim: string, subject = "hosting"): Card => ({
   sensitive: 1,
 });
 
-/** Seed otherorg/<published> (public, in the directory of that name;
- *  docs-site unless given) and testorg/other (private, listed in
- *  sensitiveRepos), the given cards, and the given commit titles on
- *  otherorg/<published>; run the real publish gate; and return its exit
- *  status, its violations and its artifact. */
-function runGate(opts: { cards: Card[]; commits?: string[]; published?: string }) {
-  const name = opts.published ?? "docs-site";
-  const publishedSlug = `otherorg-${name}`;
+interface Published {
+  slug: string;
+  /** The directory the clone sits in. */
+  name: string;
+  owner: string;
+  repoName: string;
+}
+
+/** otherorg/docs-site, in the directory docs-site. */
+const docsSite: Published = {
+  slug: "otherorg-docs-site",
+  name: "docs-site",
+  owner: "otherorg",
+  repoName: "docs-site",
+};
+
+/** Seed the given public repository (otherorg/docs-site, in the directory
+ *  docs-site, when none is given) and testorg/other (private, listed in
+ *  sensitiveRepos), the given cards, and the given commit titles on the public
+ *  repository; run the real publish gate; and return its exit status, its
+ *  violations and its artifact. */
+function runGate(opts: { cards: Card[]; commits?: string[]; published?: Published }) {
+  const published = opts.published ?? docsSite;
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-gate-card-"));
   const dataDir = path.join(work, "data");
   fs.mkdirSync(dataDir, { recursive: true });
@@ -76,15 +98,24 @@ function runGate(opts: { cards: Card[]; commits?: string[]; published?: string }
   const repo = db.prepare(
     "INSERT INTO repos (slug, name, path, owner, repoName, visibility, isFork, lastCommitAt) VALUES (?,?,?,?,?,?,?,?)"
   );
-  repo.run(publishedSlug, name, `/x/${name}`, "otherorg", name, "public", 0, at);
+  repo.run(
+    published.slug,
+    published.name,
+    `/x/${published.name}`,
+    published.owner,
+    published.repoName,
+    "public",
+    0,
+    at
+  );
   repo.run("testorg-other", "other", "/x/other", "testorg", "other", "private", 0, at);
   const event = db.prepare(
     "INSERT INTO activity (id, repoSlug, type, title, ts) VALUES (?,?,?,?,?)"
   );
   for (const title of opts.commits ?? []) {
     // A hash, as the scan makes an event id (lib/scanners/activity.ts).
-    const id = createHash("md5").update(`${publishedSlug}:${title}`).digest("hex");
-    event.run(id, publishedSlug, "commit", title, at);
+    const id = createHash("md5").update(`${published.slug}:${title}`).digest("hex");
+    event.run(id, published.slug, "commit", title, at);
   }
   const card = db.prepare(
     `INSERT INTO context_cards (id, project, repoSlug, subject, claim, derivedAt, lastVerifiedAt,
@@ -203,12 +234,20 @@ test("the gate still refuses the claim of a sensitive card that names a publishe
   assert.deepEqual(r.violations, ['sensitive card text from "tooling:hosting" present in snapshot']);
 });
 
+/** otherorg/documentation-site, in the directory documentation-site. */
+const documentationSite: Published = {
+  slug: "otherorg-documentation-site",
+  name: "documentation-site",
+  owner: "otherorg",
+  repoName: "documentation-site",
+};
+
 test("a sensitive card whose whole subject is a published repository's name does not stop the snapshot", () => {
   // The subject, 12 or more characters long, is the name of the published
   // otherorg/documentation-site, which the artifact carries as that
   // repository's own name.
   const r = runGate({
-    published: "documentation-site",
+    published: documentationSite,
     cards: [hosting("moves to the new host", "documentation-site")],
   });
   assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
@@ -224,7 +263,7 @@ test("a sensitive card whose whole claim is a published repository's name in ano
   // lib/snapshot keeps Documentation-Site, in lower case the published card's
   // name, so the commit title carries the claim as written.
   const r = runGate({
-    published: "documentation-site",
+    published: documentationSite,
     cards: [hosting("Documentation-Site")],
     commits: ["fix the Documentation-Site build"],
   });
@@ -239,7 +278,7 @@ test("the gate still refuses the claim of a sensitive card whose subject is a pu
   // published card quoting it publishes it whole. The gate reports the
   // sensitive card's text once: for the claim, not for the subject.
   const r = runGate({
-    published: "documentation-site",
+    published: documentationSite,
     cards: [
       hosting("the copy holds the staging notes", "documentation-site"),
       {
@@ -255,4 +294,131 @@ test("the gate still refuses the claim of a sensitive card whose subject is a pu
   assert.notEqual(r.status, 0, `the gate must refuse; got:\n${r.out}`);
   assert.equal(r.text, null, "no artifact may be written when the gate refuses");
   assert.deepEqual(r.violations, ['sensitive card text from "tooling:hosting" present in snapshot']);
+});
+
+/** otherorg/docs-site in the directory docs-web, so its name is not its
+ *  GitHub name. */
+const docsWeb: Published = {
+  slug: "otherorg-docs-web",
+  name: "docs-web",
+  owner: "otherorg",
+  repoName: "docs-site",
+};
+
+/** otherorg/docs-site-v2, in the directory docs-site-v2. */
+const docsSiteV2: Published = {
+  slug: "otherorg-docs-site-v2",
+  name: "docs-site-v2",
+  owner: "otherorg",
+  repoName: "docs-site-v2",
+};
+
+test("a sensitive card that names a published repository by its slug does not stop the snapshot", () => {
+  // The card's one distinctive token, otherorg-docs-site, is the slug of the
+  // published otherorg/docs-site and not its name.
+  const r = runGate({
+    cards: [hosting("the otherorg-docs-site moves to the new host")],
+    commits: ["fix the otherorg-docs-site build", "release otherorg-docs-site-v2"],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot && r.text !== null, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug), ["otherorg-docs-site"]);
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  assert.ok(!r.text.includes("tooling:hosting"), "the sensitive card's id must not appear");
+  assert.ok(!r.text.includes("moves to the new host"), "the sensitive card's claim must not appear");
+  // lib/snapshot keeps the published slug as written and redacts the token
+  // that extends it.
+  assert.deepEqual(r.snapshot.activity.map((e) => e.title).sort(), [
+    "fix the otherorg-docs-site build",
+    "release [private]",
+  ]);
+});
+
+test("a sensitive card that names a published repository by its slug in another letter case does not stop the snapshot", () => {
+  const r = runGate({
+    cards: [hosting("the OtherOrg-Docs-Site moves to the new host")],
+    commits: ["fix the otherorg-docs-site build"],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  // lib/snapshot keeps a token that is a published card's slug in any letter case.
+  assert.deepEqual(r.snapshot.activity.map((e) => e.title), ["fix the otherorg-docs-site build"]);
+});
+
+test("a sensitive card that names a published repository by its GitHub name does not stop the snapshot", () => {
+  // docs-site is the GitHub name of the published repository, whose clone sits
+  // in the directory docs-web, so no published repository is named docs-site.
+  const r = runGate({
+    published: docsWeb,
+    cards: [hosting("the docs-site moves to the new host")],
+    commits: ["fix the docs-site build", "release docs-site-v2"],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot && r.text !== null, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug), ["otherorg-docs-web"]);
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  assert.ok(!r.text.includes("tooling:hosting"), "the sensitive card's id must not appear");
+  assert.ok(!r.text.includes("moves to the new host"), "the sensitive card's claim must not appear");
+  // lib/snapshot keeps the published GitHub name as written and redacts the
+  // token that extends it.
+  assert.deepEqual(r.snapshot.activity.map((e) => e.title).sort(), [
+    "fix the docs-site build",
+    "release [private]",
+  ]);
+});
+
+test("a sensitive card that names part of a published repository's name does not stop the snapshot", () => {
+  // docs-site is part of the published docs-site-v2, joined to the rest of it
+  // by a hyphen, and no published repository is named docs-site.
+  const r = runGate({
+    published: docsSiteV2,
+    cards: [hosting("the docs-site moves to the new host")],
+    commits: ["release docs-site-v2", "fix the docs-site build"],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot && r.text !== null, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug), ["otherorg-docs-site-v2"]);
+  assert.deepEqual(r.snapshot.contextCards.map((c) => c.id), []);
+  assert.ok(!r.text.includes("tooling:hosting"), "the sensitive card's id must not appear");
+  assert.ok(!r.text.includes("moves to the new host"), "the sensitive card's claim must not appear");
+  // lib/snapshot keeps the published name the token is part of as written and
+  // redacts the token where it stands alone.
+  assert.deepEqual(r.snapshot.activity.map((e) => e.title).sort(), [
+    "fix the [private] build",
+    "release docs-site-v2",
+  ]);
+});
+
+test("the gate still refuses a token of a sensitive card whose whole token extends a published identifier", () => {
+  // Each published card carries, in its project, which sanitizeCard does not
+  // redact, a token that extends the published slug, GitHub name or name that
+  // the sensitive card's token is or is part of. No published repository
+  // carries that longer token.
+  const cases: [Published, string, string, string][] = [
+    [docsSite, "the otherorg-docs-site moves to the new host", "otherorg-docs-site-secrets", "otherorg-docs-site"],
+    [docsWeb, "the docs-site moves to the new host", "docs-site-secrets", "docs-site"],
+    [docsSiteV2, "the docs-site moves to the new host", "docs-site-v2-secrets", "docs-site"],
+  ];
+  for (const [published, claim, project, token] of cases) {
+    const r = runGate({
+      published,
+      cards: [
+        hosting(claim),
+        {
+          id: "tooling:edge",
+          project,
+          subject: "edge",
+          claim: "a published card",
+          visibility: "public",
+          sensitive: 0,
+        },
+      ],
+    });
+    assert.notEqual(r.status, 0, `the gate must refuse ${project}; got:\n${r.out}`);
+    assert.equal(r.text, null, `no artifact may be written when the gate refuses ${project}`);
+    assert.deepEqual(r.violations, [
+      `distinctive sensitive token "${token}" (from card "tooling:hosting") present in snapshot text`,
+    ]);
+  }
 });

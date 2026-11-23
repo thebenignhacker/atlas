@@ -356,17 +356,28 @@ function main() {
         // repo card is not looked for, and neither is a subject or claim that
         // is, trimmed and in lower case, such a name. The artifact carries that
         // name as the repo card's own, and lib/snapshot leaves it as written:
-        // it does not redact a sensitive token spelled as a published name, and
-        // in free text it keeps a token that is a published repo card's name,
-        // slug or repoName in any letter case. Looking for it would stop every
-        // snapshot while the sensitive card exists; check 2 skips a hidden name
-        // that is a published name for the same reason. Only names are skipped,
-        // as only names are left out of the sensitive tokens lib/snapshot
-        // redacts: a token that is a published slug or repoName and no
-        // published name is still looked for, as are the sensitive card's other
-        // tokens, and a subject or claim that holds a published name among
-        // other words is still looked for whole. In the loop below, the checks
-        // of its id make no such exception.
+        // it does not redact a sensitive token spelled as a published name.
+        // Looking for it would stop every snapshot while the sensitive card
+        // exists; check 2 skips a hidden name that is a published name for the
+        // same reason.
+        //
+        // A distinctive token that is not a published name is looked for as a
+        // word, and a word match also finds it inside a longer token, since
+        // `\b` treats `-` as a boundary: docs-site inside docs-site-v2. An
+        // occurrence is read as the whole token around it
+        // (listedIdentifierLeak) and is not counted when that token is, in
+        // lower case, the name, slug or repoName of a published repo card, as
+        // when the sensitive token is a published slug or repoName, or a
+        // hyphen-joined part of a published name, slug or repoName. The
+        // artifact carries those identifiers as the repo cards' own, and in
+        // free text lib/snapshot keeps a token that is one of them as written.
+        // The redaction in lib/snapshot and check 2 clear tokens against the
+        // same identifiers. A token no published repo card carries is still
+        // counted, such as otherorg-docs-site-secrets beside the published
+        // slug otherorg-docs-site, as are the sensitive card's other tokens,
+        // and a subject or claim that holds a published name among other words
+        // is still looked for whole. In the loop below, the checks of its id
+        // make no such exception.
         const publicCardIds = new Set(snapshot.contextCards.map((c) => c.id));
         for (const c of sensitiveCards) {
           if (publicCardIds.has(c.id))
@@ -385,8 +396,7 @@ function main() {
             ...distinctiveTokens(c.detail),
           ]) {
             if (publishedNames.has(tok.toLowerCase())) continue;
-            const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            if (new RegExp(`\\b${esc}\\b`, "i").test(json))
+            if (listedIdentifierLeak(tok, json, publishedIdentifiers) !== null)
               violations.push(
                 `distinctive sensitive token "${tok}" (from card "${c.id}") present in snapshot text`
               );
