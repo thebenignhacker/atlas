@@ -6,6 +6,7 @@ import {
   generatePublicSnapshot,
   distinctiveTokens,
   hiddenNameLeak,
+  sensitiveRepoClones,
   snapshotPath,
 } from "@/lib/snapshot";
 import { loadConfig } from "@/lib/config";
@@ -169,11 +170,16 @@ function main() {
       } else {
         const sensitiveRepoRows = db
           .prepare(
-            `SELECT slug, name FROM repos WHERE slug IN (${sensitiveSlugs
+            `SELECT slug, name, owner, repoName FROM repos WHERE slug IN (${sensitiveSlugs
               .map(() => "?")
               .join(",")})`
           )
-          .all(...sensitiveSlugs) as { slug: string; name: string }[];
+          .all(...sensitiveSlugs) as {
+          slug: string;
+          name: string;
+          owner: string | null;
+          repoName: string | null;
+        }[];
         // All active cards that are sensitive: flagged, under a sensitive repo,
         // or whose project maps to a sensitive slug. Mirrors lib/snapshot.
         const sensitiveCards = (
@@ -209,6 +215,14 @@ function main() {
               violations.push(`sensitive repo identifier "${token}" present in snapshot text`);
           }
         }
+        // The checks above look for the listed clone's own slug and name. Another
+        // clone of the same GitHub repository has a slug and directory name of
+        // its own, so also refuse any published card with the owner and repoName
+        // of a listed row.
+        for (const [listed, clone] of sensitiveRepoClones(sensitiveRepoRows, snapshot.repos))
+          violations.push(
+            `sensitive repo "${listed}" present in snapshot.repos through the clone "${clone}"`
+          );
         // A sensitive card must not appear by id, nor have its text surface via
         // any other card — both the whole trimmed claim/subject AND its
         // distinctive tokens (so a short secret like `prod-db-pw` quoted inside
