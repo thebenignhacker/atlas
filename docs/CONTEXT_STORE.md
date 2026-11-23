@@ -147,8 +147,15 @@ it by hyphens (`vault` in a published `vault-docs`), the gate does not abort on
 that occurrence if GitHub answered for the sensitive repo during the scan. A
 hyphenated token that no published repo carries (`vault-secrets`) is still
 refused, and so is such a token when it is the sensitive repo's own GitHub
-name. Sensitive content still appears in the password-gated owner view (that is
-not a public surface) and is flagged with a lock badge in the UI.
+name. A third exception covers sensitive cards: a word in a sensitive card's
+subject, claim or detail that is, in any letter case, the name of a published
+repo (`docs-site` in "the docs-site moves to the new host" while a repo named
+`docs-site` is published) is not refused as sensitive card text, since the
+snapshot leaves that name as written and the output carries it as the
+published repo's own name. The card is still withheld, and the gate still refuses its claim
+quoted whole and its other words that the gate looks for, such as
+`new-edge-host`. Sensitive content still appears in the password-gated owner
+view (that is not a public surface) and is flagged with a lock badge in the UI.
 
 > Upgrading from a database created before the `sensitive` column existed? Run
 > `npm run setup-db` once — it applies the column migration (idempotent, no data
