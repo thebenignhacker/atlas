@@ -95,6 +95,20 @@ test("the public snapshot's activity feed is ordered by event instant, latest fi
   );
 });
 
+test("the public snapshot's freshness dataAt is the latest commit instant, not the text maximum", async () => {
+  const snap = await snapshot();
+  assert.equal(snap.freshness.repos.dataAt, BETA_AT);
+  assert.equal(snap.freshness.activity.dataAt, BETA_AT);
+});
+
+test("the owner snapshot's freshness dataAt is the latest commit instant, not the text maximum", async () => {
+  process.env.ATLAS_DATA_DIR = dataDir;
+  const { generateOwnerSnapshot } = await import("@/lib/snapshot");
+  const snap = generateOwnerSnapshot({ ok: false, reason: "test" });
+  assert.equal(snap.freshness.repos.dataAt, BETA_AT);
+  assert.equal(snap.freshness.activity.dataAt, BETA_AT);
+});
+
 test("newestFirst orders times written with different UTC offsets by instant", () => {
   assert.deepEqual(
     [ALPHA_AT, null, GAMMA_AT, BETA_AT, "not a time"].sort(newestFirst),

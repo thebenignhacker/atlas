@@ -806,7 +806,12 @@ function publishedSection(
     // No fallback to the collector's database-wide clock. When no PUBLISHED row
     // carries a timestamp the honest answer is "none", not the write time of
     // whichever private or sensitive row happened to be newest.
-    dataAt: count === 0 || !present.length ? null : present.reduce((a, b) => (a > b ? a : b)),
+    // The latest INSTANT, not the text maximum: commit times carry the
+    // committer's UTC offset, so the larger string need not be the later time.
+    dataAt:
+      count === 0 || !present.length
+        ? null
+        : present.reduce((a, b) => (instantOf(b) > instantOf(a) ? b : a)),
     count,
     status: count === 0 && base.status === "ok" ? "empty" : base.status,
     note: null,
