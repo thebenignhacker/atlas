@@ -170,7 +170,7 @@ function main() {
       } else {
         const sensitiveRepoRows = db
           .prepare(
-            `SELECT slug, name, owner, repoName FROM repos WHERE slug IN (${sensitiveSlugs
+            `SELECT slug, name, owner, repoName, visibility FROM repos WHERE slug IN (${sensitiveSlugs
               .map(() => "?")
               .join(",")})`
           )
@@ -179,6 +179,7 @@ function main() {
           name: string;
           owner: string | null;
           repoName: string | null;
+          visibility: string | null;
         }[];
         // Every clone of a listed repository (each row with the owner and
         // repoName, in lower case, of a listed row) withholds the cards on it,
@@ -227,17 +228,39 @@ function main() {
         db.close();
 
         const publicSlugSet = new Set(snapshot.repos.map((r) => r.slug));
+        // The identifiers of a listed row looked for as words below: its slug,
+        // and its directory name unless a published card carries that name, in
+        // any letter case, as its own name, as when another owner's repository
+        // of the same name sits in the directory named after it. That name is in
+        // the artifact as the published repository's, so refusing it would stop
+        // every snapshot while both settings stand; check 2 skips such a hidden
+        // name for the same reason. The name is skipped only for a row GitHub
+        // answered for (visibility public or private), whose owner and repoName
+        // are then GitHub's: lib/snapshot withholds every row with them in any
+        // letter case, and the owner and repoName check below refuses a
+        // published card with them. A row GitHub did not answer for keeps the
+        // owner and name of its remote, which a transfer leaves out of date, so
+        // the published repository of the same name can be the listed one, and
+        // the name is still refused.
+        const publishedNames = new Set(snapshot.repos.map((r) => r.name.toLowerCase()));
+        const listedTokens = (r: (typeof sensitiveRepoRows)[number]): string[] =>
+          r.owner !== null &&
+          r.repoName !== null &&
+          (r.visibility === "public" || r.visibility === "private") &&
+          publishedNames.has(r.name.toLowerCase())
+            ? [r.slug]
+            : [r.slug, r.name];
         for (const r of sensitiveRepoRows) {
           if (publicSlugSet.has(r.slug))
             violations.push(`sensitive repo "${r.slug}" present in snapshot.repos`);
-          for (const token of [r.slug, r.name]) {
+          for (const token of listedTokens(r)) {
             if (!token) continue;
             const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             if (new RegExp(`\\b${esc}\\b`, "i").test(json))
               violations.push(`sensitive repo identifier "${token}" present in snapshot text`);
           }
         }
-        // The checks above look for the listed clone's own slug and name. Another
+        // The checks above look for the listed clone's own identifiers. Another
         // clone of the same GitHub repository has a slug and directory name of
         // its own, so also refuse any published card with the owner and repoName
         // of a listed row.
@@ -249,9 +272,11 @@ function main() {
         // leaves the others out of the text checked above. When a listed row's
         // owner or repoName is unknown, or out of date after a rename, no
         // published card has them, and the only rows that carry a listed slug
-        // or name can be clones the rule left out. So look for each listed slug
-        // and name, as a word, in the slug and directory name of every clone of
-        // a published repository that is not itself published.
+        // or name can be clones the rule left out. So look for the identifiers
+        // listedTokens gives for each listed row, as words, in the slug and
+        // directory name of every clone of a published repository that is not
+        // itself published. listedTokens leaves out a name only for a row GitHub
+        // answered for, whose owner and repoName are GitHub's.
         const publishedByKey = new Map<string, string>();
         for (const r of snapshot.repos)
           if (r.owner !== null && r.repoName !== null)
@@ -260,7 +285,7 @@ function main() {
           const published = publishedByKey.get(repoKey(row.owner, row.repoName));
           if (published === undefined || publicSlugSet.has(row.slug)) continue;
           for (const listedRow of sensitiveRepoRows) {
-            for (const token of [listedRow.slug, listedRow.name]) {
+            for (const token of listedTokens(listedRow)) {
               if (!token) continue;
               const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
               const word = new RegExp(`\\b${esc}\\b`, "i");
