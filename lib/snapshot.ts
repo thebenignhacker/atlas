@@ -323,6 +323,32 @@ function sanitizeRepo(repo: RepoWithSignals): RepoWithSignals {
 }
 
 /**
+ * A commit time as milliseconds since the epoch, for ordering two of them. The
+ * scan records lastCommitAt with the committer's UTC offset (git log
+ * --format=%cI), so two times written with different offsets need not sort as
+ * text in the order they happened: 2026-03-02T01:00:00+00:00 sorts after
+ * 2026-03-01T23:30:00-07:00, which is five and a half hours later. A null or
+ * unparseable time is -Infinity, below each parsed one.
+ */
+function commitInstant(at: string | null): number {
+  const ms = at === null ? NaN : Date.parse(at);
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
+/** The commit sha an activity event's meta records ({"sha": ...}), or null. */
+function metaSha(meta: string | null): string | null {
+  if (meta === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(meta);
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const sha = (parsed as { sha?: unknown }).sha;
+    return typeof sha === "string" && sha !== "" ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Build the public snapshot from the full local database. Includes ONLY public,
  * non-fork repos. Private repos, forks, todos, and local paths never appear.
  * Run locally via `npm run snapshot`; the result is safe to commit and deploy.
@@ -396,33 +422,59 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // worktree or scratch checkout) is a second row with the same owner and
     // repoName, and publishing both shows the repository twice and counts it
     // twice. Rows are grouped by owner and repoName, compared in lower case, and
-    // each group keeps one of its rows and drops the rest, merging nothing into
-    // the kept row (its slug is the card's URL): the row whose name equals its
-    // repoName in lower case (the clone in the directory named after the
-    // repository), else the row with the greatest lastCommitAt (compared as
-    // strings, a null lowest), else the row with the smallest slug. A row with a
-    // null owner or a null repoName is in no group and is kept.
+    // each group publishes one card, built on the row of one clone (its slug is
+    // the card's URL): the row whose name equals its repoName in lower case (the
+    // clone in the directory named after the repository), else the row with the
+    // newest lastCommitAt, else the row with the smallest slug. The card's last
+    // commit (lastCommitAt, lastCommitSha, lastCommitMsg) and commitCount30d are
+    // those of the group's row with the newest lastCommitAt (on a tie the card's
+    // own row, then the smallest slug), so a newer commit in another clone is not
+    // hidden behind the clone in the named directory. lastCommitAt is compared
+    // as an instant (commitInstant), a null lowest. A row with a null owner or a
+    // null repoName is in no group and is published as it is.
     const inNamedDir = (r: Repo): boolean =>
       r.repoName !== null && r.name.toLowerCase() === r.repoName.toLowerCase();
     const keptOver = (a: Repo, b: Repo): boolean => {
       if (inNamedDir(a) !== inNamedDir(b)) return inNamedDir(a);
-      if (a.lastCommitAt !== b.lastCommitAt) {
-        if (a.lastCommitAt === null) return false;
-        if (b.lastCommitAt === null) return true;
-        return a.lastCommitAt > b.lastCommitAt;
-      }
+      const at = commitInstant(a.lastCommitAt);
+      const bt = commitInstant(b.lastCommitAt);
+      if (at !== bt) return at > bt;
       return a.slug < b.slug;
     };
-    const keptByRepo = new Map<string, Repo>();
+    const clonesByRepo = new Map<string, Repo[]>();
     for (const r of publishableRows) {
       const key = repoKey(r);
       if (key === null) continue;
-      const kept = keptByRepo.get(key);
-      if (kept === undefined || keptOver(r, kept)) keptByRepo.set(key, r);
+      const clones = clonesByRepo.get(key);
+      if (clones === undefined) clonesByRepo.set(key, [r]);
+      else clones.push(r);
     }
-    const publicRepos = publishableRows.filter((r) => {
-      const key = repoKey(r);
-      return key === null || keptByRepo.get(key) === r;
+    // The card of each publishable row, by the row's slug: the row itself when
+    // it is in no group, else its group's card. The activity feed below files
+    // each clone's events under this card.
+    const cardOf = new Map<string, Repo>();
+    for (const r of publishableRows) if (repoKey(r) === null) cardOf.set(r.slug, r);
+    for (const clones of clonesByRepo.values()) {
+      const kept = clones.reduce((k, r) => (keptOver(r, k) ? r : k));
+      const newest = clones.reduce((n, r) => {
+        const rt = commitInstant(r.lastCommitAt);
+        const nt = commitInstant(n.lastCommitAt);
+        if (rt !== nt) return rt > nt ? r : n;
+        if (r === kept || n === kept) return kept;
+        return r.slug < n.slug ? r : n;
+      });
+      const card: Repo = {
+        ...kept,
+        lastCommitAt: newest.lastCommitAt,
+        lastCommitSha: newest.lastCommitSha,
+        lastCommitMsg: newest.lastCommitMsg,
+        commitCount30d: newest.commitCount30d,
+      };
+      for (const r of clones) cardOf.set(r.slug, card);
+    }
+    const publicRepos = publishableRows.flatMap((r) => {
+      const card = cardOf.get(r.slug);
+      return card !== undefined && card.slug === r.slug ? [card] : [];
     });
     const slugs = new Set(publicRepos.map((r) => r.slug));
 
@@ -496,11 +548,48 @@ export function generatePublicSnapshot(): PublicSnapshot {
       )
       .sort((a, b) => (b.lastCommitAt ?? "").localeCompare(a.lastCommitAt ?? ""));
 
-    const activity = (
-      db.prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000").all() as ActivityEvent[]
-    )
-      .filter((e) => e.repoSlug && slugs.has(e.repoSlug))
-      .map((e) => ({ ...e, title: redact(e.title) ?? "", meta: redact(e.meta) }));
+    // Each publishable clone's events are published under its card's slug. An
+    // event of another clone than the card's own is published with a meta of
+    // its sha and the card's name (the shape the scan writes), or with none
+    // when its meta records no sha, so its meta does not name the directory of
+    // a clone that is not a card. The scan writes an event per commit per clone
+    // (lib/scanners/activity.ts), so a commit two clones hold can be in the
+    // table twice: an event whose meta names a sha already published for the
+    // same card, with the same type, time and title, is dropped, and the card's
+    // own clone's event is the copy kept.
+    const activity: ActivityEvent[] = [];
+    const commitIndex = new Map<string, number>();
+    for (const e of db
+      .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT 4000")
+      .all() as ActivityEvent[]) {
+      const card = e.repoSlug ? cardOf.get(e.repoSlug) : undefined;
+      if (card === undefined) continue;
+      const own = e.repoSlug === card.slug;
+      const sha = metaSha(e.meta);
+      const meta = own
+        ? e.meta
+        : sha === null
+          ? null
+          : JSON.stringify({ sha, repo: card.name });
+      const event: ActivityEvent = {
+        ...e,
+        repoSlug: card.slug,
+        title: redact(e.title) ?? "",
+        meta: redact(meta),
+      };
+      if (sha === null) {
+        activity.push(event);
+        continue;
+      }
+      const commit = JSON.stringify([card.slug, e.type, sha, e.ts, e.title]);
+      const at = commitIndex.get(commit);
+      if (at === undefined) {
+        commitIndex.set(commit, activity.length);
+        activity.push(event);
+      } else if (own) {
+        activity[at] = event;
+      }
+    }
 
     // AI summaries only for public repos (redacted as well).
     const summaries: Record<string, string> = {};
