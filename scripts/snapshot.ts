@@ -246,11 +246,17 @@ function main() {
         // refuses a published card with them. A row GitHub did not answer for
         // keeps the owner and name of its remote, which a transfer leaves out of
         // date, so the published repository of the same name can be the listed
-        // one, and the name is still refused.
+        // one, and the name is still refused. So is the name of a row whose clone
+        // sits in a directory named otherwise than its repoName, as after a
+        // rename on GitHub: a published card that carries the directory name
+        // need not carry that repoName, and neither the redaction in lib/snapshot
+        // nor the text checks here look for a bare repoName, so skipping the name
+        // would let free text name the listed repository by its GitHub name.
         const publishedNames = new Set(snapshot.repos.map((r) => r.name.toLowerCase()));
         const listedTokens = (r: (typeof sensitiveRepoRows)[number]): string[] =>
           r.owner !== null &&
           r.repoName !== null &&
+          r.repoName.toLowerCase() === r.name.toLowerCase() &&
           (r.visibility === "public" || r.visibility === "private") &&
           publishedNames.has(r.name.toLowerCase())
             ? [r.slug, `${r.owner}/${r.repoName}`]
