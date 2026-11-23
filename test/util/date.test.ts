@@ -25,6 +25,15 @@ test("months take over after 90 days", () => {
   assert.equal(relativeTime(daysBefore(400), NOW), "1y ago");
 });
 
+test("a time after the clock reads as a day, never as a negative age", () => {
+  // NOW is 18:00 UTC on 2026-10-17. A committer whose clock runs ahead can
+  // write a time after it.
+  assert.equal(relativeTime("2026-10-17T21:00:00Z", NOW), "today");
+  assert.equal(relativeTime("2026-10-17T23:59:59-07:00", NOW), "2026-10-18");
+  assert.equal(relativeTime("2026-10-18T00:00:00Z", NOW), "2026-10-18");
+  assert.equal(relativeTime("2026-10-25T12:00:00Z", NOW), "2026-10-25");
+});
+
 test("days, today and yesterday are unchanged", () => {
   assert.equal(relativeTime(NOW.toISOString(), NOW), "today");
   assert.equal(relativeTime(daysBefore(1), NOW), "yesterday");

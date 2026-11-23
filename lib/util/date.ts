@@ -20,6 +20,13 @@ export function stalenessBucket(days: number | null): StalenessBucket {
 export function relativeTime(iso: string | null, now = new Date()): string {
   const d = daysSince(iso, now);
   if (d === null) return "never";
+  // A time after the clock (a committer whose clock runs ahead writes one) has
+  // no age: on the clock's UTC day it reads "today", on a later day as its UTC
+  // date, never as a negative count of days.
+  if (d < 0) {
+    const day = utcDate(iso);
+    return day === null || day === utcDate(now.toISOString()) ? "today" : day;
+  }
   if (d === 0) return "today";
   if (d === 1) return "yesterday";
   if (d < 7) return `${d}d ago`;

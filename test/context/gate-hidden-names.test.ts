@@ -222,6 +222,33 @@ test("a public repo name that starts a line or follows a tab still publishes", (
   assert.equal(snap.contextCards[0].claim, "Notes.\ncrypto-census-data is published weekly.");
 });
 
+test("a private name glued to a preceding or following word is redacted, and the publish goes through", () => {
+  // The reproduction of #93. The gate reads a hidden name inside any token,
+  // mycrypto-census and crypto-censusx included, while the generator matched
+  // the name as a word only, kept both tokens as written, and the gate refused
+  // the snapshot. The generator now redacts each token the gate reads.
+  const r = runGate({
+    repos: [
+      ...PUBLIC_ONLY,
+      { slug: "crypto-census-data", name: "crypto-census-data", repoName: "crypto-census-data", visibility: "public" },
+      { slug: "crypto-census", name: "crypto-census", repoName: "crypto-census", visibility: "private" },
+    ],
+    cardClaim: "Merged from mycrypto-census into crypto-census-data.",
+    summaries: { "crypto-census-data": "Fed by crypto-censusx." },
+    commits: [{ repoSlug: "crypto-census-data", title: "import MyCrypto-Census and crypto-censusx" }],
+  });
+  assert.equal(r.status, 0, `gate must pass; got:\n${r.out}`);
+  assert.equal(r.published, true);
+  const work = dirs[dirs.length - 1];
+  const snap = JSON.parse(fs.readFileSync(path.join(work, "public-snapshot.json"), "utf8"));
+  assert.equal(snap.contextCards[0].claim, "Merged from [private] into crypto-census-data.");
+  assert.equal(snap.summaries["crypto-census-data"], "Fed by [private].");
+  assert.ok(
+    snap.activity.some((e: { title: string }) => e.title === "import [private] and [private]"),
+    `the commit title must be redacted; got ${JSON.stringify(snap.activity.map((e: { title: string }) => e.title))}`
+  );
+});
+
 test("a private name that starts a line or follows a tab still aborts the publish", () => {
   // The card's project is published as written (sanitizeCard redacts only the
   // subject, claim and detail), so the gate is what refuses it.
