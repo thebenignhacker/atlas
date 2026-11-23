@@ -32,9 +32,13 @@ after(() => {
 interface Clone {
   slug: string;
   name: string;
-  repoName: string;
+  /** null: the scan could not read the repository from the clone's remote. */
+  repoName: string | null;
   lastCommitAt: string;
-  owner?: string;
+  /** Defaults to testorg; null as for repoName. */
+  owner?: string | null;
+  /** Defaults to public; "unknown" when the clone was not enriched. */
+  visibility?: string;
 }
 
 /** A public, active context card attached to a clone by its repoSlug. */
@@ -53,8 +57,8 @@ const PLAIN: Clone = {
   lastCommitAt: "2026-01-10T00:00:00.000Z",
 };
 
-/** Seed a throwaway atlas tree with one public row and one event per clone, and
- *  the given context cards, run the real publish gate against it, and return its
+/** Seed a throwaway atlas tree with one row and one event per clone, and the
+ *  given context cards, run the real publish gate against it, and return its
  *  exit status and artifact. */
 function runGate(opts: {
   sensitiveRepos: string[];
@@ -87,7 +91,8 @@ function runGate(opts: {
     "INSERT INTO activity (id, repoSlug, type, title, ts) VALUES (?,?,?,?,?)"
   );
   for (const c of opts.clones) {
-    repo.run(c.slug, c.name, `/x/${c.name}`, c.owner ?? "testorg", c.repoName, "public", 0, c.lastCommitAt);
+    const owner = c.owner === undefined ? "testorg" : c.owner;
+    repo.run(c.slug, c.name, `/x/${c.name}`, owner, c.repoName, c.visibility ?? "public", 0, c.lastCommitAt);
     event.run(`commit-${c.slug}`, c.slug, "commit", `a commit in ${c.name}`, c.lastCommitAt);
   }
   const card = db.prepare(
@@ -219,4 +224,70 @@ test("the gate refuses a published card that quotes a card on another clone of a
   assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
   assert.equal(r.snapshot, null, "no artifact may be written");
   assert.match(r.out, /sensitive card text from "tooling:copy-fact" present in snapshot/);
+});
+
+test("the gate refuses when the listed clone's repository is unknown and the clone that carries its name is not published", () => {
+  // The listed clone vlt has no owner or repoName (its remote names no GitHub
+  // repository the scan can read), so nothing ties it to testorg/vault. Of the
+  // other two clones of testorg/vault the one-card rule publishes the newest,
+  // scratch9, and drops vlt-copy, the only one whose slug and directory name
+  // carry the listed identifiers.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vlt"],
+    publicOwners: ["testorg"],
+    clones: [
+      { slug: "testorg-vlt", name: "vlt", owner: null, repoName: null, visibility: "unknown", lastCommitAt: "2026-01-01T00:00:00.000Z" },
+      { slug: "testorg-vlt-copy", name: "vlt-copy", repoName: "vault", lastCommitAt: "2026-02-01T00:00:00.000Z" },
+      { slug: "testorg-scratch9", name: "scratch9", repoName: "vault", lastCommitAt: "2026-03-01T00:00:00.000Z" },
+      PLAIN,
+    ],
+  });
+  assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.snapshot, null, "no artifact may be written");
+  assert.match(
+    r.out,
+    /sensitive repo identifier "vlt" names "testorg-vlt-copy", a clone of the published repository "testorg-scratch9"/
+  );
+});
+
+test("the gate refuses when the listed clone records the repository's old name and the clone that carries it is not published", () => {
+  // testorg/oldname was renamed to newname. The listed clone oldname still
+  // records the old name, so no published card has its owner and repoName. The
+  // one-card rule publishes the clone in the directory named newname and drops
+  // oldname-wt, the only clone of it whose slug and directory name carry the
+  // listed identifiers.
+  const r = runGate({
+    sensitiveRepos: ["testorg-oldname"],
+    publicOwners: ["testorg"],
+    clones: [
+      { slug: "testorg-oldname", name: "oldname", repoName: "oldname", visibility: "unknown", lastCommitAt: "2026-01-01T00:00:00.000Z" },
+      { slug: "testorg-oldname-wt", name: "oldname-wt", repoName: "newname", lastCommitAt: "2026-03-01T00:00:00.000Z" },
+      { slug: "testorg-newname", name: "newname", repoName: "newname", lastCommitAt: "2026-02-01T00:00:00.000Z" },
+      PLAIN,
+    ],
+  });
+  assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.snapshot, null, "no artifact may be written");
+  assert.match(
+    r.out,
+    /sensitive repo identifier "oldname" names "testorg-oldname-wt", a clone of the published repository "testorg-newname"/
+  );
+});
+
+test("a clone left out by the one-card rule that carries no listed identifier does not stop the snapshot", () => {
+  // plain-wt is a second clone of testorg/plain; the one-card rule publishes
+  // the clone in the directory named plain. Neither carries "testorg-vlt" or
+  // "vlt", so the gate writes the snapshot.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vlt"],
+    publicOwners: ["testorg"],
+    clones: [
+      { slug: "testorg-vlt", name: "vlt", owner: null, repoName: null, visibility: "unknown", lastCommitAt: "2026-01-01T00:00:00.000Z" },
+      PLAIN,
+      { slug: "testorg-plain-wt", name: "plain-wt", repoName: "plain", lastCommitAt: "2026-02-01T00:00:00.000Z" },
+    ],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug), ["testorg-plain"]);
 });
