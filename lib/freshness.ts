@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
 import { getMeta } from "@/lib/db";
 import { lastRun } from "@/lib/scan-runs";
+import { ACTIVITY_NEWEST_FIRST } from "@/lib/util/date";
 import type { SectionFreshness, SectionStatus, SnapshotFreshness } from "@/lib/freshness-shared";
 
 /**
@@ -116,13 +117,23 @@ export function computeFreshness(
 
   const out: SnapshotFreshness = {
     repos: section(db, builtAt, {
-      dataAt: scalar(db, "SELECT max(lastCommitAt) AS v FROM repos"),
+      // Latest by instant, not max() of the text: commit times carry the
+      // committer's UTC offset (git log --format=%cI), so the larger string
+      // need not be the later time. julianday() applies the offset; an
+      // unparseable time is NULL and sorts last; the text breaks a tie.
+      dataAt: scalar(
+        db,
+        "SELECT lastCommitAt AS v FROM repos WHERE lastCommitAt IS NOT NULL ORDER BY julianday(lastCommitAt) DESC, lastCommitAt DESC LIMIT 1"
+      ),
       collectedAt: lastScanAt,
       count: count(db, "repos"),
       stage: "scan",
     }),
     activity: section(db, builtAt, {
-      dataAt: scalar(db, "SELECT max(ts) AS v FROM activity"),
+      dataAt: scalar(
+        db,
+        `SELECT ts AS v FROM activity WHERE ts IS NOT NULL ORDER BY ${ACTIVITY_NEWEST_FIRST} LIMIT 1`
+      ),
       collectedAt: lastScanAt,
       count: count(db, "activity"),
       stage: "scan",
