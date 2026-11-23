@@ -342,6 +342,20 @@ function main() {
         // any other card — both the whole trimmed claim/subject AND its
         // distinctive tokens (so a short secret like `prod-db-pw` quoted inside
         // a public card is still caught, not just long verbatim claims).
+        //
+        // A distinctive token that is, in lower case, the name of a published
+        // repo card is not looked for. The artifact carries that name as the
+        // repo card's own, and lib/snapshot leaves it as written: it does not
+        // redact a sensitive token spelled as a published name, and in free
+        // text it keeps a token that is a published repo card's name, slug or
+        // repoName in any letter case. Looking for it would stop every snapshot
+        // while the sensitive card exists; check 2 skips a hidden name that is
+        // a published name for the same reason. Only names are skipped, as only
+        // names are left out of the sensitive tokens lib/snapshot redacts: a
+        // token that is a published slug or repoName and no published name is
+        // still looked for, as are the sensitive card's other tokens. In the
+        // loop below, the checks of its id and of its subject and claim whole
+        // make no such exception.
         const publicCardIds = new Set(snapshot.contextCards.map((c) => c.id));
         for (const c of sensitiveCards) {
           if (publicCardIds.has(c.id))
@@ -358,6 +372,7 @@ function main() {
             ...distinctiveTokens(c.claim),
             ...distinctiveTokens(c.detail),
           ]) {
+            if (publishedNames.has(tok.toLowerCase())) continue;
             const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             if (new RegExp(`\\b${esc}\\b`, "i").test(json))
               violations.push(
