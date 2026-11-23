@@ -31,6 +31,36 @@ export function relativeTime(iso: string | null, now = new Date()): string {
   return `${Math.floor(d / 365)}y ago`;
 }
 
+/**
+ * An ISO time as milliseconds since the epoch, for ordering two of them. The
+ * scan records commit times with the committer's UTC offset (git log
+ * --format=%cI), so two times written with different offsets need not sort as
+ * text in the order they happened: 2026-03-02T01:00:00+00:00 sorts after
+ * 2026-03-01T23:30:00-07:00 as text, yet is five and a half hours earlier. A
+ * null or unparseable time is -Infinity, below each parsed one.
+ */
+export function instantOf(iso: string | null | undefined): number {
+  const ms = iso == null ? NaN : Date.parse(iso);
+  return Number.isNaN(ms) ? -Infinity : ms;
+}
+
+/**
+ * A sort comparator putting the later instant first (instantOf), a null or
+ * unparseable time last. Two equal instants compare as 0.
+ */
+export function newestFirst(a: string | null | undefined, b: string | null | undefined): number {
+  const x = instantOf(a);
+  const y = instantOf(b);
+  return x === y ? 0 : y > x ? 1 : -1;
+}
+
+/**
+ * SQL ordering an activity query by its ts column as an instant, latest first.
+ * SQLite's julianday() applies a +HH:MM / -HH:MM / Z suffix; a ts it cannot
+ * parse is NULL and sorts after each parsed one. The text of ts breaks a tie.
+ */
+export const ACTIVITY_NEWEST_FIRST = "julianday(ts) DESC, ts DESC";
+
 /** The UTC calendar day (YYYY-MM-DD) of an ISO time, or null when unparseable. */
 export function utcDate(iso: string | null): string | null {
   if (!iso) return null;

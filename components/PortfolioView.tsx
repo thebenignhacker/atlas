@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { RepoWithSignals } from "@/lib/queries";
 import type { StalenessBucket } from "@/lib/types";
+import { newestFirst } from "@/lib/util/date";
 import { RepoCard } from "@/components/RepoCard";
 import { OverviewCharts } from "@/components/OverviewCharts";
 import { ShowMore } from "@/components/ShowMore";
@@ -32,7 +33,7 @@ function sortRepos(list: RepoWithSignals[], sort: Sort): RepoWithSignals[] {
       case "attention":
         return b.signals.attention.length - a.signals.attention.length;
       default:
-        return (b.lastCommitAt ?? "").localeCompare(a.lastCommitAt ?? "");
+        return newestFirst(a.lastCommitAt, b.lastCommitAt);
     }
   });
 }
@@ -156,10 +157,7 @@ export function PortfolioView({
     }
     return Array.from(map.entries())
       .map(([name, list]) => ({ name, repos: sortRepos(list, sort) }))
-      .sort(
-        (a, b) =>
-          (b.repos[0]?.lastCommitAt ?? "").localeCompare(a.repos[0]?.lastCommitAt ?? "")
-      );
+      .sort((a, b) => newestFirst(a.repos[0]?.lastCommitAt, b.repos[0]?.lastCommitAt));
   }, [primary, grouped, sort]);
 
   const flatPrimary = useMemo(() => sortRepos(primary, sort), [primary, sort]);

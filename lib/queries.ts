@@ -18,6 +18,7 @@ import type { SessionBoard } from "@/lib/session-board-shared";
 import { EMPTY_USAGE, type UsageRollup } from "@/lib/usage/types";
 import { DEFAULT_PUBLIC_USAGE_PROJECTS } from "@/lib/usage/catalog-meta";
 import { loadConfig } from "@/lib/config";
+import { ACTIVITY_NEWEST_FIRST, newestFirst } from "@/lib/util/date";
 import type {
   ActivityEvent,
   ContextCard,
@@ -107,7 +108,7 @@ export function getRepos(mode: ResolvedMode): RepoWithSignals[] {
         signals: computeSignals(r),
         openTodos: todoMap.get(r.slug) ?? 0,
       }))
-      .sort((a, b) => (b.lastCommitAt ?? "").localeCompare(a.lastCommitAt ?? ""));
+      .sort((a, b) => newestFirst(a.lastCommitAt, b.lastCommitAt));
     repoCache = result;
     return result;
   } finally {
@@ -223,7 +224,7 @@ export function getActivity(mode: ResolvedMode, limit = 300): ActivityEvent[] {
   const db = getReadDb();
   try {
     return db
-      .prepare("SELECT * FROM activity ORDER BY ts DESC LIMIT ?")
+      .prepare(`SELECT * FROM activity ORDER BY ${ACTIVITY_NEWEST_FIRST} LIMIT ?`)
       .all(limit) as ActivityEvent[];
   } finally {
     db.close();
@@ -325,7 +326,7 @@ export function getActivityForRepo(
   const db = getReadDb();
   try {
     return db
-      .prepare("SELECT * FROM activity WHERE repoSlug = ? ORDER BY ts DESC LIMIT ?")
+      .prepare(`SELECT * FROM activity WHERE repoSlug = ? ORDER BY ${ACTIVITY_NEWEST_FIRST} LIMIT ?`)
       .all(slug, limit) as ActivityEvent[];
   } finally {
     db.close();
