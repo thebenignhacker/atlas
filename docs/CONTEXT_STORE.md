@@ -137,8 +137,14 @@ GitHub answered for the sensitive repo during the scan. The exception applies
 only when the sensitive repo's clone sits in the directory named after its
 GitHub repository. The sensitive repo's slug is still refused, and so are its
 GitHub owner and name written as `owner/name`, alone or in a GitHub URL, in any
-letter case. Sensitive content still appears in the password-gated owner view
-(that is not a public surface) and is flagged with a lock badge in the UI.
+letter case. A second exception: when the sensitive repo's name or slug is only
+part of a published repo's own name, slug or GitHub name, joined to the rest of
+it by hyphens (`vault` in a published `vault-docs`), the gate does not abort on
+that occurrence if GitHub answered for the sensitive repo during the scan. A
+hyphenated token that no published repo carries (`vault-secrets`) is still
+refused, and so is such a token when it is the sensitive repo's own GitHub
+name. Sensitive content still appears in the password-gated owner view (that is
+not a public surface) and is flagged with a lock badge in the UI.
 
 > Upgrading from a database created before the `sensitive` column existed? Run
 > `npm run setup-db` once — it applies the column migration (idempotent, no data

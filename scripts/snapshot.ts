@@ -6,6 +6,7 @@ import {
   generatePublicSnapshot,
   distinctiveTokens,
   hiddenNameLeak,
+  listedIdentifierLeak,
   sensitiveRepoClones,
   snapshotPath,
 } from "@/lib/snapshot";
@@ -261,13 +262,41 @@ function main() {
           publishedNames.has(r.name.toLowerCase())
             ? [r.slug, `${r.owner}/${r.repoName}`]
             : [r.slug, r.name];
+        // A word match also finds a listed identifier inside a longer token,
+        // since `\b` treats `-` as a boundary: vault inside vault-docs. Such a
+        // token is not counted when it is the name, slug or repoName of a
+        // published card (the identifiers check 2 clears tokens against) and
+        // not the listed row's own slug, name or repoName, and only for a row
+        // GitHub answered for. That row's owner and repoName are GitHub's, and
+        // lib/snapshot withholds, and the check below refuses, every card with
+        // them, so a published card is another repository. A row GitHub did
+        // not answer for keeps the owner and name of its remote, which a
+        // transfer or a rename leaves out of date, so a published card whose
+        // name extends the listed name can be the listed repository in another
+        // directory, and every word match of its identifiers still counts.
+        const publishedIdentifiers = new Set(
+          snapshot.repos
+            .flatMap((p) => [p.name, p.slug, p.repoName])
+            .filter((s): s is string => !!s)
+            .map((s) => s.toLowerCase())
+        );
+        const clearedFor = (r: (typeof sensitiveRepoRows)[number]): Set<string> => {
+          if (
+            r.owner === null ||
+            r.repoName === null ||
+            (r.visibility !== "public" && r.visibility !== "private")
+          )
+            return new Set();
+          const own = new Set([r.slug, r.name, r.repoName].map((s) => s.toLowerCase()));
+          return new Set([...publishedIdentifiers].filter((s) => !own.has(s)));
+        };
         for (const r of sensitiveRepoRows) {
           if (publicSlugSet.has(r.slug))
             violations.push(`sensitive repo "${r.slug}" present in snapshot.repos`);
+          const cleared = clearedFor(r);
           for (const token of listedTokens(r)) {
             if (!token) continue;
-            const esc = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            if (new RegExp(`\\b${esc}\\b`, "i").test(json))
+            if (listedIdentifierLeak(token, json, cleared) !== null)
               violations.push(`sensitive repo identifier "${token}" present in snapshot text`);
           }
         }

@@ -100,6 +100,33 @@ export function hiddenNameLeak(
 }
 
 /**
+ * Whether an identifier of a repository listed in `sensitiveRepos` (its slug,
+ * its directory name, or `owner/repoName`) occurs in published text, and if so
+ * in what token. Returns that token, or null.
+ *
+ * The identifier is looked for as a word (`\b`, in any letter case), and `\b`
+ * treats `-` as a boundary, so `vault` is found inside `vault-docs`. Each
+ * occurrence is therefore read as the whole token around it, the run of
+ * letters, digits, `_` and `-` that hiddenNameLeak uses as its unit, and is
+ * not counted when that token, in lower case, is in `cleared`. A token outside
+ * `cleared`, such as `vault-secrets`, is counted, and with an empty set every
+ * word match is. The gate passes the name, slug and repoName of each published
+ * card, less the listed row's own slug, name and repoName, or an empty set.
+ *
+ * Pure (no I/O) so the boundary can be tested in both directions.
+ */
+export function listedIdentifierLeak(
+  identifier: string,
+  text: string,
+  cleared: Set<string>
+): string | null {
+  const esc = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const tokens =
+    text.match(new RegExp(`(?<![\\w-])[\\w-]*\\b${esc}\\b[\\w-]*(?![\\w-])`, "gi")) ?? [];
+  return tokens.find((t) => !cleared.has(t.toLowerCase())) ?? null;
+}
+
+/**
  * The published repo cards that belong to a repository listed in
  * `sensitiveRepos`, as `[listed slug, published slug]` pairs: each card whose
  * owner and repoName equal, in lower case, those of a listed row. Each clone
