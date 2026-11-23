@@ -52,6 +52,15 @@ interface Card {
   claim: string;
 }
 
+/** A commit event of a clone, seeded as the scan writes it
+ *  (lib/scanners/activity.ts): the subject as its title, and as its meta the
+ *  sha and the directory name of the clone. */
+interface Commit {
+  repoSlug: string;
+  sha: string;
+  title: string;
+}
+
 // Every case also holds this unrelated repository, which stays published.
 const PLAIN: Clone = {
   slug: "testorg-plain",
@@ -61,13 +70,14 @@ const PLAIN: Clone = {
 };
 
 /** Seed a throwaway atlas tree with one row and one event per clone, and the
- *  given context cards, run the real publish gate against it, and return its
- *  exit status and artifact. */
+ *  given commits and context cards, run the real publish gate against it, and
+ *  return its exit status and artifact. */
 function runGate(opts: {
   sensitiveRepos: string[];
   publicOwners: string[];
   clones: Clone[];
   cards?: Card[];
+  commits?: Commit[];
 }) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-gate-clones-"));
   const dataDir = path.join(work, "data");
@@ -102,6 +112,16 @@ function runGate(opts: {
     const id = createHash("md5").update(`${c.slug}:${c.lastCommitAt}`).digest("hex");
     event.run(id, c.slug, "commit", `a commit in ${c.name}`, c.lastCommitAt);
   }
+  const commit = db.prepare(
+    "INSERT INTO activity (id, repoSlug, type, title, ts, meta) VALUES (?,?,?,?,?,?)"
+  );
+  for (const c of opts.commits ?? []) {
+    const clone = opts.clones.find((x) => x.slug === c.repoSlug);
+    if (clone === undefined) throw new Error(`no clone has the slug ${c.repoSlug}`);
+    const id = createHash("md5").update(`${c.repoSlug}:${c.sha}`).digest("hex");
+    const meta = JSON.stringify({ sha: c.sha, repo: clone.name });
+    commit.run(id, c.repoSlug, "commit", c.title, clone.lastCommitAt, meta);
+  }
   const card = db.prepare(
     `INSERT INTO context_cards (id, project, repoSlug, subject, claim, derivedAt, lastVerifiedAt,
        freshness, status, visibility, sensitive, createdAt, updatedAt)
@@ -123,7 +143,7 @@ function runGate(opts: {
   const snapshot = fs.existsSync(file)
     ? (JSON.parse(fs.readFileSync(file, "utf8")) as {
         repos: { slug: string }[];
-        activity: { repoSlug: string | null }[];
+        activity: { repoSlug: string | null; title: string; meta: string | null }[];
         contextCards: { id: string }[];
       })
     : null;
@@ -477,6 +497,60 @@ test("the gate refuses a published name that extends the listed name when it can
     assert.equal(r.snapshot, null, "no artifact may be written");
     assert.match(r.out, /sensitive repo identifier "vault" present in snapshot text/);
   }
+});
+
+test("the snapshot keeps a published name that extends the listed name whole in the published card's activity", () => {
+  // The reproduction of #79 with commits as the scan writes them. The listed
+  // name vault is redacted as a word, and \b treats '-' as a boundary, so it is
+  // also found inside vault-docs: the published card's own name, and the
+  // directory name the scan writes into the meta of each of its commits. A
+  // marker there, [private]-docs beside the card's name vault-docs, would spell
+  // out the listed name. The listed name on its own is still redacted.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [{ ...VAULTS[0], visibility: "private" }, VAULT_DOCS, PLAIN],
+    commits: [
+      { repoSlug: VAULT_DOCS.slug, sha: "09c9d45d", title: "docs: build the vault-docs site" },
+      { repoSlug: VAULT_DOCS.slug, sha: "1a2b3c4d", title: "docs: move the notes out of vault" },
+    ],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.doesNotMatch(
+    JSON.stringify(r.snapshot),
+    /[\w-]\[private\]|\[private\][\w-]/,
+    "no [private] marker may be joined to the rest of a token"
+  );
+  const events = new Map(
+    r.snapshot.activity.filter((e) => e.repoSlug === VAULT_DOCS.slug).map((e) => [e.title, e.meta])
+  );
+  assert.equal(
+    events.get("docs: build the vault-docs site"),
+    JSON.stringify({ sha: "09c9d45d", repo: "vault-docs" })
+  );
+  assert.equal(
+    events.get("docs: move the notes out of [private]"),
+    JSON.stringify({ sha: "1a2b3c4d", repo: "vault-docs" })
+  );
+});
+
+test("the snapshot still redacts the listed name inside a token no published card carries", () => {
+  // vault-secrets is none of the published card's identifiers.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [{ ...VAULTS[0], visibility: "private" }, VAULT_DOCS, PLAIN],
+    commits: [{ repoSlug: VAULT_DOCS.slug, sha: "5e6f7a8b", title: "chore: rotate vault-secrets" }],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  const title = r.snapshot.activity.find(
+    (e) => e.repoSlug === VAULT_DOCS.slug && e.title.startsWith("chore: rotate ")
+  )?.title;
+  assert.ok(title !== undefined, "the commit must be published under its card");
+  assert.match(title, /\[private\]/);
+  assert.doesNotMatch(JSON.stringify(r.snapshot), /vault-secrets/i);
 });
 
 test("the gate's listed-identifier check reads each word match as the whole token around it", async () => {

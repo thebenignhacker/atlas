@@ -113,8 +113,11 @@ If maintaining a card ever costs more than it saves, `retire` it.
   gitignored `data/atlas.db` and never enters git.
 - The public Atlas snapshot includes only `--visibility public` cards, with
   source paths and verify commands stripped and private repo names redacted (see
-  the snapshot adversarial check). Mark a card `public` only when its claim is
-  safe to show on the public demo.
+  the snapshot adversarial check). A redacted name is left as written where the
+  run of letters, digits, `_` and `-` around it is, in any letter case, a
+  published repo's own name, slug or GitHub name (`vault` in a published
+  `vault-docs`), since that text is in the output already. Mark a card `public`
+  only when its claim is safe to show on the public demo.
 
 ### Sensitive (never publishable)
 

@@ -556,10 +556,32 @@ export function generatePublicSnapshot(): PublicSnapshot {
     const redactRes = redactNames.map(
       (n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi")
     );
+    // `\b` treats `-` as a boundary, so a name is also found inside a longer
+    // token: vault inside vault-docs. A match whose whole token (the run of
+    // letters, digits, `_` and `-` around it) is, in lower case, the name, slug
+    // or repoName of a published card is left as written. That token is in the
+    // artifact anyway as the card's own, and a marker inside it, [private]-docs
+    // beside the card's vault-docs, would spell out the redacted name. The
+    // gate's hidden-name check clears tokens against the same set, and its
+    // listed-identifier check against it less the listed repository's own
+    // slug, name and repoName (scripts/snapshot.ts).
+    const publishedIdentifiers = new Set(
+      publicRepos
+        .flatMap((r) => [r.name, r.slug, r.repoName])
+        .filter((s): s is string => !!s)
+        .map((s) => s.toLowerCase())
+    );
+    const mark = (match: string, at: number, text: string): string => {
+      let start = at;
+      while (start > 0 && /[\w-]/.test(text[start - 1])) start--;
+      let end = at + match.length;
+      while (end < text.length && /[\w-]/.test(text[end])) end++;
+      return publishedIdentifiers.has(text.slice(start, end).toLowerCase()) ? match : "[private]";
+    };
     const redact = (s: string | null): string | null => {
       if (!s) return s;
       let out = s;
-      for (const re of redactRes) out = out.replace(re, "[private]");
+      for (const re of redactRes) out = out.replace(re, mark);
       return out;
     };
 
