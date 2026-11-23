@@ -291,3 +291,72 @@ test("a clone left out by the one-card rule that carries no listed identifier do
   assert.ok(r.snapshot, "the artifact must be written");
   assert.deepEqual(r.snapshot.repos.map((x) => x.slug), ["testorg-plain"]);
 });
+
+// testorg/vault in the directory named after it, which is the listed clone, and
+// otherorg/vault, another repository of the same name, in a directory of the
+// same name under another allowed owner.
+const VAULTS: Clone[] = [
+  { slug: "testorg-vault", name: "vault", repoName: "vault", lastCommitAt: "2026-01-01T00:00:00.000Z" },
+  { slug: "otherorg-vault", name: "vault", repoName: "vault", owner: "otherorg", lastCommitAt: "2026-01-20T00:00:00.000Z" },
+];
+
+test("a listed repository is withheld and another owner's repository of the same name is published", () => {
+  // The published card of otherorg/vault carries the name vault, the listed
+  // clone's directory name, as its own name.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [...VAULTS, PLAIN],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug).sort(), ["otherorg-vault", "testorg-plain"]);
+  assert.deepEqual(r.snapshot.activity.map((e) => e.repoSlug).sort(), ["otherorg-vault", "testorg-plain"]);
+});
+
+test("a second clone of another owner's repository of the listed name does not stop the snapshot", () => {
+  // The one-card rule publishes otherorg/vault from the directory named vault
+  // and leaves out vault-wt, whose directory name carries the word vault.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [
+      ...VAULTS,
+      { slug: "otherorg-vault-wt", name: "vault-wt", repoName: "vault", owner: "otherorg", lastCommitAt: "2026-02-01T00:00:00.000Z" },
+      PLAIN,
+    ],
+  });
+  assert.equal(r.status, 0, `the gate must write the snapshot; got:\n${r.out}`);
+  assert.ok(r.snapshot, "the artifact must be written");
+  assert.deepEqual(r.snapshot.repos.map((x) => x.slug).sort(), ["otherorg-vault", "testorg-plain"]);
+});
+
+test("the gate refuses the listed slug in the text when another owner's repository carries the listed name", () => {
+  // Only the listed directory name is already in the artifact as otherorg/vault's
+  // own name. A card that quotes the listed slug still names the listed clone.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [...VAULTS, PLAIN],
+    cards: [
+      { id: "tooling:plain-fact", repoSlug: "testorg-plain", subject: "plain fact", claim: "notes copied from testorg-vault" },
+    ],
+  });
+  assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.snapshot, null, "no artifact may be written");
+  assert.match(r.out, /sensitive repo identifier "testorg-vault" present in snapshot text/);
+});
+
+test("the gate refuses the listed name when GitHub did not answer for the listed clone", () => {
+  // Without GitHub's answer the listed clone keeps the owner and name of its
+  // remote, which a transfer leaves out of date, so otherorg/vault can be the
+  // listed repository under a new owner.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [{ ...VAULTS[0], visibility: "unknown" }, VAULTS[1], PLAIN],
+  });
+  assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.snapshot, null, "no artifact may be written");
+  assert.match(r.out, /sensitive repo identifier "vault" present in snapshot text/);
+});
