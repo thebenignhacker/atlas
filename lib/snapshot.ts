@@ -99,6 +99,37 @@ export function hiddenNameLeak(
 }
 
 /**
+ * The published repo cards that belong to a repository listed in
+ * `sensitiveRepos`, as `[listed slug, published slug]` pairs: each card whose
+ * owner and repoName equal, in lower case, those of a listed row. Each clone
+ * directory has a slug of its own, so a clone of a listed repository can carry
+ * none of the listed row's identifiers; this compares the repository instead.
+ * A row with a null owner or a null repoName matches nothing.
+ *
+ * Pure (no I/O) so the gate's check can be tested with a card the generator
+ * never publishes.
+ */
+export function sensitiveRepoClones(
+  listed: { slug: string; owner: string | null; repoName: string | null }[],
+  published: { slug: string; owner: string | null; repoName: string | null }[]
+): [string, string][] {
+  const out: [string, string][] = [];
+  for (const l of listed) {
+    if (l.owner === null || l.repoName === null) continue;
+    for (const p of published) {
+      if (
+        p.owner !== null &&
+        p.repoName !== null &&
+        p.owner.toLowerCase() === l.owner.toLowerCase() &&
+        p.repoName.toLowerCase() === l.repoName.toLowerCase()
+      )
+        out.push([l.slug, p.slug]);
+    }
+  }
+  return out;
+}
+
+/**
  * Distinctive tokens to scrub from public free text when they originate in
  * sensitive content (a sensitive card's subject/claim/detail). A token counts
  * as distinctive — and therefore redactable/assertable — when it's long enough
@@ -321,11 +352,33 @@ export function generatePublicSnapshot(): PublicSnapshot {
     const sensitiveRepoNames = rows
       .filter((r) => sensitiveSlugs.has(r.slug))
       .map((r) => r.name);
+    // The GitHub repository a row is a clone of: owner and repoName in lower
+    // case, or null when either is unknown.
+    const repoKey = (r: Repo): string | null =>
+      r.owner === null || r.repoName === null
+        ? null
+        : JSON.stringify([r.owner.toLowerCase(), r.repoName.toLowerCase()]);
+    // A listed slug withholds its GitHub repository, not only that one clone.
+    // Each clone directory has a slug of its own, so another clone of a listed
+    // repository can carry none of the listed identifiers, and dropping the
+    // listed slug alone would leave that clone as the repository's card. Every
+    // row with the owner and repoName of a listed row is dropped as well.
+    const sensitiveRepoKeys = new Set(
+      rows
+        .filter((r) => sensitiveSlugs.has(r.slug))
+        .map(repoKey)
+        .filter((k): k is string => k !== null)
+    );
+    const ofSensitiveRepo = (r: Repo): boolean => {
+      const key = repoKey(r);
+      return key !== null && sensitiveRepoKeys.has(key);
+    };
     const publishableRows = rows.filter(
       (r) =>
         r.visibility === "public" &&
         r.isFork !== 1 &&
         !sensitiveSlugs.has(r.slug) &&
+        !ofSensitiveRepo(r) &&
         (allow.length === 0 ||
           (r.owner !== null && allowedOwners.has(r.owner.toLowerCase())))
     );
@@ -340,10 +393,6 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // repository), else the row with the greatest lastCommitAt (compared as
     // strings, a null lowest), else the row with the smallest slug. A row with a
     // null owner or a null repoName is in no group and is kept.
-    const repoKey = (r: Repo): string | null =>
-      r.owner === null || r.repoName === null
-        ? null
-        : JSON.stringify([r.owner.toLowerCase(), r.repoName.toLowerCase()]);
     const inNamedDir = (r: Repo): boolean =>
       r.repoName !== null && r.name.toLowerCase() === r.repoName.toLowerCase();
     const keptOver = (a: Repo, b: Repo): boolean => {
