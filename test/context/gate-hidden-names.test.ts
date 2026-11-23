@@ -39,13 +39,15 @@ interface Repo {
 
 /** Build a throwaway atlas tree + DB and run the real publish gate against it.
  *  `summaries` maps a repo slug to its AI summary; `commits` are commit events
- *  with the subject as their title, as the scan writes them. */
+ *  with the subject as their title, as the scan writes them; `sensitiveClaim`,
+ *  when given, is the claim of a private card flagged sensitive. */
 function runGate(opts: {
   repos: Repo[];
   cardClaim: string;
   cardProject?: string;
   summaries?: Record<string, string>;
   commits?: { repoSlug: string; title: string }[];
+  sensitiveClaim?: string;
 }) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), "atlas-gate-work-"));
   const dataDir = path.join(work, "data");
@@ -91,6 +93,12 @@ function runGate(opts: {
     now,
     now
   );
+  if (opts.sensitiveClaim !== undefined)
+    db.prepare(
+      `INSERT INTO context_cards (id, project, repoSlug, subject, claim, derivedAt, lastVerifiedAt,
+         freshness, status, visibility, sensitive, createdAt, updatedAt)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run("tooling:hosting", "tooling", null, "hosting", opts.sensitiveClaim, now, now, "fresh", "active", "private", 1, now, now);
   const summary = db.prepare(
     "INSERT INTO ai_outputs (id, entityType, entityId, task, output, generatedAt) VALUES (?,?,?,?,?,?)"
   );
@@ -247,6 +255,46 @@ test("a private name glued to a preceding or following word is redacted, and the
     snap.activity.some((e: { title: string }) => e.title === "import [private] and [private]"),
     `the commit title must be redacted; got ${JSON.stringify(snap.activity.map((e: { title: string }) => e.title))}`
   );
+});
+
+test("a sensitive card token that holds or meets a private name is redacted whole, as a word and glued to one", () => {
+  // A sensitive card's token can hold a private repo name and go on past a
+  // `.`, as an internal hostname does. The private name was replaced with the
+  // run of letters, digits, `_` and `-` around it, crypto-census01 in
+  // crypto-census01.db.internal, before the token was looked for, so the token
+  // was no longer found, .db.internal was published, and the gate wrote the
+  // snapshot. The token census01.db meets the private name in
+  // mycrypto-census01.db the same way. Each token is redacted whole.
+  const r = runGate({
+    repos: [
+      ...PUBLIC_ONLY,
+      { slug: "crypto-census-data", name: "crypto-census-data", repoName: "crypto-census-data", visibility: "public" },
+      { slug: "crypto-census", name: "crypto-census", repoName: "crypto-census", visibility: "private" },
+    ],
+    sensitiveClaim: "Exports go to crypto-census01.db.internal and crypto-census.db.internal; rows sit in census01.db",
+    cardClaim: "Point the export at crypto-census01.db.internal, xcrypto-census01.db.internal or crypto-census.db.internal.",
+    summaries: { "crypto-census-data": "Fed by crypto-census01.db.internalx." },
+    commits: [{ repoSlug: "crypto-census-data", title: "read rows from mycrypto-census01.db" }],
+  });
+  assert.equal(r.status, 0, `gate must pass; got:\n${r.out}`);
+  assert.equal(r.published, true);
+  const work = dirs[dirs.length - 1];
+  const text = fs.readFileSync(path.join(work, "public-snapshot.json"), "utf8");
+  const snap = JSON.parse(text);
+  assert.deepEqual(
+    {
+      claim: snap.contextCards[0].claim,
+      summary: snap.summaries["crypto-census-data"],
+      titles: snap.activity.map((e: { title: string }) => e.title),
+    },
+    {
+      claim: "Point the export at [private], [private] or [private].",
+      summary: "Fed by [private].",
+      titles: ["read rows from [private]"],
+    }
+  );
+  for (const part of ["census01", "db.internal"])
+    assert.ok(!text.includes(part), `no part of a sensitive token may be published, found ${part}`);
 });
 
 test("a private name that starts a line or follows a tab still aborts the publish", () => {

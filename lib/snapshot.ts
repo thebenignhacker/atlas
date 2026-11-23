@@ -589,10 +589,16 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // crypto-census inside mycrypto-census or crypto-censusx. Matched as a word,
     // those tokens were kept as written and the gate refused the snapshot. A
     // sensitive name or card token is matched as a word, as the gate's
-    // listed-identifier check (listedIdentifierLeak) reads it.
+    // listed-identifier check (listedIdentifierLeak) reads it, unless it holds
+    // a character other than a letter, digit, `_` or `-`, such as the `.` of a
+    // hostname. Such a name spans more than one token (below). Glued to a word,
+    // as in xcrypto-census01.db.internal, it is not found as a word, and the
+    // hidden name in it, crypto-census, stands for its first token only, so
+    // such a name is matched with no word boundary as well.
     const redactRes = redactNames.map((n) => {
       const esc = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      return new RegExp(hiddenRedactNames.has(n) ? esc : `\\b${esc}\\b`, "gi");
+      const glued = hiddenRedactNames.has(n) || /[^\w-]/.test(n);
+      return new RegExp(glued ? esc : `\\b${esc}\\b`, "gi");
     });
     // `\b` treats `-` as a boundary, so a name is also found inside a longer
     // token: vault inside vault-docs or vault-docs-v2. Each match therefore
@@ -606,8 +612,15 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // sensitive cards clear tokens against the same set, and its
     // listed-identifier check against it less the listed repository's own
     // slug, name and repoName, or against none for a row GitHub did not answer
-    // for (scripts/snapshot.ts). Every match of the name lies inside one such
-    // token, and the tokens are found in one pass over the text.
+    // for (scripts/snapshot.ts). A match stands for the token it lies in, or,
+    // for a name that holds another character, the tokens it spans and what is
+    // between them. The matches of every name are found in the text as given,
+    // and their tokens are replaced in one pass over it. Replaced name by name,
+    // the [private] of one name split a token another name stands for:
+    // crypto-census, replaced first, left [private].db.internal of the
+    // sensitive card token crypto-census01.db.internal, which was then not
+    // found, and the token census01.db was split the same way in
+    // mycrypto-census01.db.
     const publishedIdentifiers = new Set(
       publicRepos
         .flatMap((r) => [r.name, r.slug, r.repoName])
@@ -615,7 +628,11 @@ export function generatePublicSnapshot(): PublicSnapshot {
         .map((s) => s.toLowerCase())
     );
     const tokenChar = /[\w-]/;
-    const redactTokens = (text: string, re: RegExp): string => {
+    const redactTokens = (text: string, res: RegExp[]): string => {
+      // The matches of every name, in the order of the index they start at.
+      const matches = res
+        .flatMap((re) => Array.from(text.matchAll(re)))
+        .sort((a, b) => a.index - b.index);
       let out = "";
       let copied = 0; // text before this index is in `out`
       let start = -1; // the open token is text[start, end); none while -1
@@ -626,7 +643,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
         out += publishedIdentifiers.has(token.toLowerCase()) ? token : "[private]";
         copied = end;
       };
-      for (const m of text.matchAll(re)) {
+      for (const m of matches) {
         let stop = m.index + m[0].length;
         if (start !== -1 && m.index <= end) {
           // In the open token, or right after it: the same token.
@@ -645,12 +662,7 @@ export function generatePublicSnapshot(): PublicSnapshot {
       if (start !== -1) close();
       return out + text.slice(copied);
     };
-    const redact = (s: string | null): string | null => {
-      if (!s) return s;
-      let out = s;
-      for (const re of redactRes) out = redactTokens(out, re);
-      return out;
-    };
+    const redact = (s: string | null): string | null => (s ? redactTokens(s, redactRes) : s);
 
     const repos: RepoWithSignals[] = publicRepos
       .map((r) =>
