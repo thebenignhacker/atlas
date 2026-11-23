@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import Database from "better-sqlite3";
 import { initSchema } from "@/lib/db";
 
@@ -17,9 +18,11 @@ import { initSchema } from "@/lib/db";
  * The same holds for a context card on another clone: the published card drops
  * its repoSlug, so nothing in the artifact ties it to the listed repository.
  *
- * Every test but the third runs the real publish gate against a seeded database
- * and asserts on its exit status and the artifact it writes. The third tests the
- * gate's own check with a card the generator never publishes.
+ * Every test but the third and the last runs the real publish gate against a
+ * seeded database and asserts on its exit status and the artifact it writes. The
+ * third tests the gate's own check with a card the generator never publishes,
+ * and the last the helper that reads a listed identifier's word matches as
+ * whole tokens.
  */
 
 const repoRoot = process.cwd();
@@ -93,7 +96,11 @@ function runGate(opts: {
   for (const c of opts.clones) {
     const owner = c.owner === undefined ? "testorg" : c.owner;
     repo.run(c.slug, c.name, `/x/${c.name}`, owner, c.repoName, c.visibility ?? "public", 0, c.lastCommitAt);
-    event.run(`commit-${c.slug}`, c.slug, "commit", `a commit in ${c.name}`, c.lastCommitAt);
+    // A hash, as the scan makes an event id (lib/scanners/activity.ts). An id
+    // that spells out the slug, such as commit-otherorg-vault-docs, is a token
+    // the scan never writes into the artifact.
+    const id = createHash("md5").update(`${c.slug}:${c.lastCommitAt}`).digest("hex");
+    event.run(id, c.slug, "commit", `a commit in ${c.name}`, c.lastCommitAt);
   }
   const card = db.prepare(
     `INSERT INTO context_cards (id, project, repoSlug, subject, claim, derivedAt, lastVerifiedAt,
@@ -401,4 +408,93 @@ test("the gate refuses the listed name when GitHub did not answer for the listed
   assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
   assert.equal(r.snapshot, null, "no artifact may be written");
   assert.match(r.out, /sensitive repo identifier "vault" present in snapshot text/);
+});
+
+// otherorg/vault-docs, another repository, in the directory named after it. Its
+// name and slug extend the listed name vault with a hyphen.
+const VAULT_DOCS: Clone = {
+  slug: "otherorg-vault-docs",
+  name: "vault-docs",
+  repoName: "vault-docs",
+  owner: "otherorg",
+  lastCommitAt: "2026-01-20T00:00:00.000Z",
+};
+
+test("a published repository whose name extends the listed name with a hyphen does not stop the snapshot", () => {
+  // The listed clone testorg/vault sits in the directory named after it, and is
+  // private, then GitHub-public. The word vault is in the published card's own
+  // name, repoName and slug, inside the tokens vault-docs and
+  // otherorg-vault-docs. In the second case the published repository is
+  // testorg/vault-docs, whose slug testorg-vault-docs extends the listed slug.
+  for (const [listed, docs] of [
+    [{ ...VAULTS[0], visibility: "private" }, VAULT_DOCS],
+    [VAULTS[0], { ...VAULT_DOCS, slug: "testorg-vault-docs", owner: "testorg" }],
+  ] as const) {
+    const r = runGate({
+      sensitiveRepos: ["testorg-vault"],
+      publicOwners: ["testorg", "otherorg"],
+      clones: [listed, docs, PLAIN],
+    });
+    assert.equal(r.status, 0, `the gate must write the snapshot with ${docs.slug}; got:\n${r.out}`);
+    assert.ok(r.snapshot, "the artifact must be written");
+    assert.deepEqual(r.snapshot.repos.map((x) => x.slug).sort(), [docs.slug, "testorg-plain"].sort());
+  }
+});
+
+test("the gate refuses the listed name, alone or extended with a hyphen, in a token no published card carries", () => {
+  // sanitizeCard redacts a card's subject, claim and detail, not its id, so the
+  // id reaches the artifact as written. vault names the listed repository, and
+  // vault-secrets is none of the published card's identifiers.
+  for (const id of ["tooling:vault", "tooling:vault-secrets"]) {
+    const r = runGate({
+      sensitiveRepos: ["testorg-vault"],
+      publicOwners: ["testorg", "otherorg"],
+      clones: [{ ...VAULTS[0], visibility: "private" }, VAULT_DOCS, PLAIN],
+      cards: [{ id, repoSlug: "testorg-plain", subject: "plain fact", claim: "a fact recorded on plain" }],
+    });
+    assert.equal(r.status, 1, `the gate must refuse the card id "${id}"; got:\n${r.out}`);
+    assert.equal(r.snapshot, null, "no artifact may be written");
+    assert.match(r.out, /sensitive repo identifier "vault" present in snapshot text/);
+  }
+});
+
+test("the gate refuses a published name that extends the listed name when it can name the listed repository", () => {
+  // First, GitHub did not answer for the listed clone, which keeps the owner
+  // and name of its remote, so otherorg/vault-docs can be the listed repository
+  // after a transfer and a rename. Then the listed clone's repository is
+  // testorg/vault-docs on GitHub, as after a rename, so vault-docs is also the
+  // listed repository's own name.
+  for (const listed of [
+    { ...VAULTS[0], visibility: "unknown" },
+    { ...VAULTS[0], repoName: "vault-docs", visibility: "private" },
+  ]) {
+    const r = runGate({
+      sensitiveRepos: ["testorg-vault"],
+      publicOwners: ["testorg", "otherorg"],
+      clones: [listed, VAULT_DOCS, PLAIN],
+    });
+    assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+    assert.equal(r.snapshot, null, "no artifact may be written");
+    assert.match(r.out, /sensitive repo identifier "vault" present in snapshot text/);
+  }
+});
+
+test("the gate's listed-identifier check reads each word match as the whole token around it", async () => {
+  const { listedIdentifierLeak } = await import("@/lib/snapshot");
+  const cleared = new Set(["vault-docs", "otherorg-vault-docs"]);
+  // Only inside cleared tokens, in any letter case.
+  assert.equal(listedIdentifierLeak("vault", '{"name":"vault-docs","slug":"otherorg-vault-docs"}', cleared), null);
+  assert.equal(listedIdentifierLeak("vault", "see Vault-Docs", cleared), null);
+  // The identifier itself, and longer tokens that are not cleared.
+  assert.equal(listedIdentifierLeak("vault", "vault-docs, then the vault", cleared), "vault");
+  assert.equal(listedIdentifierLeak("vault", "vault-docs and vault-secrets", cleared), "vault-secrets");
+  assert.equal(listedIdentifierLeak("vault", "commit-otherorg-vault-docs", cleared), "commit-otherorg-vault-docs");
+  assert.equal(
+    listedIdentifierLeak("testorg/vault", "mirrors https://github.com/TestOrg/Vault.git", cleared),
+    "TestOrg/Vault"
+  );
+  // No word match, as with a plain \b test.
+  assert.equal(listedIdentifierLeak("vault", "vaults, myvault and vault_docs", cleared), null);
+  // An empty set counts every word match.
+  assert.equal(listedIdentifierLeak("vault", "vault-docs", new Set()), "vault-docs");
 });
