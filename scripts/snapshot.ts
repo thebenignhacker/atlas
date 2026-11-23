@@ -234,21 +234,26 @@ function main() {
         // of the same name sits in the directory named after it. That name is in
         // the artifact as the published repository's, so refusing it would stop
         // every snapshot while both settings stand; check 2 skips such a hidden
-        // name for the same reason. The name is skipped only for a row GitHub
-        // answered for (visibility public or private), whose owner and repoName
-        // are then GitHub's: lib/snapshot withholds every row with them in any
-        // letter case, and the owner and repoName check below refuses a
-        // published card with them. A row GitHub did not answer for keeps the
-        // owner and name of its remote, which a transfer leaves out of date, so
-        // the published repository of the same name can be the listed one, and
-        // the name is still refused.
+        // name for the same reason. In its place the row's owner and repoName
+        // are looked for, written owner/repoName as in a GitHub URL. No published
+        // field carries that pair (the remote URL is not published), and
+        // lib/snapshot does not redact it, as it redacts no name a published card
+        // carries, so this check is the one that refuses free text naming the
+        // listed repository by its owner and repoName. The name is skipped only
+        // for a row GitHub answered for (visibility public or private), whose
+        // owner and repoName are then GitHub's: lib/snapshot withholds every row
+        // with them in any letter case, and the owner and repoName check below
+        // refuses a published card with them. A row GitHub did not answer for
+        // keeps the owner and name of its remote, which a transfer leaves out of
+        // date, so the published repository of the same name can be the listed
+        // one, and the name is still refused.
         const publishedNames = new Set(snapshot.repos.map((r) => r.name.toLowerCase()));
         const listedTokens = (r: (typeof sensitiveRepoRows)[number]): string[] =>
           r.owner !== null &&
           r.repoName !== null &&
           (r.visibility === "public" || r.visibility === "private") &&
           publishedNames.has(r.name.toLowerCase())
-            ? [r.slug]
+            ? [r.slug, `${r.owner}/${r.repoName}`]
             : [r.slug, r.name];
         for (const r of sensitiveRepoRows) {
           if (publicSlugSet.has(r.slug))
@@ -276,7 +281,9 @@ function main() {
         // listedTokens gives for each listed row, as words, in the slug and
         // directory name of every clone of a published repository that is not
         // itself published. listedTokens leaves out a name only for a row GitHub
-        // answered for, whose owner and repoName are GitHub's.
+        // answered for, whose owner and repoName are GitHub's; the owner/repoName
+        // it gives in its place matches no slug or directory name, neither of
+        // which holds a slash.
         const publishedByKey = new Map<string, string>();
         for (const r of snapshot.repos)
           if (r.owner !== null && r.repoName !== null)
