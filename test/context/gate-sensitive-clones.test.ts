@@ -369,6 +369,26 @@ test("the gate refuses the listed repository's owner/name in the text when anoth
   }
 });
 
+test("the gate refuses the listed name when the listed clone is not in the directory named after its GitHub repository", () => {
+  // The listed clone sits in the directory vault, but its GitHub repository is
+  // testorg/vault-private, as after a rename on GitHub. The published card of
+  // otherorg/vault carries the name vault, and no published card carries
+  // vault-private, which the generator does not redact: it redacts the listed
+  // directory name, and only when no published card carries it. A card that
+  // writes vault-private names the listed repository by its GitHub name.
+  const r = runGate({
+    sensitiveRepos: ["testorg-vault"],
+    publicOwners: ["testorg", "otherorg"],
+    clones: [{ ...VAULTS[0], repoName: "vault-private", visibility: "private" }, VAULTS[1], PLAIN],
+    cards: [
+      { id: "tooling:plain-fact", repoSlug: "testorg-plain", subject: "plain fact", claim: "notes copied from vault-private" },
+    ],
+  });
+  assert.equal(r.status, 1, `the gate must refuse; got:\n${r.out}`);
+  assert.equal(r.snapshot, null, "no artifact may be written");
+  assert.match(r.out, /sensitive repo identifier "vault" present in snapshot text/);
+});
+
 test("the gate refuses the listed name when GitHub did not answer for the listed clone", () => {
   // Without GitHub's answer the listed clone keeps the owner and name of its
   // remote, which a transfer leaves out of date, so otherorg/vault can be the
