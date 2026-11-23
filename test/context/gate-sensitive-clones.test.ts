@@ -347,6 +347,28 @@ test("the gate refuses the listed slug in the text when another owner's reposito
   assert.match(r.out, /sensitive repo identifier "testorg-vault" present in snapshot text/);
 });
 
+test("the gate refuses the listed repository's owner/name in the text when another owner's repository carries the listed name", () => {
+  // The listed directory name is otherorg/vault's own name in the artifact, but
+  // testorg/vault, the listed repository's owner and name, is in no published
+  // field, and the generator redacts no name a published card carries. A card
+  // that writes it, alone or in a GitHub URL, in any letter case, names the
+  // listed repository. The listed repository is GitHub-public, then private.
+  for (const [listed, claim] of [
+    [VAULTS[0], "notes copied from testorg/vault"],
+    [{ ...VAULTS[0], visibility: "private" }, "mirrors https://github.com/TestOrg/Vault.git"],
+  ] as const) {
+    const r = runGate({
+      sensitiveRepos: ["testorg-vault"],
+      publicOwners: ["testorg", "otherorg"],
+      clones: [listed, VAULTS[1], PLAIN],
+      cards: [{ id: "tooling:plain-fact", repoSlug: "testorg-plain", subject: "plain fact", claim }],
+    });
+    assert.equal(r.status, 1, `the gate must refuse "${claim}"; got:\n${r.out}`);
+    assert.equal(r.snapshot, null, "no artifact may be written");
+    assert.match(r.out, /sensitive repo identifier "testorg\/vault" present in snapshot text/);
+  }
+});
+
 test("the gate refuses the listed name when GitHub did not answer for the listed clone", () => {
   // Without GitHub's answer the listed clone keeps the owner and name of its
   // remote, which a transfer leaves out of date, so otherorg/vault can be the

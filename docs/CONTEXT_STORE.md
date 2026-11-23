@@ -134,8 +134,10 @@ in the output. One exception: when a published repo has the same name as a
 sensitive repo (another owner's repository of that name), the name is already in
 the output as the published repo's own name, so the gate does not abort on it if
 GitHub answered for the sensitive repo during the scan. The sensitive repo's slug
-is still refused. Sensitive content still appears in the password-gated owner
-view (that is not a public surface) and is flagged with a lock badge in the UI.
+is still refused, and so are its GitHub owner and name written as `owner/name`,
+alone or in a GitHub URL, in any letter case. Sensitive content still appears in
+the password-gated owner view (that is not a public surface) and is flagged with
+a lock badge in the UI.
 
 > Upgrading from a database created before the `sensitive` column existed? Run
 > `npm run setup-db` once — it applies the column migration (idempotent, no data
