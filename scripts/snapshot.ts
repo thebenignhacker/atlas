@@ -180,8 +180,30 @@ function main() {
           owner: string | null;
           repoName: string | null;
         }[];
-        // All active cards that are sensitive: flagged, under a sensitive repo,
-        // or whose project maps to a sensitive slug. Mirrors lib/snapshot.
+        // Every clone of a listed repository (each row with the owner and
+        // repoName, in lower case, of a listed row) withholds the cards on it,
+        // as the listed slug does. Mirrors lib/snapshot.
+        const repoKey = (owner: string, repoName: string): string =>
+          JSON.stringify([owner.toLowerCase(), repoName.toLowerCase()]);
+        const keyedRows = db
+          .prepare(
+            "SELECT slug, owner, repoName FROM repos WHERE owner IS NOT NULL AND repoName IS NOT NULL"
+          )
+          .all() as { slug: string; owner: string; repoName: string }[];
+        const listedKeys = new Set(
+          sensitiveRepoRows.flatMap((r) =>
+            r.owner === null || r.repoName === null ? [] : [repoKey(r.owner, r.repoName)]
+          )
+        );
+        const withheldSlugSet = new Set([
+          ...sensitiveSlugSet,
+          ...keyedRows
+            .filter((r) => listedKeys.has(repoKey(r.owner, r.repoName)))
+            .map((r) => slug(r.slug)),
+        ]);
+        // All active cards that are sensitive: flagged, under a sensitive repo
+        // in any of its clones, or whose project maps to one of their slugs.
+        // Mirrors lib/snapshot.
         const sensitiveCards = (
           db
             .prepare(
@@ -199,8 +221,8 @@ function main() {
         ).filter(
           (c) =>
             c.sensitive === 1 ||
-            (c.repoSlug && sensitiveSlugSet.has(slug(c.repoSlug))) ||
-            sensitiveSlugSet.has(slug(c.project))
+            (c.repoSlug && withheldSlugSet.has(slug(c.repoSlug))) ||
+            withheldSlugSet.has(slug(c.project))
         );
         db.close();
 

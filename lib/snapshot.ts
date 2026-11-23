@@ -52,7 +52,8 @@ export const ownerSnapshotFile = ownerSnapshotPath;
  *   - attached to a sensitive repo via repoSlug,
  *   - (defensive) its project name maps to a sensitive repo slug even without a
  *     repoSlug set.
- * `sensitiveSlugs` is the configured `sensitiveRepos` set.
+ * `sensitiveSlugs` is the configured `sensitiveRepos` set; the public snapshot
+ * also adds the slug of every other clone of a listed repository.
  */
 export function isCardPublishable(
   card: ContextCard,
@@ -373,6 +374,14 @@ export function generatePublicSnapshot(): PublicSnapshot {
       const key = repoKey(r);
       return key !== null && sensitiveRepoKeys.has(key);
     };
+    // The slugs whose context cards are withheld: each listed slug, and the slug
+    // of every other clone of a listed repository. A card names one clone by its
+    // repoSlug (or by a project name equal to that slug), and the published card
+    // drops that link, so a card on another clone would otherwise be published.
+    const withheldSlugs = new Set([
+      ...sensitiveSlugs,
+      ...rows.filter(ofSensitiveRepo).map((r) => slug(r.slug)),
+    ]);
     const publishableRows = rows.filter(
       (r) =>
         r.visibility === "public" &&
@@ -428,11 +437,12 @@ export function generatePublicSnapshot(): PublicSnapshot {
     // Distinctive tokens from SENSITIVE cards' own text. A sensitive card never
     // ships, but its claim could be quoted verbatim inside a publishable card
     // (the owner authors both); scrub those tokens so the secret can't leak by
-    // cross-reference. The gate re-derives the same set and fails closed.
+    // cross-reference. A card on any clone of a listed repository counts as
+    // sensitive here. The gate re-derives the same set and fails closed.
     const isSensitiveCard = (c: ContextCard): boolean =>
       c.sensitive ||
-      (c.repoSlug != null && sensitiveSlugs.has(slug(c.repoSlug))) ||
-      sensitiveSlugs.has(slug(c.project));
+      (c.repoSlug != null && withheldSlugs.has(slug(c.repoSlug))) ||
+      withheldSlugs.has(slug(c.project));
     const sensitiveCardRows = (
       db
         .prepare("SELECT * FROM context_cards WHERE status = 'active'")
@@ -520,16 +530,17 @@ export function generatePublicSnapshot(): PublicSnapshot {
 
     // Only public, active, NON-sensitive cards reach the demo. The sensitive
     // exclusion is enforced in code (not just SQL): drop cards flagged
-    // sensitive, cards under a sensitive repo (by slug), and — defensively —
-    // cards whose project name maps to a sensitive repo slug even without a
-    // repoSlug set. Fail-closed: the snapshot gate re-checks this independently.
+    // sensitive, cards under a sensitive repo (by the slug of any of its
+    // clones), and, defensively, cards whose project name maps to one of those
+    // slugs even without a repoSlug set. Fail-closed: the snapshot gate
+    // re-checks this independently.
     const eligible = (db
       .prepare(
         "SELECT * FROM context_cards WHERE visibility = 'public' AND status = 'active'"
       )
       .all() as CardRow[])
       .map(rowToCard)
-      .filter((c) => isCardPublishable(c, sensitiveSlugs));
+      .filter((c) => isCardPublishable(c, withheldSlugs));
     const contextCards = eligible.map((c) => sanitizeCard(c, redact));
     // Metrics derived from EXACTLY the published cards, so the counts can never
     // disclose the existence of a private or sensitive card filtered out above
